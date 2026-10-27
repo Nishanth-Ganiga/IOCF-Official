@@ -1,0 +1,520 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import type { Board } from '../data/boards';
+import type { Entry, FormatId, Player } from '../data/players';
+import type { ProfileId } from '../data/portfolio';
+import { useSmoothScroll } from '../hooks/smoothScroll';
+import { EASE } from './fx';
+import { Flag } from './IocfChairmen';
+import { IocfHeader, LOGO } from './IocfHome';
+
+type BoardsModule = typeof import('../data/boards');
+type PlayersModule = typeof import('../data/players');
+
+const ROUTE = '#/players';
+export const MISSING = '—';
+
+const container = { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } };
+const item = {
+  hidden: { opacity: 0, y: 24, filter: 'blur(8px)' },
+  show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.8, ease: EASE } },
+};
+
+/** Route is `#/players[/<boardId>[/<playerId>]]`. */
+function useRoute() {
+  const read = () => {
+    const h = window.location.hash;
+    if (!h.startsWith(ROUTE)) return [] as string[];
+    return h
+      .slice(ROUTE.length)
+      .split('/')
+      .filter(Boolean)
+      .map(decodeURIComponent);
+  };
+  const [parts, setParts] = useState<string[]>(read);
+  useEffect(() => {
+    const on = () => setParts(read());
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  return parts;
+}
+
+const boardSlugOf = (b: Board) => b.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const navigate = (...parts: string[]) => {
+  window.location.hash = [ROUTE, ...parts].join('/');
+};
+
+function useData() {
+  const [data, setData] = useState<{ b: BoardsModule; p: PlayersModule; players: Player[] } | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    Promise.all([import('../data/boards'), import('../data/players')])
+      .then(async ([b, p]) => setData({ b, p, players: await p.loadPlayers() }))
+      .catch(() => setFailed(true));
+  }, []);
+  return { data, failed };
+}
+
+export default function IocfPlayers({ profileId, onSwitch }: { profileId: ProfileId; onSwitch: (id: ProfileId) => void }) {
+  const { scrollTo } = useSmoothScroll();
+  const { data, failed } = useData();
+  const [boardId, playerId] = useRoute();
+
+  useEffect(() => {
+    scrollTo(0, { offset: 0 });
+  }, [boardId, playerId, scrollTo]);
+
+  const go = (id: string) => {
+    if (id === 'top') navigate();
+    scrollTo(id === 'top' ? 0 : `#${id}`, { offset: id === 'top' ? 0 : -72 });
+  };
+  const links = [
+    { id: 'top', label: 'Home' },
+    { id: 'boards', label: 'Boards' },
+  ];
+
+  const board = data && boardId ? data.b.boards.find((b) => data.b.boardSlug(b) === boardId) : undefined;
+  const player = data && playerId ? data.players.find((p) => p.id === playerId && p.boardId === boardId) : undefined;
+
+  let body;
+  if (failed) body = <Notice tone="error">The player directory could not be loaded. Please refresh the page to try again.</Notice>;
+  else if (!data) body = <Loading />;
+  else if (!boardId) body = <Directory data={data} />;
+  else if (!board) body = <NotFound what="board" />;
+  else if (!playerId) body = <PlayerList board={board} data={data} />;
+  else if (!player) body = <NotFound what="player" board={board} />;
+  else body = <PlayerProfile board={board} player={player} />;
+
+  return (
+    <>
+      <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />
+      <main className="min-h-[100svh]">
+        {body}
+        <footer className="gutter border-t border-white/5 py-10 text-center text-xs text-smoke">One Federation. Four Roles. One Cricketing Vision.</footer>
+      </main>
+    </>
+  );
+}
+
+/* ---------- shared bits ---------- */
+
+export function Notice({ tone, children }: { tone: 'error' | 'info'; children: ReactNode }) {
+  return (
+    <div className="gutter pt-32">
+      <p role={tone === 'error' ? 'alert' : 'status'} className={`rounded-xl border bg-ink-2 px-5 py-10 text-center text-sm text-mist ${tone === 'error' ? 'border-crimson/40' : 'border-white/10'}`}>
+        {children}
+      </p>
+    </div>
+  );
+}
+
+export function Loading() {
+  return (
+    <div className="gutter pt-32" aria-busy="true">
+      <p className="sr-only" role="status">
+        Loading players
+      </p>
+      <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 8 }, (_, i) => (
+          <li key={i} className="h-36 animate-pulse rounded-2xl border border-white/5 bg-ink-2" />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function NotFound({ what, board }: { what: 'board' | 'player'; board?: Board }) {
+  return (
+    <div className="gutter pt-32 text-center">
+      <p className="text-sm text-mist">That {what} could not be found.</p>
+      <button type="button" onClick={() => (board ? navigate(boardSlugOf(board)) : navigate())} className="mt-4 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+        {board ? `BACK TO ${board.name.toUpperCase()}` : 'BACK TO PLAYER DIRECTORY'}
+      </button>
+    </div>
+  );
+}
+
+export function Breadcrumb({ items }: { items: { label: string; onClick?: () => void }[] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="text-xs text-smoke">
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {items.map((it, i) => (
+          <li key={it.label + i} className="flex items-center gap-2">
+            {i > 0 && <span aria-hidden>/</span>}
+            {it.onClick ? (
+              <button type="button" onClick={it.onClick} className="transition hover:text-bone">
+                {it.label}
+              </button>
+            ) : (
+              <span aria-current="page" className="text-mist">
+                {it.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+export function BackButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className="text-xs font-semibold tracking-[0.2em] text-mist transition hover:text-bone">
+      ← {children}
+    </button>
+  );
+}
+
+export function Avatar({ player, size }: { player: { name: string; photo?: string }; size: string }) {
+  return (
+    <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-ink-3 ${size}`}>
+      {player.photo ? (
+        <img src={player.photo} alt={`${player.name} portrait`} className="h-full w-full object-cover" />
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="#6d6c75" strokeWidth="1.2" strokeLinecap="round" className="h-1/2 w-1/2" aria-hidden>
+          <circle cx="12" cy="8" r="3.5" />
+          <path d="M5 20c.8-3.6 3.5-5.5 7-5.5s6.2 1.9 7 5.5" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
+export const searchInput = 'w-full rounded-lg border border-white/15 bg-ink-2 px-4 py-2.5 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b] sm:max-w-sm';
+
+/* ---------- 1. directory of boards ---------- */
+
+type Data = NonNullable<ReturnType<typeof useData>['data']>;
+
+function Directory({ data }: { data: Data }) {
+  const [query, setQuery] = useState('');
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    data.players.forEach((p) => m.set(p.boardId, (m.get(p.boardId) ?? 0) + 1));
+    return m;
+  }, [data]);
+  const q = query.trim().toLowerCase();
+  const visible = data.b.boards.filter((b) => !q || b.name.toLowerCase().includes(q));
+
+  return (
+    <>
+      <section className="relative overflow-hidden">
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(55%_60%_at_78%_45%,rgba(107,18,41,0.35),transparent_70%)]" />
+        <div className="gutter relative z-[2] grid w-full items-center gap-8 pb-10 pt-24 lg:grid-cols-[1.15fr_1fr] lg:pt-28">
+          <motion.div variants={container} initial="hidden" animate="show" className="order-2 lg:order-1">
+            <motion.p variants={item} className="font-sans text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b] sm:text-xs">
+              INTERNATIONAL ONLINE CRICKET FEDERATION
+            </motion.p>
+            <motion.h1 variants={item} className="mt-3 font-display leading-[0.9] tracking-[0.02em] text-bone" style={{ fontSize: 'clamp(2.8rem, 7vw, 6rem)' }}>
+              IOCF PLAYER DIRECTORY
+            </motion.h1>
+            <motion.p variants={item} className="mt-4 font-sans text-xs font-bold tracking-[0.3em] text-bone sm:text-sm">
+              {data.b.boards.length} BOARDS • ONE GLOBAL CRICKET COMMUNITY
+            </motion.p>
+            <motion.p variants={item} className="mt-5 max-w-xl text-[15px] leading-relaxed text-bone/75 sm:text-base">
+              Explore players representing IOCF boards worldwide. Discover player profiles, match statistics, rankings and achievements as the global cricket community grows.
+            </motion.p>
+          </motion.div>
+          <motion.div
+            className="order-1 mx-auto aspect-square w-[min(52vw,20rem)] lg:order-2 lg:w-full lg:max-w-[24rem]"
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1.2, ease: EASE }}
+          >
+            <img src={LOGO.src} srcSet={LOGO.srcSet} sizes="(max-width: 1024px) 52vw, 24rem" alt={LOGO.alt} className="h-full w-full object-contain drop-shadow-[0_24px_60px_rgba(0,0,0,0.6)]" />
+          </motion.div>
+        </div>
+      </section>
+
+      <section id="boards" aria-label="Boards" className="gutter py-10 sm:py-14">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search boards by name" aria-label="Search boards by name" className={searchInput} />
+          <p role="status" aria-live="polite" className="text-xs text-smoke">
+            Showing {visible.length} of {data.b.boards.length} boards
+          </p>
+        </div>
+        {visible.length === 0 ? (
+          <div className="rounded-xl border border-white/10 bg-ink-2 px-5 py-12 text-center">
+            <p className="text-sm text-bone">No boards match your search.</p>
+            <button type="button" onClick={() => setQuery('')} className="mt-4 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+              CLEAR SEARCH
+            </button>
+          </div>
+        ) : (
+          <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visible.map((b) => {
+              const id = data.b.boardSlug(b);
+              const count = counts.get(id);
+              return (
+                <li key={id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(id)}
+                    aria-label={`View players of ${b.name}`}
+                    className="group flex h-full w-full flex-col gap-4 rounded-2xl border border-white/10 bg-ink-2 p-5 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="font-display text-2xl leading-tight tracking-wide text-bone">{b.name.toUpperCase()}</span>
+                      <Flag board={b} />
+                    </span>
+                    {count !== undefined && (
+                      <span className="text-xs text-mist">
+                        {count} {count === 1 ? 'player' : 'players'}
+                      </span>
+                    )}
+                    <span className="mt-auto text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW PLAYERS →</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </>
+  );
+}
+
+/* ---------- 2. a board's player list ---------- */
+
+type Sort = 'default' | 'asc' | 'desc';
+
+function PlayerList({ board, data }: { board: Board; data: Data }) {
+  const boardId = data.b.boardSlug(board);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<Sort>('default');
+  const all = useMemo(() => data.players.filter((p) => p.boardId === boardId), [data, boardId]);
+
+  const q = query.trim().toLowerCase();
+  const visible = all
+    .filter((p) => !q || p.name.toLowerCase().includes(q))
+    .sort((a, b) => (sort === 'default' ? 0 : (sort === 'asc' ? 1 : -1) * a.name.localeCompare(b.name)));
+
+  return (
+    <div className="gutter pb-16 pt-28">
+      <Breadcrumb items={[{ label: 'Player Directory', onClick: () => navigate() }, { label: board.name }]} />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate()}>BACK TO DIRECTORY</BackButton>
+      </div>
+      <header className="mt-6 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{all.length} PLAYERS</p>
+          <h1 className="mt-1 font-display text-[clamp(2.4rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{board.name.toUpperCase()}</h1>
+        </div>
+        <Flag board={board} className="text-5xl" />
+      </header>
+
+      <div className="mb-4 mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${board.name} players`} aria-label={`Search ${board.name} players`} className={searchInput} />
+        <label className="flex items-center gap-2 text-xs text-smoke">
+          Sort by name
+          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]">
+            <option value="default">Default order</option>
+            <option value="asc">A → Z</option>
+            <option value="desc">Z → A</option>
+          </select>
+        </label>
+      </div>
+      <p role="status" aria-live="polite" className="mb-4 text-xs text-smoke">
+        Showing {visible.length} of {all.length} players
+      </p>
+
+      {all.length === 0 ? (
+        <Notice tone="info">No players have been added for this board yet.</Notice>
+      ) : visible.length === 0 ? (
+        <div className="rounded-xl border border-white/10 bg-ink-2 px-5 py-12 text-center">
+          <p className="text-sm text-bone">No players match your search.</p>
+          <button type="button" onClick={() => setQuery('')} className="mt-4 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+            CLEAR SEARCH
+          </button>
+        </div>
+      ) : (
+        <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visible.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => navigate(boardId, p.id)}
+                aria-label={`View profile of ${p.name} (${board.name}, ID ${p.id})`}
+                className="group flex w-full flex-col gap-4 rounded-2xl border border-white/10 bg-ink-2 p-4 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+              >
+                <span className="flex items-center gap-4">
+                  <Avatar player={p} size="h-16 w-16" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-base font-semibold text-bone">{p.name}</span>
+                    <span className="mt-1 flex items-center gap-2 text-xs text-mist">
+                      <Flag board={board} className="text-base" />
+                      {board.name}
+                    </span>
+                  </span>
+                </span>
+                <span className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW PROFILE →</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ---------- 3. individual player profile ---------- */
+
+function PlayerProfile({ board, player }: { board: Board; player: Player }) {
+  const [tab, setTab] = useState<FormatId | null>(null);
+  const [mod, setMod] = useState<PlayersModule | null>(null);
+  useEffect(() => {
+    import('../data/players').then(setMod);
+  }, []);
+  const boardSlug = player.boardId;
+  const formats = mod?.FORMATS ?? [];
+  const activeFormat = tab ?? formats[0]?.id;
+
+  return (
+    <div className="gutter mx-auto max-w-5xl pb-16 pt-28">
+      <Breadcrumb
+        items={[
+          { label: 'Player Directory', onClick: () => navigate() },
+          { label: board.name, onClick: () => navigate(boardSlug) },
+          { label: `${player.name} (${player.id})` },
+        ]}
+      />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate(boardSlug)}>BACK TO {board.name.toUpperCase()} PLAYERS</BackButton>
+      </div>
+
+      <Card title="PLAYER OVERVIEW" className="mt-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <Avatar player={player} size="h-32 w-32" />
+          <dl className="grid flex-1 gap-4 sm:grid-cols-3">
+            <Fact label="Player name" value={player.name} />
+            <Fact label="Board">
+              <span className="flex items-center gap-2">
+                <Flag board={board} className="text-xl" />
+                {board.name}
+              </span>
+            </Fact>
+            <Fact label="Player ID" value={player.id} mono />
+          </dl>
+        </div>
+      </Card>
+
+      {mod && (
+        <>
+          <div className="mt-6 grid gap-6 md:grid-cols-2">
+            <Card title="BATTING STATISTICS">
+              <StatGrid fields={mod.BATTING_FIELDS} values={player.batting} />
+            </Card>
+            <Card title="BOWLING STATISTICS">
+              <StatGrid fields={mod.BOWLING_FIELDS} values={player.bowling} />
+            </Card>
+          </div>
+
+          <Card title="FORMAT-BASED STATISTICS" className="mt-6">
+            <div role="tablist" aria-label="Cricket format" className="flex flex-wrap gap-2">
+              {formats.map((f) => (
+                <button
+                  key={f.id}
+                  role="tab"
+                  type="button"
+                  id={`tab-${f.id}`}
+                  aria-selected={activeFormat === f.id}
+                  aria-controls="format-panel"
+                  onClick={() => setTab(f.id)}
+                  className={`rounded-full border px-4 py-1.5 text-xs font-semibold tracking-wide transition ${
+                    activeFormat === f.id ? 'border-[#c9a24b] bg-[#c9a24b] text-ink' : 'border-white/15 text-mist hover:border-white/40 hover:text-bone'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {activeFormat && (
+              <div id="format-panel" role="tabpanel" aria-labelledby={`tab-${activeFormat}`} className="mt-5 grid gap-6 md:grid-cols-2">
+                <div>
+                  <h3 className="mb-3 text-[10px] font-semibold tracking-[0.22em] text-smoke">BATTING</h3>
+                  <StatGrid fields={mod.BATTING_FIELDS} values={player.formats?.[activeFormat]?.batting} />
+                </div>
+                <div>
+                  <h3 className="mb-3 text-[10px] font-semibold tracking-[0.22em] text-smoke">BOWLING</h3>
+                  <StatGrid fields={mod.BOWLING_FIELDS} values={player.formats?.[activeFormat]?.bowling} />
+                </div>
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <Card title="RECENT PERFORMANCES">
+          <EntryList entries={player.recentPerformances} />
+        </Card>
+        <Card title="TOURNAMENT HISTORY">
+          <EntryList entries={player.tournaments} />
+        </Card>
+        <Card title="PLAYER ACHIEVEMENTS">
+          <EntryList entries={player.achievements} />
+        </Card>
+        <Card title="CURRENT RANKINGS">
+          <EntryList entries={player.rankings} />
+        </Card>
+        <Card title="CAREER HIGHLIGHTS" className="md:col-span-2">
+          <EntryList entries={player.highlights} />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export function Card({ title, className = '', children }: { title: string; className?: string; children: ReactNode }) {
+  return (
+    <section className={`rounded-2xl border border-white/10 bg-ink-2 p-5 ${className}`}>
+      <h2 className="mb-4 text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+export function Fact({ label, value, mono, children }: { label: string; value?: string; mono?: boolean; children?: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-semibold tracking-[0.22em] text-smoke">{label.toUpperCase()}</dt>
+      <dd className={`mt-1 break-words text-sm text-bone ${mono ? 'font-mono text-xs' : ''}`}>{children ?? value}</dd>
+    </div>
+  );
+}
+
+export function StatGrid<K extends string>({ fields, values }: { fields: readonly { key: K; label: string }[]; values?: Partial<Record<K, string | number>> }) {
+  return (
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3">
+      {fields.map((f) => {
+        const v = values?.[f.key];
+        return (
+          <div key={f.key} className="rounded-lg bg-ink-3 px-3 py-2.5">
+            <dt className="text-[10px] leading-tight tracking-wide text-smoke">{f.label}</dt>
+            <dd className={`mt-1 text-base font-semibold ${v === undefined ? 'text-smoke' : 'text-bone'}`}>
+              {v === undefined ? <span aria-label="Not available">{MISSING}</span> : v}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+export function EntryList({ entries }: { entries?: Entry[] }) {
+  if (!entries || entries.length === 0) return <p className="text-sm text-smoke">Not available</p>;
+  return (
+    <ul className="space-y-3">
+      {entries.map((e, i) => (
+        <li key={`${e.title}-${i}`} className="border-l border-[#c9a24b]/40 pl-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <p className="text-sm font-semibold text-bone">{e.title}</p>
+            {e.date && <p className="text-[11px] text-smoke">{e.date}</p>}
+          </div>
+          {e.detail && <p className="mt-1 text-[13px] leading-relaxed text-mist">{e.detail}</p>}
+        </li>
+      ))}
+    </ul>
+  );
+}
