@@ -10,9 +10,16 @@
     "images": "node scripts/build-images.mjs",
     "sync": "node scripts/sync-sheet.mjs",
     "serve": "node server/serve.mjs",
-    "start": "npm run build && npm run serve"
+    "start": "npm run build && npm run serve",
+    "cap:sync": "npm run build && cap sync",
+    "cap:ios": "npm run cap:sync && cap open ios",
+    "cap:android": "npm run cap:sync && cap open android"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "exceljs": "^4.4.0",
     "framer-motion": "11.18.2",
     "lenis": "1.1.20",
@@ -20,6 +27,9 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
     "@tailwindcss/vite": "4.1.4",
     "@types/react": "18.3.20",
     "@types/react-dom": "18.3.6",
