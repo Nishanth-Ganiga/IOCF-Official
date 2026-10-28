@@ -35,7 +35,7 @@ else {
   setInterval(sync, Math.max(1, cfg.intervalMinutes) * 60_000).unref?.();
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.pdf': 'application/pdf', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.pdf': 'application/pdf', '.apk': 'application/vnd.android.package-archive', '.ico': 'image/x-icon' };
 
 function send(res, code, body, headers = {}) {
   res.writeHead(code, headers);
@@ -52,9 +52,11 @@ http
       // the freshly synced copy, falling back to whatever the build shipped
       const file = fs.existsSync(cacheFile) ? cacheFile : path.join(dist, 'iocf-data.json');
       if (!fs.existsSync(file)) return send(res, 404, 'No data yet');
-      return send(res, 200, fs.readFileSync(file), { 'content-type': TYPES['.json'], 'cache-control': 'no-cache' });
+      return send(res, 200, fs.readFileSync(file), { 'content-type': TYPES['.json'], 'cache-control': 'no-cache', 'access-control-allow-origin': '*' });
     }
     if (pathname === '/api/status') return send(res, 200, JSON.stringify(status), { 'content-type': TYPES['.json'], 'cache-control': 'no-store' });
+
+    if (pathname.startsWith('/downloads/') && !fs.existsSync(path.join(dist, pathname))) return send(res, 404, 'Not available yet');
 
     let file = path.normalize(path.join(dist, pathname));
     if (!file.startsWith(dist)) return send(res, 403, 'Forbidden');

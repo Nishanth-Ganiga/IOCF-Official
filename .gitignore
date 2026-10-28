@@ -3,3 +3,7 @@ dist
 .DS_Store
 *.local
 /.claude.cache
+ios/App/Pods
+android/.gradle
+android/local.properties
+android/app/build

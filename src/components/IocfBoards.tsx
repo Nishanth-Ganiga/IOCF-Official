@@ -13,7 +13,7 @@ import { Flag } from './IocfChairmen';
 import { IocfHeader, LOGO } from './IocfHome';
 import { Avatar, BackButton, Breadcrumb, Card, Fact, Loading, Notice, searchInput } from './IocfPlayers';
 import { Compare, Councils, Credits, Leadership, Rankings, Sponsors } from './IocfBoardPages';
-import { Bar, chip, fmtNum, GOLD, linkBtn, Move, navigate, selectCls, StarButton, useData, useFavs, useRoute, type Data } from './boardKit';
+import { Bar, chip, fmtNum, GOLD, InstagramLink, linkBtn, Move, navigate, selectCls, StarButton, useData, useFavs, useRoute, type Data } from './boardKit';
 import { downloadBoardReport } from './boardReport';
 import { announcementsFor } from '../data/chairmanContent';
 import SiteFooter from './SiteFooter';
@@ -342,7 +342,8 @@ function Directory({ data }: { data: Data }) {
                           </span>
                           <span className="mt-auto text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW BOARD →</span>
                         </button>
-                        <span className="absolute bottom-4 right-4">
+                        <span className="absolute bottom-4 right-4 flex items-center gap-3">
+                          <InstagramLink board={b} />
                           <StarButton on={favs.includes(id)} onClick={() => toggle(id)} name={b.name} />
                         </span>
                       </li>
@@ -363,6 +364,7 @@ function Directory({ data }: { data: Data }) {
                   <th className="px-4 py-3 text-right font-semibold">RANK</th>
                   <th className="px-4 py-3 text-right font-semibold">CREDITS</th>
                   <th className="px-4 py-3 text-right font-semibold">PLAYERS</th>
+                  <th className="px-4 py-3 text-right font-semibold">INSTAGRAM</th>
                 </tr>
               </thead>
               <tbody>
@@ -386,6 +388,9 @@ function Directory({ data }: { data: Data }) {
                       </td>
                       <td className="px-4 py-2.5 text-right text-mist">{creditsOf(b) !== undefined ? fmtNum(creditsOf(b)!) : '—'}</td>
                       <td className="px-4 py-2.5 text-right text-mist">{counts.get(id) ?? 0}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <InstagramLink board={b} />
+                      </td>
                     </tr>
                   );
                 })}
@@ -468,6 +473,7 @@ function BoardPage({ board, data, onSwitch }: { board: Board; data: Data; onSwit
             <button type="button" onClick={() => navigate('compare', slug)} className={linkBtn}>
               COMPARE →
             </button>
+            <InstagramLink board={board} label="INSTAGRAM" className="text-xs font-semibold tracking-[0.2em] !text-[#c9a24b] hover:underline" />
             <button type="button" onClick={() => downloadBoardReport(board, { players: squad.length, awardWinners: winners, council })} className={linkBtn}>
               ⬇ REPORT CARD
             </button>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useFavourites } from '../data/favourites';
 import type { Board } from '../data/boards';
+import { instagramOf } from '../data/social';
 import type { Player } from '../data/players';
 import type { Umpire } from '../data/umpires';
 
@@ -69,6 +70,29 @@ export function StarButton({ on, onClick, name }: { on: boolean; onClick: () => 
     >
       {on ? '★' : '☆'}
     </button>
+  );
+}
+
+/** Opens the board's official Instagram page in a new tab; renders nothing when none is listed. */
+export function InstagramLink({ board, label, className = '' }: { board: Board; label?: string; className?: string }) {
+  const ig = instagramOf(board);
+  if (!ig) return null;
+  return (
+    <a
+      href={ig.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${board.name} on Instagram (@${ig.handle}), opens in a new tab`}
+      title={`@${ig.handle}`}
+      className={`inline-flex items-center gap-1.5 text-smoke transition hover:text-[#c9a24b] ${className}`}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-[18px] w-[18px]" aria-hidden>
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+      </svg>
+      {label}
+    </a>
   );
 }
 

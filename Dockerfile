@@ -34,12 +34,15 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 
-# Final stage for app image
-FROM nginx
+# Final stage for app image: a small Node server that serves dist/ and re-syncs the Google Sheet
+FROM base
 
-# Copy built application
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/server ./server
+COPY --from=build /app/scripts ./scripts
+COPY --from=build /app/iocf.config.json /app/package.json ./
 
-# Start the server by default, this can be overwritten at runtime
-EXPOSE 80
-CMD [ "/usr/sbin/nginx", "-g", "daemon off;" ]
+ENV PORT=8080
+EXPOSE 8080
+CMD [ "node", "server/serve.mjs" ]

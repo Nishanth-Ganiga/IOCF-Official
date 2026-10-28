@@ -1,0 +1,11 @@
+{
+  "appId": "com.iocf.app",
+  "appName": "IOCF",
+  "webDir": "dist",
+  "backgroundColor": "#07070a",
+  "ios": { "contentInset": "never" },
+  "plugins": {
+    "SplashScreen": { "launchAutoHide": true, "launchShowDuration": 800, "backgroundColor": "#07070a" },
+    "StatusBar": { "style": "DARK", "backgroundColor": "#07070a" }
+  }
+}
