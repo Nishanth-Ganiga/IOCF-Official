@@ -7,6 +7,9 @@ import { useSmoothScroll } from '../hooks/smoothScroll';
 import { EASE } from './fx';
 import { Flag } from './IocfChairmen';
 import { IocfHeader, LOGO } from './IocfHome';
+import SiteFooter, { ShareButton } from './SiteFooter';
+import { franchiseHistory } from '../data/franchise';
+import { useFavourites } from '../data/favourites';
 
 type BoardsModule = typeof import('../data/boards');
 type PlayersModule = typeof import('../data/players');
@@ -59,7 +62,7 @@ function useData() {
 export default function IocfPlayers({ profileId, onSwitch }: { profileId: ProfileId; onSwitch: (id: ProfileId) => void }) {
   const { scrollTo } = useSmoothScroll();
   const { data, failed } = useData();
-  const [boardId, playerId] = useRoute();
+  const [boardId, playerId, extraId] = useRoute();
 
   useEffect(() => {
     scrollTo(0, { offset: 0 });
@@ -84,17 +87,18 @@ export default function IocfPlayers({ profileId, onSwitch }: { profileId: Profil
   else if (boardId === 'all') body = <AllPlayers data={data} />;
   else if (boardId === 'achievements') body = <AchievementsWall data={data} />;
   else if (boardId === 'highlights') body = <HighlightsGallery data={data} />;
+  else if (boardId === 'compare') body = <ComparePlayers data={data} a={playerId} b={extraId} />;
   else if (!board) body = <NotFound what="board" />;
   else if (!playerId) body = <PlayerList board={board} data={data} />;
   else if (!player) body = <NotFound what="player" board={board} />;
-  else body = <PlayerProfile board={board} player={player} />;
+  else body = <PlayerProfile board={board} player={player} onSwitch={onSwitch} />;
 
   return (
     <>
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />
       <main className="min-h-[100svh]">
         {body}
-        <footer className="gutter border-t border-white/5 py-10 text-center text-xs text-smoke">One Federation. Four Roles. One Cricketing Vision.</footer>
+        <SiteFooter />
       </main>
     </>
   );
@@ -194,6 +198,7 @@ const BROWSE = [
   { route: 'all', title: 'ALL PLAYERS', blurb: 'Every player in one list. Filter by board, tournament or achievements, and jump by letter.' },
   { route: 'achievements', title: 'ACHIEVEMENTS WALL', blurb: 'Award winners grouped by tournament.' },
   { route: 'highlights', title: 'HIGHLIGHTS', blurb: 'Career highlight gallery, with video links as they are added.' },
+  { route: 'compare', title: 'COMPARE PLAYERS', blurb: 'Put two players side by side: awards, tournaments and franchise history.' },
 ];
 
 function Directory({ data }: { data: Data }) {
@@ -237,7 +242,7 @@ function Directory({ data }: { data: Data }) {
       </section>
 
       <section aria-label="Browse players" className="gutter pt-4">
-        <ul className="grid gap-4 sm:grid-cols-3">
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {BROWSE.map((l) => (
             <li key={l.route}>
               <button
@@ -316,9 +321,10 @@ const filterBtn = (on: boolean) =>
   `rounded-full border px-3.5 py-1.5 text-xs font-semibold tracking-wide transition ${on ? 'border-[#c9a24b] bg-[#c9a24b] text-ink' : 'border-white/15 text-mist hover:border-white/40 hover:text-bone'}`;
 const selectCls = 'rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]';
 
-function PlayerCard({ player, board }: { player: Player; board?: Board }) {
+function PlayerCard({ player, board, fav, onFav }: { player: Player; board?: Board; fav?: boolean; onFav?: () => void }) {
   const awards = player.achievements?.length ?? 0;
   return (
+    <div className="relative">
     <button
       type="button"
       onClick={() => navigate(player.boardId, player.id)}
@@ -344,6 +350,12 @@ function PlayerCard({ player, board }: { player: Player; board?: Board }) {
       </span>
       <span className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW PROFILE →</span>
     </button>
+    {onFav && (
+      <button type="button" onClick={onFav} aria-pressed={fav} aria-label={`${fav ? 'Remove' : 'Add'} ${player.name} ${fav ? 'from' : 'to'} favourites`} className={`absolute bottom-3 right-4 text-lg leading-none ${fav ? 'text-[#c9a24b]' : 'text-smoke hover:text-bone'}`}>
+        {fav ? '★' : '☆'}
+      </button>
+    )}
+    </div>
   );
 }
 
@@ -354,6 +366,8 @@ function Roster({ players, data, boardId, label }: { players: Player[]; data: Da
   const [board, setBoard] = useState('');
   const [tournament, setTournament] = useState('');
   const [awardsOnly, setAwardsOnly] = useState(false);
+  const [favOnly, setFavOnly] = useState(false);
+  const { favs, toggle } = useFavourites('players');
 
   const boardBySlug = useMemo(() => new Map(data.b.boards.map((b) => [data.b.boardSlug(b), b])), [data]);
   const tournaments = useMemo(() => [...new Set(players.flatMap(tournamentsOf))].sort(), [players]);
@@ -365,6 +379,7 @@ function Roster({ players, data, boardId, label }: { players: Player[]; data: Da
     .filter((p) => !board || p.boardId === board)
     .filter((p) => !tournament || tournamentsOf(p).includes(tournament))
     .filter((p) => !awardsOnly || (p.achievements?.length ?? 0) > 0)
+    .filter((p) => !favOnly || favs.includes(p.id))
     .sort((a, b) => (sort === 'default' ? 0 : (sort === 'asc' ? 1 : -1) * a.name.localeCompare(b.name)));
 
   const grouped = sort !== 'default';
@@ -375,12 +390,13 @@ function Roster({ players, data, boardId, label }: { players: Player[]; data: Da
     return [...m.entries()].map(([letter, items]) => ({ letter, items }));
   }, [visible, grouped]);
   const present = new Set(groups.map((g) => g.letter));
-  const filtered = Boolean(q || board || tournament || awardsOnly);
+  const filtered = Boolean(q || board || tournament || awardsOnly || favOnly);
   const clear = () => {
     setQuery('');
     setBoard('');
     setTournament('');
     setAwardsOnly(false);
+    setFavOnly(false);
   };
 
   return (
@@ -418,6 +434,9 @@ function Roster({ players, data, boardId, label }: { players: Player[]; data: Da
         </select>
         <button type="button" aria-pressed={awardsOnly} onClick={() => setAwardsOnly((v) => !v)} className={filterBtn(awardsOnly)}>
           Has achievements
+        </button>
+        <button type="button" aria-pressed={favOnly} onClick={() => setFavOnly((v) => !v)} className={filterBtn(favOnly)}>
+          ★ Favourites{favs.length ? ` (${favs.length})` : ''}
         </button>
         {filtered && (
           <button type="button" onClick={clear} className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
@@ -470,7 +489,7 @@ function Roster({ players, data, boardId, label }: { players: Player[]; data: Da
             <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {g.items.map((p) => (
                 <li key={p.id}>
-                  <PlayerCard player={p} board={boardBySlug.get(p.boardId)} />
+                  <PlayerCard player={p} board={boardBySlug.get(p.boardId)} fav={favs.includes(p.id)} onFav={() => toggle(p.id)} />
                 </li>
               ))}
             </ul>
@@ -713,7 +732,9 @@ function HighlightsGallery({ data }: { data: Data }) {
 
 /* ---------- 3. individual player profile ---------- */
 
-function PlayerProfile({ board, player }: { board: Board; player: Player }) {
+function PlayerProfile({ board, player, onSwitch }: { board: Board; player: Player; onSwitch: (id: ProfileId) => void }) {
+  const { favs, toggle } = useFavourites('players');
+  const stints = franchiseHistory(player, board.name);
   const [tab, setTab] = useState<FormatId | null>(null);
   const [mod, setMod] = useState<PlayersModule | null>(null);
   useEffect(() => {
@@ -736,7 +757,17 @@ function PlayerProfile({ board, player }: { board: Board; player: Player }) {
         <BackButton onClick={() => navigate(boardSlug)}>BACK TO {board.name.toUpperCase()} PLAYERS</BackButton>
       </div>
 
-      <Card title="PLAYER OVERVIEW" className="mt-6">
+      <div className="mt-6 flex flex-wrap items-center gap-5">
+        <button type="button" onClick={() => toggle(player.id)} aria-pressed={favs.includes(player.id)} aria-label={`${favs.includes(player.id) ? 'Remove' : 'Add'} ${player.name} ${favs.includes(player.id) ? 'from' : 'to'} favourites`} className={`text-lg leading-none ${favs.includes(player.id) ? 'text-[#c9a24b]' : 'text-smoke hover:text-bone'}`}>
+          {favs.includes(player.id) ? '★' : '☆'}
+        </button>
+        <ShareButton />
+        <button type="button" onClick={() => navigate('compare', player.id)} className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+          COMPARE →
+        </button>
+      </div>
+
+      <Card title="PLAYER OVERVIEW" className="mt-4">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <Avatar player={player} size="h-32 w-32" />
           <dl className="grid flex-1 gap-4 sm:grid-cols-3">
@@ -814,6 +845,34 @@ function PlayerProfile({ board, player }: { board: Board; player: Player }) {
         <Card title="CAREER HIGHLIGHTS" className="md:col-span-2">
           <EntryList entries={player.highlights} />
         </Card>
+        <Card title="FRANCHISE HISTORY" className="md:col-span-2">
+          {stints.length === 0 ? (
+            <p className="text-sm text-smoke">No franchise league squads found under this name.</p>
+          ) : (
+            <ul className="space-y-3">
+              {stints.map((st) => (
+                <li key={`${st.league.id}-${st.team.id}`} className="border-l border-[#c9a24b]/40 pl-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.hash = `#/leagues/${st.league.id}/${st.team.id}`;
+                      onSwitch('leagues');
+                    }}
+                    className="text-sm font-semibold text-bone hover:text-[#c9a24b]"
+                  >
+                    {st.team.name} <span className="font-normal text-mist">· {st.league.shortName}</span>
+                  </button>
+                  <p className="mt-1 text-[13px] text-mist">
+                    {[st.entry.role, st.entry.price !== undefined ? `${st.entry.price.toLocaleString('en-US')} credits` : undefined, st.entry.mom ? `${st.entry.mom} Man of the Match` : undefined, st.entry.bat ? `${st.entry.bat} Best Batsman` : undefined, st.entry.bowl ? `${st.entry.bowl} Best Bowler` : undefined, ...st.honours.map((h) => h.title)]
+                      .filter(Boolean)
+                      .join(' · ') || 'Squad member'}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-[11px] text-smoke">Matched by player name, so check that it is the same person.</p>
+        </Card>
       </div>
     </div>
   );
@@ -874,5 +933,99 @@ export function EntryList({ entries }: { entries?: Entry[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+
+/* ---------- compare two players ---------- */
+
+function ComparePlayers({ data, a, b }: { data: Data; a?: string; b?: string }) {
+  const byId = useMemo(() => new Map(data.players.map((p) => [p.id, p])), [data]);
+  const boardBy = useMemo(() => new Map(data.b.boards.map((x) => [data.b.boardSlug(x), x])), [data]);
+  const chosen = [a, b].map((id) => (id ? byId.get(id) : undefined));
+  const set = (i: number, id: string) => {
+    const next = [chosen[0]?.id ?? '', chosen[1]?.id ?? ''];
+    next[i] = id;
+    navigate('compare', ...next.filter(Boolean));
+  };
+  const players = chosen.filter((p): p is Player => !!p);
+  const options = useMemo(() => [...data.players].sort((x, y) => x.name.localeCompare(y.name)), [data]);
+
+  const tournamentOf = (e: Entry) => (e.detail ?? '').split(' · ')[0].trim() || 'Other awards';
+  const rows: { label: string; values: string[] }[] = players.length
+    ? [
+        { label: 'Board', values: players.map((p) => boardBy.get(p.boardId)?.name ?? '—') },
+        { label: 'Awards', values: players.map((p) => String(p.achievements?.length ?? 0)) },
+        { label: 'Tournaments', values: players.map((p) => String(p.tournaments?.length ?? 0)) },
+        { label: 'Tournament list', values: players.map((p) => (p.tournaments ?? []).map((t) => t.title).join(', ') || '—') },
+        { label: 'Awards by tournament', values: players.map((p) => { const m = new Map<string, number>(); (p.achievements ?? []).forEach((e) => m.set(tournamentOf(e), (m.get(tournamentOf(e)) ?? 0) + 1)); return [...m.entries()].map(([t, n]) => `${t}: ${n}`).join(' · ') || '—'; }) },
+        { label: 'Highlights', values: players.map((p) => (p.highlights ?? []).map((h) => h.title).join(' · ') || '—') },
+        { label: 'Franchise squads', values: players.map((p) => { const bd = boardBy.get(p.boardId); const st = bd ? franchiseHistory(p, bd.name) : []; return st.map((x) => `${x.team.name} (${x.league.shortName})`).join(', ') || '—'; }) },
+      ]
+    : [];
+
+  return (
+    <div className="gutter mx-auto max-w-5xl pb-16 pt-28">
+      <Breadcrumb items={[{ label: 'Player Directory', onClick: () => navigate() }, { label: 'Compare Players' }]} />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate()}>BACK TO DIRECTORY</BackButton>
+      </div>
+      <header className="mt-6">
+        <h1 className="font-display text-[clamp(2.4rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">COMPARE PLAYERS</h1>
+        <p className="mt-3 text-sm text-mist">Batting and bowling statistics will appear here once they are recorded.</p>
+      </header>
+      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+        {[0, 1].map((i) => (
+          <label key={i} className="text-xs text-smoke">
+            Player {i + 1}
+            <select value={chosen[i]?.id ?? ''} onChange={(e) => set(i, e.target.value)} className="mt-1 w-full rounded-md border border-white/15 bg-ink-2 px-2 py-2 text-sm text-bone outline-none focus:border-[#c9a24b]">
+              <option value="">Select a player</option>
+              {options.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} — {boardBy.get(p.boardId)?.name ?? p.boardId}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+      {players.length < 2 ? (
+        <div className="mt-6">
+          <Notice tone="info">Pick two players to compare.</Notice>
+        </div>
+      ) : (
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-white/10 bg-ink-2">
+          <table className="w-full min-w-[480px] text-left text-sm">
+            <thead>
+              <tr>
+                <th className="px-4 py-3" />
+                {players.map((p) => (
+                  <th key={p.id} className="px-4 py-3">
+                    <button type="button" onClick={() => navigate(p.boardId, p.id)} className="flex items-center gap-3 text-left text-bone hover:text-[#c9a24b]">
+                      <Avatar player={p} size="h-10 w-10" />
+                      {p.name}
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.label} className="border-t border-white/5 align-top">
+                  <th scope="row" className="px-4 py-2.5 text-xs font-medium text-smoke">
+                    {r.label}
+                  </th>
+                  {r.values.map((v, i) => (
+                    <td key={i} className="px-4 py-2.5 text-[13px] text-bone">
+                      {v}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

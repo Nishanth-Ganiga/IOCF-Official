@@ -21,6 +21,13 @@ export type Announcement = {
 
 export const visions: Record<string, string> = {};
 
+/** Public contact links per board slug. Only add what the chairman has agreed to share. */
+export type Contact = { email?: string; linkedin?: string; instagram?: string; website?: string };
+export const contacts: Record<string, Contact> = {};
+
+/** Date the current chairman took office, per board slug (ISO, e.g. "2026-03-01"). Shown as "Chairman since …". */
+export const appointedOn: Record<string, string> = {};
+
 export const announcements: Announcement[] = [];
 
 /** Newest first: this board's items plus federation-wide ones. */

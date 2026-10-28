@@ -8,6 +8,9 @@ import { EASE } from './fx';
 import { Flag } from './IocfChairmen';
 import { IocfHeader, LOGO } from './IocfHome';
 import { BackButton, Breadcrumb, Card, Loading, MISSING, Notice, searchInput } from './IocfPlayers';
+import { useFavourites } from '../data/favourites';
+import { ShareButton } from './SiteFooter';
+import SiteFooter from './SiteFooter';
 
 type LeaguesModule = typeof import('../data/leagues');
 type BoardsModule = typeof import('../data/boards');
@@ -92,7 +95,7 @@ export default function IocfLeagues({ profileId, onSwitch }: { profileId: Profil
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />
       <main className="min-h-[100svh]">
         {body}
-        <footer className="gutter border-t border-white/5 py-10 text-center text-xs text-smoke">One Federation. Four Roles. One Cricketing Vision.</footer>
+        <SiteFooter />
       </main>
     </>
   );
@@ -237,9 +240,9 @@ function MatchRow({ m, data }: { m: LeagueMatch; data: Data }) {
 function LeaguePage({ league, data }: { league: League; data: Data }) {
   const table = useMemo(() => data.m.standings(league), [data, league]);
   const [teamQuery, setTeamQuery] = useState('');
+  const [venue, setVenue] = useState('');
   const q = teamQuery.trim().toLowerCase();
   const teams = league.teams.filter((t) => !q || t.name.toLowerCase().includes(q));
-  const playoffs = league.matches.filter((m) => m.stage);
   const regular = league.matches.filter((m) => !m.stage);
   const facts = [
     { label: 'Host board', value: league.host },
@@ -259,7 +262,10 @@ function LeaguePage({ league, data }: { league: League; data: Data }) {
           <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{league.shortName}</p>
           <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{league.name.toUpperCase()}</h1>
         </div>
-        <StatusBadge status={league.status} />
+        <div className="flex flex-col items-end gap-3">
+          <StatusBadge status={league.status} />
+          <ShareButton />
+        </div>
       </header>
 
       <Card title="LEAGUE SUMMARY" className="mt-6">
@@ -363,32 +369,191 @@ function LeaguePage({ league, data }: { league: League; data: Data }) {
         </Card>
       )}
 
-      <section className="mt-8" aria-label="Matches">
-        <h2 className="mb-4 text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">RESULTS ({league.matches.length} MATCHES)</h2>
-        {league.matches.length === 0 ? (
-          <p className="rounded-xl border border-white/10 bg-ink-2 px-5 py-8 text-center text-sm text-mist">No matches have been recorded for this league.</p>
-        ) : (
-          <>
-            {playoffs.length > 0 && (
-              <>
-                <h3 className="mb-3 text-[10px] font-semibold tracking-[0.22em] text-smoke">PLAYOFFS</h3>
-                <ul className="mb-6 space-y-2">
-                  {playoffs.map((m, i) => (
-                    <MatchRow key={`p${i}`} m={m} data={data} />
-                  ))}
-                </ul>
-              </>
+      <AuctionCard league={league} data={data} />
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <VenuesCard league={league} data={data} onPick={(v) => { setVenue(v); window.setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
+        <HeadToHeadCard league={league} data={data} />
+      </div>
+      <ResultsExplorer league={league} data={data} venue={venue} setVenue={setVenue} />
+    </div>
+  );
+}
+
+function AuctionCard({ league, data }: { league: League; data: Data }) {
+  const rows = useMemo(() => data.m.auction(league).filter((r) => r.spent > 0 || r.purse !== undefined), [data, league]);
+  if (rows.length === 0) return null;
+  const maxSpent = Math.max(1, ...rows.map((r) => r.spent));
+  return (
+    <Card title="AUCTION · SPEND AND REMAINING PURSE" className="mt-8">
+      <ul className="space-y-3">
+        {rows.map((r) => (
+          <li key={r.team.id} className="grid items-center gap-2 sm:grid-cols-[11rem_1fr_16rem]">
+            <button type="button" onClick={() => navigate(league.id, r.team.id)} className="text-left text-sm font-semibold text-bone hover:text-[#c9a24b]">
+              {r.team.name}
+            </button>
+            <span className="h-2.5 overflow-hidden rounded-full bg-ink-3" role="img" aria-label={`${r.team.name} spent ${fmt(r.spent)} credits`}>
+              <span className="block h-full rounded-full bg-[#c9a24b]" style={{ width: `${(r.spent / maxSpent) * 100}%` }} />
+            </span>
+            <span className="text-[12px] text-mist">
+              Spent {fmt(r.spent)}
+              {r.purse !== undefined && ` · Purse left ${fmt(r.purse)}`}
+              {r.top && ` · Top buy ${r.top.name} (${fmt(r.top.price)})`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[11px] text-smoke">Spend adds up the recorded price of each squad member. Purse left is the figure in the team's notes.</p>
+    </Card>
+  );
+}
+
+function VenuesCard({ league, data, onPick }: { league: League; data: Data; onPick: (venue: string) => void }) {
+  const venues = useMemo(() => data.m.venuesOf(league), [data, league]);
+  return (
+    <Card title="VENUES">
+      {venues.length === 0 ? (
+        <p className="text-sm text-smoke">No venues recorded.</p>
+      ) : (
+        <ul className="space-y-2">
+          {venues.map((v) => (
+            <li key={v.venue}>
+              <button type="button" onClick={() => onPick(v.venue)} className="flex w-full items-baseline justify-between gap-3 border-l border-[#c9a24b]/40 pl-3 text-left hover:text-[#c9a24b]">
+                <span className="text-sm text-bone">{v.venue}</span>
+                <span className="text-[11px] text-smoke">
+                  {v.matches} {v.matches === 1 ? 'match' : 'matches'}
+                  {v.topWinner && ` · most wins: ${v.topWinner[0]} (${v.topWinner[1]})`}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function HeadToHeadCard({ league, data }: { league: League; data: Data }) {
+  const [a, setA] = useState('');
+  const [b, setB] = useState('');
+  const res = a && b && a !== b ? data.m.headToHead(league, a, b) : null;
+  return (
+    <Card title="HEAD TO HEAD">
+      <div className="flex flex-wrap gap-2">
+        {[
+          [a, setA, 'Team A'],
+          [b, setB, 'Team B'],
+        ].map(([val, set, label]) => (
+          <select key={label as string} value={val as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} aria-label={label as string} className="rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]">
+            <option value="">{label as string}</option>
+            {league.teams.map((t) => (
+              <option key={t.id} value={t.name}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        ))}
+      </div>
+      {!res ? (
+        <p className="mt-4 text-sm text-smoke">Pick two different teams to see how they have fared against each other.</p>
+      ) : res.games.length === 0 ? (
+        <p className="mt-4 text-sm text-smoke">These teams have not met in this league.</p>
+      ) : (
+        <>
+          <p className="mt-4 text-sm text-bone">
+            {a} <span className="font-semibold text-[#c9a24b]">{res.aWins}</span> – <span className="font-semibold text-[#c9a24b]">{res.bWins}</span> {b} <span className="text-smoke">in {res.games.length} {res.games.length === 1 ? 'match' : 'matches'}</span>
+          </p>
+          <ul className="mt-3 space-y-1.5 text-[12px] text-mist">
+            {res.games.map((m, i) => (
+              <li key={i}>
+                {[m.stage, m.date, m.venue].filter(Boolean).join(' · ')} — {m.winner ? `${m.winner} won` : 'no result recorded'}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
+  );
+}
+function ResultsExplorer({ league, data, venue, setVenue }: { league: League; data: Data; venue: string; setVenue: (v: string) => void }) {
+  const [team, setTeam] = useState('');
+  const [umpire, setUmpire] = useState('');
+  const [stage, setStage] = useState<'all' | 'league' | 'playoffs'>('all');
+  const [newest, setNewest] = useState(false);
+  const sel = 'rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]';
+
+  const umpires = useMemo(() => [...new Set(league.matches.map((m) => m.umpire).filter((u): u is string => !!u))].sort(), [league]);
+  const venues = useMemo(() => [...new Set(league.matches.map((m) => m.venue).filter((u): u is string => !!u))].sort(), [league]);
+  const shown = league.matches
+    .filter((m) => !team || m.teams.includes(team))
+    .filter((m) => !venue || m.venue === venue)
+    .filter((m) => !umpire || m.umpire === umpire)
+    .filter((m) => stage === 'all' || (stage === 'playoffs') === Boolean(m.stage));
+  const list = newest ? [...shown].reverse() : shown;
+  const filtered = Boolean(team || venue || umpire || stage !== 'all');
+  const clear = () => {
+    setTeam('');
+    setVenue('');
+    setUmpire('');
+    setStage('all');
+  };
+
+  return (
+    <section id="results" className="mt-8" aria-label="Matches">
+      <h2 className="mb-4 text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">RESULTS ({league.matches.length} MATCHES)</h2>
+      {league.matches.length === 0 ? (
+        <p className="rounded-xl border border-white/10 bg-ink-2 px-5 py-8 text-center text-sm text-mist">No matches have been recorded for this league.</p>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <select value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Filter by team" className={sel}>
+              <option value="">All teams</option>
+              {league.teams.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <select value={venue} onChange={(e) => setVenue(e.target.value)} aria-label="Filter by venue" className={sel}>
+              <option value="">All venues</option>
+              {venues.map((v) => (
+                <option key={v}>{v}</option>
+              ))}
+            </select>
+            <select value={umpire} onChange={(e) => setUmpire(e.target.value)} aria-label="Filter by umpire" className={sel}>
+              <option value="">All umpires</option>
+              {umpires.map((u) => (
+                <option key={u}>{u}</option>
+              ))}
+            </select>
+            <select value={stage} onChange={(e) => setStage(e.target.value as typeof stage)} aria-label="Filter by stage" className={sel}>
+              <option value="all">All stages</option>
+              <option value="league">League stage</option>
+              <option value="playoffs">Playoffs</option>
+            </select>
+            <label className="flex items-center gap-2 text-xs text-smoke">
+              <input type="checkbox" checked={newest} onChange={(e) => setNewest(e.target.checked)} /> Latest first
+            </label>
+            {filtered && (
+              <button type="button" onClick={clear} className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+                CLEAR FILTERS
+              </button>
             )}
-            <h3 className="mb-3 text-[10px] font-semibold tracking-[0.22em] text-smoke">LEAGUE STAGE</h3>
+          </div>
+          <p role="status" aria-live="polite" className="mb-3 text-xs text-smoke">
+            Showing {list.length} of {league.matches.length} matches
+          </p>
+          {list.length === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-ink-2 px-5 py-8 text-center text-sm text-mist">No matches match your filters.</p>
+          ) : (
             <ul className="space-y-2">
-              {regular.map((m, i) => (
-                <MatchRow key={`r${i}`} m={m} data={data} />
+              {list.map((m, i) => (
+                <MatchRow key={i} m={m} data={data} />
               ))}
             </ul>
-          </>
-        )}
-      </section>
-    </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -399,6 +564,9 @@ type Sort = 'squad' | 'name' | 'price' | 'awards';
 function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; data: Data }) {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>('squad');
+  const { favs, toggle: toggleFav } = useFavourites('teams');
+  const favId = `${league.id}/${team.id}`;
+  const isFav = favs.includes(favId);
   const record = data.m.standings(league).find((r) => r.id === team.id);
   const teamMatches = league.matches.filter((m) => m.teams.includes(team.name));
   const result = team.name === league.champions ? 'Champions' : team.name === league.runnersUp ? 'Runners-up' : team.name === league.fairPlay ? 'Fair Play award' : undefined;
@@ -424,6 +592,12 @@ function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; da
         <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{league.name.toUpperCase()}</p>
         <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{team.name.toUpperCase()}</h1>
         {result && <p className="mt-3 w-fit rounded border border-[#c9a24b]/50 px-2 py-0.5 text-[11px] font-semibold tracking-[0.2em] text-[#c9a24b]">{result.toUpperCase()}</p>}
+        <div className="mt-3 flex items-center gap-4">
+          <button type="button" onClick={() => toggleFav(favId)} aria-pressed={isFav} aria-label={isFav ? `Remove ${team.name} from favourites` : `Add ${team.name} to favourites`} className={`text-lg leading-none ${isFav ? 'text-[#c9a24b]' : 'text-smoke hover:text-bone'}`}>
+            {isFav ? '★' : '☆'}
+          </button>
+          <ShareButton />
+        </div>
       </header>
 
       <Card title="TEAM SUMMARY" className="mt-6">

@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildDataset, readWorkbook } from './index.mjs';
+import { withRankHistory } from './history.mjs';
 
 export function loadConfig(root = process.cwd()) {
   let file = {};
@@ -67,7 +68,9 @@ export async function syncOnce({ sheetUrl, sheetFile, outputs }) {
   } else {
     throw new Error('No sheet configured. Set "sheetUrl" in iocf.config.json (or the IOCF_SHEET_URL environment variable).');
   }
-  const { dataset, report } = buildDataset(book, { source });
+  const built = buildDataset(book, { source });
+  const { report } = built;
+  const dataset = withRankHistory(built.dataset, outputs[0]);
   const text = JSON.stringify(dataset);
   for (const out of outputs) writeAtomic(out, text);
   return { generatedAt: dataset.generatedAt, source, report };

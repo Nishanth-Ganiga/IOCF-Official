@@ -132,7 +132,7 @@ export default function ProfileSelector({ onPick }: { onPick: (id: ProfileId) =>
         ))}
       </motion.ul>
       <p className="relative mt-12 max-w-md text-center text-xs leading-relaxed text-smoke">
-        One Federation. Four Roles. One Cricketing Vision.
+        One Federation. Many Roles. One Cricketing Vision.
       </p>
     </motion.div>
   );

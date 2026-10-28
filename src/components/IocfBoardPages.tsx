@@ -1,12 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Board } from '../data/boards';
 import {
-  bestFormat, councilGroups, councilOf, creditsOf, FORMAT_ORDER, hallOfFameOf, honoursOf, leagueAwardCredits, overallRank, rankIn, sponsorsOf, titlesOf, winRate,
+  bestFormat, councilGroups, councilOf, creditsOf, FORMAT_ORDER, hallOfFameOf, honoursOf, leagueAwardCredits, movement, overallRank, rankIn, sponsorsOf, titlesOf, winRate,
 } from '../data/boardInsights';
 import { rankingRules } from '../data/iocfInfo';
 import { Flag } from './IocfChairmen';
 import { BackButton, Breadcrumb, Notice } from './IocfPlayers';
-import { Bar, chip, downloadCsv, fmtNum, GOLD, linkBtn, navigate, selectCls, type Data } from './boardKit';
+import { Bar, chip, downloadCsv, fmtNum, GOLD, linkBtn, Move, navigate, selectCls, type Data } from './boardKit';
 
 function Page({ crumb, kicker, title, children, wide }: { crumb: string; kicker: string; title: string; children: ReactNode; wide?: boolean }) {
   return (
@@ -118,6 +118,7 @@ export function Rankings({ data }: { data: Data }) {
                     return (
                       <td key={f} className="px-4 py-3 text-right" style={{ color: r && r.rank <= 3 ? GOLD : undefined }}>
                         {r ? `#${r.rank}` : '—'}
+                        {r && <Move by={movement(board, f)} />}
                       </td>
                     );
                   })}
@@ -148,6 +149,7 @@ export function Rankings({ data }: { data: Data }) {
                   <tr key={board.name} className="border-t border-white/5 transition hover:bg-white/[0.03]">
                     <td className="px-4 py-3 font-semibold" style={{ color: r.rank <= 3 ? GOLD : undefined }}>
                       #{r.rank}
+                      <Move by={movement(board, tab)} />
                     </td>
                     <td className="px-4 py-3">
                       <BoardLink board={board} data={data} />
@@ -171,7 +173,7 @@ export function Rankings({ data }: { data: Data }) {
           </table>
         </div>
       )}
-      <p className="mt-3 text-[11px] text-smoke">Gap = points difference to the board ranked directly above.</p>
+      <p className="mt-3 text-[11px] text-smoke">Gap = points difference to the board ranked directly above. ▲ / ▼ show places moved since the rankings last changed; they appear after the first change.</p>
     </Page>
   );
 }

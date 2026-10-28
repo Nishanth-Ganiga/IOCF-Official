@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Board } from '../data/boards';
 import {
-  bestFormat, councilGroups, councilOf, creditsOf, hallOfFameOf, honoursOf, leagueAwardsOf, leagueFootprint, overallRank, rankIn, sponsorsOf, squadAwardsByTournament,
-  strength, titlesOf, topAchievers, winRate,
+  bestFormat, councilGroups, councilOf, creditsOf, hallOfFameOf, honoursOf, leagueAwardsOf, leagueFootprint, movement, overallRank, rankIn, REGION_ORDER, regionOf, sponsorsOf,
+  squadAwardsByTournament, strength, titlesOf, topAchievers, winRate,
 } from '../data/boardInsights';
 import type { ProfileId } from '../data/portfolio';
 import { store } from '../data/store';
@@ -13,7 +13,10 @@ import { Flag } from './IocfChairmen';
 import { IocfHeader, LOGO } from './IocfHome';
 import { Avatar, BackButton, Breadcrumb, Card, Fact, Loading, Notice, searchInput } from './IocfPlayers';
 import { Compare, Councils, Credits, Leadership, Rankings, Sponsors } from './IocfBoardPages';
-import { Bar, chip, fmtNum, GOLD, linkBtn, navigate, selectCls, StarButton, useData, useFavs, useRoute, type Data } from './boardKit';
+import { Bar, chip, fmtNum, GOLD, linkBtn, Move, navigate, selectCls, StarButton, useData, useFavs, useRoute, type Data } from './boardKit';
+import { downloadBoardReport } from './boardReport';
+import { announcementsFor } from '../data/chairmanContent';
+import SiteFooter from './SiteFooter';
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } };
 const item = {
@@ -70,7 +73,7 @@ export default function IocfBoards({ profileId, onSwitch }: { profileId: Profile
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={NAV} searchable={searchable} />
       <main className="min-h-[100svh]">
         {body}
-        <footer className="gutter border-t border-white/5 py-10 text-center text-xs text-smoke">One Federation. Many Roles. One Cricketing Vision.</footer>
+        <SiteFooter />
       </main>
     </>
   );
@@ -99,6 +102,8 @@ function Directory({ data }: { data: Data }) {
   const [council, setCouncil] = useState('');
   const [sponsored, setSponsored] = useState<'all' | 'yes' | 'no'>('all');
   const [favOnly, setFavOnly] = useState(false);
+  const [region, setRegion] = useState('');
+  const [byRegion, setByRegion] = useState(false);
   const [view, setView] = useState<'grid' | 'table'>('grid');
 
   const boards = data.b.boards;
@@ -119,16 +124,18 @@ function Directory({ data }: { data: Data }) {
     .filter((b) => !council || councilOf(b, groups) === council)
     .filter((b) => sponsored === 'all' || (sponsored === 'yes') === Boolean(b.sponsors?.length))
     .filter((b) => !favOnly || favs.includes(data.b.boardSlug(b)))
+    .filter((b) => !region || regionOf(b) === region)
     .sort((a, b) =>
       sort === 'name' ? a.name.localeCompare(b.name) : sort === 'rank' ? (overallRank(a) ?? 999) - (overallRank(b) ?? 999) : (creditsOf(b) ?? -1) - (creditsOf(a) ?? -1),
     );
-  const filtered = Boolean(q || status !== 'all' || council || sponsored !== 'all' || favOnly);
+  const filtered = Boolean(q || status !== 'all' || council || sponsored !== 'all' || favOnly || region);
   const clear = () => {
     setQuery('');
     setStatus('all');
     setCouncil('');
     setSponsored('all');
     setFavOnly(false);
+    setRegion('');
   };
 
   const stats = [
@@ -205,7 +212,10 @@ function Directory({ data }: { data: Data }) {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-display text-2xl tracking-wide text-bone">{b.name.toUpperCase()}</span>
-                    <span className="text-xs text-mist">{rankIn(b)?.points} points</span>
+                    <span className="text-xs text-mist">
+                      {rankIn(b)?.points} points
+                      <Move by={movement(b)} />
+                    </span>
                   </span>
                   <Flag board={b} />
                 </button>
@@ -257,6 +267,12 @@ function Directory({ data }: { data: Data }) {
               </option>
             ))}
           </select>
+          <select value={region} onChange={(e) => setRegion(e.target.value)} aria-label="Filter by region" className={selectCls}>
+            <option value="">All regions</option>
+            {REGION_ORDER.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
           <select value={sponsored} onChange={(e) => setSponsored(e.target.value as typeof sponsored)} aria-label="Filter by sponsors" className={selectCls}>
             <option value="all">Any sponsors</option>
             <option value="yes">Has sponsors</option>
@@ -270,6 +286,9 @@ function Directory({ data }: { data: Data }) {
               <option value="credits">Credits</option>
             </select>
           </label>
+          <button type="button" aria-pressed={byRegion} onClick={() => setByRegion((v) => !v)} className={chip(byRegion)}>
+            Group by region
+          </button>
           <button type="button" aria-pressed={favOnly} onClick={() => setFavOnly((v) => !v)} className={chip(favOnly)}>
             ★ Favourites{favs.length ? ` (${favs.length})` : ''}
           </button>
@@ -291,36 +310,48 @@ function Directory({ data }: { data: Data }) {
             </button>
           </div>
         ) : view === 'grid' ? (
-          <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {visible.map((b) => {
-              const id = data.b.boardSlug(b);
-              const rank = overallRank(b);
-              return (
-                <li key={id} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => navigate(id)}
-                    aria-label={`View ${b.name} board`}
-                    className="group flex h-full w-full flex-col gap-3 rounded-2xl border border-white/10 bg-ink-2 p-5 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
-                  >
-                    <span className="flex items-start justify-between gap-3">
-                      <span className="font-display text-2xl leading-tight tracking-wide text-bone">{b.name.toUpperCase()}</span>
-                      <Flag board={b} />
-                    </span>
-                    <span className="text-xs text-mist">{b.chairman ? `Chairman: ${b.chairman}` : 'Chairman vacant'}</span>
-                    <span className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-smoke">
-                      {rank !== undefined && <span>Overall rank #{rank}</span>}
-                      <span>{counts.get(id) ?? 0} players</span>
-                    </span>
-                    <span className="mt-auto text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW BOARD →</span>
-                  </button>
-                  <span className="absolute bottom-4 right-4">
-                    <StarButton on={favs.includes(id)} onClick={() => toggle(id)} name={b.name} />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            {(byRegion ? [...REGION_ORDER, 'Other'].map((r) => ({ title: r, list: visible.filter((b) => regionOf(b) === r) })).filter((g) => g.list.length) : [{ title: '', list: visible }]).map((g) => (
+              <div key={g.title || 'all'} className="mb-8">
+                {g.title && <h2 className="mb-3 border-b border-white/10 pb-1 font-display text-2xl tracking-wide text-[#c9a24b]">{g.title.toUpperCase()}</h2>}
+                <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {g.list.map((b) => {
+                    const id = data.b.boardSlug(b);
+                    const rank = overallRank(b);
+                    return (
+                      <li key={id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => navigate(id)}
+                          aria-label={`View ${b.name} board`}
+                          className="group flex h-full w-full flex-col gap-3 rounded-2xl border border-white/10 bg-ink-2 p-5 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+                        >
+                          <span className="flex items-start justify-between gap-3">
+                            <span className="font-display text-2xl leading-tight tracking-wide text-bone">{b.name.toUpperCase()}</span>
+                            <Flag board={b} />
+                          </span>
+                          <span className="text-xs text-mist">{b.chairman ? `Chairman: ${b.chairman}` : 'Chairman vacant'}</span>
+                          <span className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-smoke">
+                            {rank !== undefined && (
+                              <span>
+                                Overall rank #{rank}
+                                <Move by={movement(b)} />
+                              </span>
+                            )}
+                            <span>{counts.get(id) ?? 0} players</span>
+                          </span>
+                          <span className="mt-auto text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW BOARD →</span>
+                        </button>
+                        <span className="absolute bottom-4 right-4">
+                          <StarButton on={favs.includes(id)} onClick={() => toggle(id)} name={b.name} />
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-white/10 bg-ink-2">
             <table className="w-full min-w-[640px] text-left text-sm">
@@ -349,7 +380,10 @@ function Directory({ data }: { data: Data }) {
                         </button>
                       </td>
                       <td className="px-4 py-2.5 text-mist">{b.chairman ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-[#c9a24b]">{overallRank(b) !== undefined ? `#${overallRank(b)}` : '—'}</td>
+                      <td className="px-4 py-2.5 text-right text-[#c9a24b]">
+                        {overallRank(b) !== undefined ? `#${overallRank(b)}` : '—'}
+                        <Move by={movement(b)} />
+                      </td>
                       <td className="px-4 py-2.5 text-right text-mist">{creditsOf(b) !== undefined ? fmtNum(creditsOf(b)!) : '—'}</td>
                       <td className="px-4 py-2.5 text-right text-mist">{counts.get(id) ?? 0}</td>
                     </tr>
@@ -391,6 +425,7 @@ function BoardPage({ board, data, onSwitch }: { board: Board; data: Data; onSwit
   const credits = creditsOf(board);
   const sponsors = sponsorsOf(board);
   const rankings = board.rankings ?? [];
+  const news = announcementsFor(slug);
 
   const openIn = (profile: ProfileId, hash: string) => {
     window.location.hash = hash;
@@ -433,6 +468,9 @@ function BoardPage({ board, data, onSwitch }: { board: Board; data: Data; onSwit
             <button type="button" onClick={() => navigate('compare', slug)} className={linkBtn}>
               COMPARE →
             </button>
+            <button type="button" onClick={() => downloadBoardReport(board, { players: squad.length, awardWinners: winners, council })} className={linkBtn}>
+              ⬇ REPORT CARD
+            </button>
           </div>
         </div>
         <Flag board={board} className="text-5xl" />
@@ -444,6 +482,7 @@ function BoardPage({ board, data, onSwitch }: { board: Board; data: Data; onSwit
           <Fact label="CEO" value={board.ceo ?? 'Not announced'} />
           <Fact label="Players" value={String(squad.length)} />
           <Fact label="Umpires" value={String(umpires.length)} />
+          <Fact label="Region" value={regionOf(board)} />
           <Fact label="Council" value={council ?? 'Not assigned'} />
           <Fact label="Tournament titles" value={String(titlesOf(board))} />
           {credits !== undefined && <Fact label="Available credits" value={fmtNum(credits)} />}
@@ -509,7 +548,10 @@ function BoardPage({ board, data, onSwitch }: { board: Board; data: Data; onSwit
                 {rankings.map((r) => (
                   <tr key={r.format} className="border-t border-white/5">
                     <td className="py-2 text-bone">{r.format}</td>
-                    <td className="py-2 text-right font-semibold text-[#c9a24b]">#{r.rank}</td>
+                    <td className="py-2 text-right font-semibold text-[#c9a24b]">
+                      #{r.rank}
+                      <Move by={movement(board, r.format)} />
+                    </td>
                     <td className="py-2 text-right text-mist">{r.points}</td>
                     <td className="py-2 text-right text-mist">
                       {r.won ?? '—'}/{r.played ?? '—'}
@@ -673,6 +715,32 @@ function BoardPage({ board, data, onSwitch }: { board: Board; data: Data; onSwit
             </ul>
           ) : (
             <p className="text-sm text-smoke">No sponsors announced yet.</p>
+          )}
+        </Card>
+
+        <Card title="NEWS & ANNOUNCEMENTS" className="md:col-span-2">
+          {news.length ? (
+            <ul className="space-y-4">
+              {news.map((a) => (
+                <li key={a.id} className="border-l border-[#c9a24b]/40 pl-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <p className="text-sm font-semibold text-bone">{a.title}</p>
+                    <p className="text-[11px] text-smoke">
+                      {a.date}
+                      {!a.board && ' · Federation-wide'}
+                    </p>
+                  </div>
+                  {a.body && <p className="mt-1 text-[13px] leading-relaxed text-mist">{a.body}</p>}
+                  {a.link && (
+                    <a href={a.link} target="_blank" rel="noopener noreferrer" className={`mt-1 inline-block ${linkBtn}`}>
+                      READ MORE →
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-smoke">No announcements yet. They are added in chairmanContent.ts.</p>
           )}
         </Card>
 

@@ -8,6 +8,9 @@ import { EASE } from './fx';
 import { Flag } from './IocfChairmen';
 import { IocfHeader, LOGO } from './IocfHome';
 import { Avatar, BackButton, Breadcrumb, Card, EntryList, Fact, Loading, MISSING, Notice, StatGrid, searchInput } from './IocfPlayers';
+import SiteFooter, { ShareButton } from './SiteFooter';
+import { officiatedBy, officiatingCounts } from '../data/officiating';
+import { useFavourites } from '../data/favourites';
 
 type BoardsModule = typeof import('../data/boards');
 type UmpiresModule = typeof import('../data/umpires');
@@ -87,6 +90,7 @@ export default function IocfUmpires({ profileId, onSwitch }: { profileId: Profil
   const links = [
     { id: 'top', label: 'Home' },
     { id: 'rankings', label: 'Top 30' },
+    { id: 'all', label: 'All umpires' },
     { id: 'boards', label: 'Boards' },
   ];
 
@@ -99,7 +103,7 @@ export default function IocfUmpires({ profileId, onSwitch }: { profileId: Profil
     body = board ? <BoardList board={board} data={data} /> : <NotFound what="board" />;
   } else {
     const umpire = data.umpires.find((u) => u.id === route.id);
-    body = umpire ? <Profile umpire={umpire} data={data} /> : <NotFound what="umpire" />;
+    body = umpire ? <Profile umpire={umpire} data={data} onSwitch={onSwitch} /> : <NotFound what="umpire" />;
   }
 
   return (
@@ -107,7 +111,7 @@ export default function IocfUmpires({ profileId, onSwitch }: { profileId: Profil
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />
       <main className="min-h-[100svh]">
         {body}
-        <footer className="gutter border-t border-white/5 py-10 text-center text-xs text-smoke">One Federation. Four Roles. One Cricketing Vision.</footer>
+        <SiteFooter />
       </main>
     </>
   );
@@ -159,6 +163,7 @@ function Home({ data }: { data: Data }) {
         </div>
       </section>
       <Top30 data={data} />
+      <AllUmpires data={data} />
       <Boards data={data} />
     </>
   );
@@ -234,6 +239,105 @@ function Top30({ data }: { data: Data }) {
           })}
         </ol>
       </div>
+    </section>
+  );
+}
+
+function AllUmpires({ data }: { data: Data }) {
+  const { favs, toggle } = useFavourites('umpires');
+  const [query, setQuery] = useState('');
+  const [board, setBoard] = useState('');
+  const [sort, setSort] = useState<'points' | 'name' | 'matches'>('points');
+  const [favOnly, setFavOnly] = useState(false);
+  const boardOf = useMemo(() => new Map(data.b.boards.map((b) => [data.b.boardSlug(b), b])), [data]);
+  const counts = useMemo(() => officiatingCounts(data.umpires), [data]);
+  const pts = (u: Umpire) => (typeof u.performance?.points === 'number' ? u.performance.points : -1);
+
+  const q = query.trim().toLowerCase();
+  const rows = data.umpires
+    .filter((u) => u.boardId && u.name !== 'Umpire')
+    .filter((u) => !q || u.name.toLowerCase().includes(q))
+    .filter((u) => !board || u.boardId === board)
+    .filter((u) => !favOnly || favs.includes(u.id))
+    .sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name) : sort === 'matches' ? (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0) : pts(b) - pts(a)) || a.name.localeCompare(b.name));
+  const total = data.umpires.filter((u) => u.boardId).length;
+  const sel = 'rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]';
+
+  return (
+    <section id="all" aria-label="All umpires" className="gutter py-10 sm:py-14">
+      <h2 className="font-display text-[clamp(2.2rem,5vw,4rem)] leading-[0.9] tracking-wide text-bone">ALL UMPIRES</h2>
+      <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">Every board umpire in one list. Franchise matches officiated are counted from the umpire names in the match results.</p>
+      <div className="mb-4 mt-6 flex flex-wrap items-center gap-3">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search umpires" aria-label="Search umpires" className={searchInput} />
+        <select value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Filter by board" className={sel}>
+          <option value="">All boards</option>
+          {data.b.boards.map((b) => (
+            <option key={b.name} value={data.b.boardSlug(b)}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-2 text-xs text-smoke">
+          Sort
+          <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className={sel}>
+            <option value="points">Points</option>
+            <option value="matches">Matches officiated</option>
+            <option value="name">Name A → Z</option>
+          </select>
+        </label>
+        <button type="button" aria-pressed={favOnly} onClick={() => setFavOnly((v) => !v)} className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold ${favOnly ? 'border-[#c9a24b] bg-[#c9a24b] text-ink' : 'border-white/15 text-mist hover:text-bone'}`}>
+          ★ Favourites{favs.length ? ` (${favs.length})` : ''}
+        </button>
+      </div>
+      <p role="status" aria-live="polite" className="mb-3 text-xs text-smoke">
+        Showing {rows.length} of {total} umpires
+      </p>
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-white/10 bg-ink-2 px-5 py-12 text-center text-sm text-mist">No umpires match your filters.</div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-ink-2">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="text-[10px] tracking-[0.2em] text-smoke">
+              <tr>
+                <th className="px-4 py-3 font-semibold" />
+                <th className="px-2 py-3 font-semibold">UMPIRE</th>
+                <th className="px-2 py-3 font-semibold">BOARD</th>
+                <th className="px-2 py-3 text-right font-semibold">POINTS</th>
+                <th className="px-4 py-3 text-right font-semibold">FRANCHISE MATCHES</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((u) => {
+                const b = boardOf.get(u.boardId!);
+                return (
+                  <tr key={u.id} className="border-t border-white/5 hover:bg-white/[0.03]">
+                    <td className="px-4 py-2.5">
+                      <button type="button" onClick={() => toggle(u.id)} aria-pressed={favs.includes(u.id)} aria-label={`${favs.includes(u.id) ? 'Remove' : 'Add'} ${u.name} ${favs.includes(u.id) ? 'from' : 'to'} favourites`} className={`text-lg leading-none ${favs.includes(u.id) ? 'text-[#c9a24b]' : 'text-smoke hover:text-bone'}`}>
+                        {favs.includes(u.id) ? '★' : '☆'}
+                      </button>
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <button type="button" onClick={() => navigate('u', u.id)} className="text-bone hover:text-[#c9a24b]">
+                        {u.name}
+                      </button>
+                    </td>
+                    <td className="px-2 py-2.5 text-mist">
+                      {b && (
+                        <span className="flex items-center gap-1.5">
+                          <Flag board={b} className="text-base" />
+                          {b.name}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2.5 text-right text-mist">{pts(u) >= 0 ? pts(u) : MISSING}</td>
+                    <td className="px-4 py-2.5 text-right text-mist">{counts.get(u.id) ?? 0}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
@@ -383,7 +487,9 @@ function BoardList({ board, data }: { board: Board; data: Data }) {
 
 /* ---------- individual profile ---------- */
 
-function Profile({ umpire, data }: { umpire: Umpire; data: Data }) {
+function Profile({ umpire, data, onSwitch }: { umpire: Umpire; data: Data; onSwitch: (id: ProfileId) => void }) {
+  const { favs, toggle } = useFavourites('umpires');
+  const { matches, shared } = useMemo(() => officiatedBy(umpire, data.umpires), [umpire, data]);
   const board = data.b.boards.find((b) => data.b.boardSlug(b) === umpire.boardId);
   const position = data.u.ranking.find((r) => r.umpireId === umpire.id)?.position;
   // ranking placeholders belong to the Top 30 list; board umpires to their board list
@@ -396,7 +502,14 @@ function Profile({ umpire, data }: { umpire: Umpire; data: Data }) {
         <BackButton onClick={() => goBack(parent.to)}>BACK</BackButton>
       </div>
 
-      <Card title="UMPIRE PROFILE" className="mt-6">
+      <div className="mt-6 flex items-center gap-4">
+        <button type="button" onClick={() => toggle(umpire.id)} aria-pressed={favs.includes(umpire.id)} aria-label={`${favs.includes(umpire.id) ? 'Remove' : 'Add'} ${umpire.name} ${favs.includes(umpire.id) ? 'from' : 'to'} favourites`} className={`text-lg leading-none ${favs.includes(umpire.id) ? 'text-[#c9a24b]' : 'text-smoke hover:text-bone'}`}>
+          {favs.includes(umpire.id) ? '★' : '☆'}
+        </button>
+        <ShareButton />
+      </div>
+
+      <Card title="UMPIRE PROFILE" className="mt-4">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <Avatar player={umpire} size="h-32 w-32" />
           <dl className="grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -441,6 +554,34 @@ function Profile({ umpire, data }: { umpire: Umpire; data: Data }) {
         </Card>
         <Card title="CAREER MILESTONES">
           <EntryList entries={umpire.milestones} />
+        </Card>
+        <Card title={`FRANCHISE LEAGUE MATCHES (${matches.length})`} className="md:col-span-2">
+          {matches.length === 0 ? (
+            <p className="text-sm text-smoke">No franchise league matches found under this name.</p>
+          ) : (
+            <ul className="space-y-2">
+              {matches.map(({ league, match }, i) => (
+                <li key={i} className="border-l border-[#c9a24b]/40 pl-3 text-[13px] text-mist">
+                  <span className="text-bone">
+                    {match.teams[0]} vs {match.teams[1]}
+                  </span>{' '}
+                  · {[league.shortName, match.stage, match.date, match.venue].filter(Boolean).join(' · ')}
+                  {match.winner && ` · ${match.winner} won`}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.hash = `#/leagues/${league.id}`;
+                      onSwitch('leagues');
+                    }}
+                    className="ml-3 text-[11px] font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline"
+                  >
+                    LEAGUE →
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-[11px] text-smoke">Matched by the umpire name recorded in the match results{shared > 0 ? `; ${shared} other ${shared === 1 ? 'umpire shares' : 'umpires share'} this name, so some matches may belong to them` : ''}.</p>
         </Card>
       </div>
     </div>

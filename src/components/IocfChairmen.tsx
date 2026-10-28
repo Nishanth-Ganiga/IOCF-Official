@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Board } from '../data/boards';
 import { councilGroups, councilOf, overallRank, sponsorsOf } from '../data/boardInsights';
-import { announcementsFor } from '../data/chairmanContent';
+import { announcementsFor, appointedOn, contacts } from '../data/chairmanContent';
+import { creditsOf, titlesOf } from '../data/boardInsights';
 import type { ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import { EASE } from './fx';
 import { IocfHeader, LOGO } from './IocfHome';
+import SiteFooter from './SiteFooter';
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.2 } } };
 const item = {
@@ -51,6 +53,7 @@ export default function IocfChairmen({ profileId, onSwitch }: { profileId: Profi
   const slug = useSelectedSlug();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<Status>('all');
+  const [byCouncil, setByCouncil] = useState(false);
 
   const go = (id: string) => {
     if (window.location.hash.startsWith(ROUTE)) history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -60,6 +63,7 @@ export default function IocfChairmen({ profileId, onSwitch }: { profileId: Profi
   const links = [
     { id: 'top', label: 'Home' },
     { id: 'directory', label: 'Chairpersons' },
+    { id: 'compare', label: 'Compare' },
   ];
 
   const boards = mod?.boards;
@@ -142,7 +146,15 @@ export default function IocfChairmen({ profileId, onSwitch }: { profileId: Profi
               aria-label="Search boards by name"
               className="w-full rounded-lg border border-white/15 bg-ink-2 px-4 py-2.5 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b] sm:max-w-sm"
             />
-            <div role="group" aria-label="Filter by profile status" className="flex gap-2">
+            <div role="group" aria-label="Filter by profile status" className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                aria-pressed={byCouncil}
+                onClick={() => setByCouncil((v) => !v)}
+                className={`rounded-full border px-4 py-1.5 text-xs font-semibold tracking-wide transition ${byCouncil ? 'border-[#c9a24b] bg-[#c9a24b] text-ink' : 'border-white/15 text-mist hover:border-white/40 hover:text-bone'}`}
+              >
+                Group by council
+              </button>
               {FILTERS.map((f) => (
                 <button
                   key={f.id}
@@ -189,15 +201,22 @@ export default function IocfChairmen({ profileId, onSwitch }: { profileId: Profi
               </button>
             </div>
           ) : (
-            <ul className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {visible.map((b) => (
-                <BoardCard key={b.name} board={b} mod={mod} />
-              ))}
-            </ul>
+            councilSections(visible, mod, byCouncil).map((g) => (
+              <div key={g.title || 'all'} className="mb-8">
+                {g.title && <h2 className="mb-4 border-b border-white/10 pb-1 font-display text-2xl tracking-wide text-[#c9a24b]">{g.title.toUpperCase()}</h2>}
+                <ul className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-3">
+                  {g.list.map((b) => (
+                    <BoardCard key={b.name} board={b} mod={mod} />
+                  ))}
+                </ul>
+              </div>
+            ))
           )}
         </section>
 
-        <footer className="gutter border-t border-white/5 py-10 text-center text-xs text-smoke">One Federation. Four Roles. One Cricketing Vision.</footer>
+        {mod && <ChairmanCompare mod={mod} />}
+
+        <SiteFooter />
       </main>
 
       <AnimatePresence>{selected && mod && <BoardDetail key={selected.name} board={selected} mod={mod} />}</AnimatePresence>
@@ -306,6 +325,89 @@ function BoardStats({ board, compact }: { board: Board; compact?: boolean }) {
   );
 }
 
+/** Directory sections: one list, or one per council (boards with no council last). */
+function councilSections(list: Board[], mod: BoardsModule, grouped: boolean) {
+  if (!grouped) return [{ title: '', list }];
+  const groups = councilGroups(mod.boards);
+  const named = groups.map((g) => ({ title: g.name, list: list.filter((b) => g.members.includes(b.name)) }));
+  const rest = list.filter((b) => !groups.some((g) => g.members.includes(b.name)));
+  return [...named, { title: 'No council yet', list: rest }].filter((g) => g.list.length);
+}
+
+/** Two chairmen side by side, with the stats of their boards. */
+function ChairmanCompare({ mod }: { mod: BoardsModule }) {
+  const groups = useMemo(() => councilGroups(mod.boards), [mod]);
+  const [a, setA] = useState('');
+  const [b, setB] = useState('');
+  const pick = [a, b].map((s) => mod.boards.find((x) => mod.boardSlug(x) === s));
+  const rows: { label: string; get: (x: Board) => string }[] = [
+    { label: 'Chairman', get: (x) => x.chairman ?? 'Vacant' },
+    { label: 'In office since', get: (x) => (appointedOn[mod.boardSlug(x)] ? fmtDate(appointedOn[mod.boardSlug(x)]) : '—') },
+    { label: 'CEO', get: (x) => x.ceo ?? '—' },
+    { label: 'Overall rank', get: (x) => (overallRank(x) !== undefined ? `#${overallRank(x)}` : '—') },
+    { label: 'Tournament titles', get: (x) => String(titlesOf(x)) },
+    { label: 'Available credits', get: (x) => (creditsOf(x) !== undefined ? creditsOf(x)!.toLocaleString('en-US') : '—') },
+    { label: 'Council', get: (x) => councilOf(x, groups) ?? '—' },
+    { label: 'Sponsors', get: (x) => String(sponsorsOf(x).length) },
+    { label: 'Contributions recorded', get: (x) => String(x.achievements?.length ?? 0) },
+  ];
+  return (
+    <section id="compare" aria-label="Compare chairmen" className="gutter pb-14">
+      <h2 className="font-display text-[clamp(2rem,5vw,3.5rem)] leading-[0.9] tracking-wide text-bone">COMPARE CHAIRMEN</h2>
+      <div className="mt-5 flex flex-wrap gap-3">
+        {[
+          [a, setA, 'First board'],
+          [b, setB, 'Second board'],
+        ].map(([val, set, label]) => (
+          <select key={label as string} value={val as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} aria-label={label as string} className="rounded-md border border-white/15 bg-ink-2 px-2 py-2 text-sm text-bone outline-none focus:border-[#c9a24b]">
+            <option value="">{label as string}</option>
+            {mod.boards.map((x) => (
+              <option key={x.name} value={mod.boardSlug(x)}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        ))}
+      </div>
+      {pick[0] && pick[1] ? (
+        <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-ink-2">
+          <table className="w-full min-w-[420px] text-left text-sm">
+            <thead>
+              <tr>
+                <th className="px-4 py-3" />
+                {pick.map((x) => (
+                  <th key={x!.name} className="px-4 py-3">
+                    <span className="flex items-center gap-2 text-bone">
+                      <Flag board={x!} className="text-lg" />
+                      {x!.name}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.label} className="border-t border-white/5">
+                  <th scope="row" className="px-4 py-2.5 text-xs font-medium text-smoke">
+                    {r.label}
+                  </th>
+                  {pick.map((x) => (
+                    <td key={x!.name} className="px-4 py-2.5 text-bone">
+                      {r.get(x!)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-smoke">Pick two boards to compare their chairmen and leadership records.</p>
+      )}
+    </section>
+  );
+}
+
 /** The council this board sits in, and its fellow members. */
 function CouncilPanel({ board, mod }: { board: Board; mod: BoardsModule }) {
   const groups = useMemo(() => councilGroups(mod.boards), [mod]);
@@ -363,6 +465,33 @@ function SponsorPanel({ board }: { board: Board }) {
       ) : (
         <p className="mt-2 text-[13px] leading-relaxed text-smoke">No sponsors announced yet.</p>
       )}
+    </div>
+  );
+}
+
+function ContactCard({ board, mod }: { board: Board; mod: BoardsModule }) {
+  const c = contacts[mod.boardSlug(board)];
+  const links = c
+    ? ([
+        c.email && ['Email', `mailto:${c.email}`],
+        c.linkedin && ['LinkedIn', c.linkedin],
+        c.instagram && ['Instagram', c.instagram],
+        c.website && ['Website', c.website],
+      ].filter(Boolean) as [string, string][])
+    : [];
+  if (links.length === 0) return null;
+  return (
+    <div className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
+      <p className="text-[10px] font-semibold tracking-[0.22em] text-smoke">CONTACT</p>
+      <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+        {links.map(([label, href]) => (
+          <li key={label}>
+            <a href={href} target={href.startsWith('mailto:') ? undefined : '_blank'} rel="noopener noreferrer" className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+              {label.toUpperCase()} →
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -492,6 +621,7 @@ function BoardDetail({ board, mod }: { board: Board; mod: BoardsModule }) {
           <div className="min-w-0">
             <p className={`text-lg font-semibold ${board.chairman ? 'text-bone' : 'text-mist'}`}>{board.chairman ?? 'Chairman details coming soon'}</p>
             <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c9a24b]">Board Chairman</p>
+            {appointedOn[mod.boardSlug(board)] && <p className="mt-1 text-xs text-mist">In office since {fmtDate(appointedOn[mod.boardSlug(board)])}</p>}
             {!available && <p className="mt-2 text-xs text-smoke">This profile has not been published yet.</p>}
           </div>
         </div>
@@ -520,6 +650,8 @@ function BoardDetail({ board, mod }: { board: Board; mod: BoardsModule }) {
             </p>
           )}
         </div>
+
+        <ContactCard board={board} mod={mod} />
 
         <div className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
           <Announcements board={board} mod={mod} />

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useFavourites } from '../data/favourites';
 import type { Board } from '../data/boards';
 import type { Player } from '../data/players';
 import type { Umpire } from '../data/umpires';
@@ -40,32 +41,8 @@ export function useData() {
   return { data, failed };
 }
 
-const FAV_KEY = 'iocf-fav-boards';
-const readFavs = (): string[] => {
-  try {
-    const v = JSON.parse(localStorage.getItem(FAV_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-};
-
 /** Favourite boards, saved on this device. */
-export function useFavs() {
-  const [favs, setFavs] = useState<string[]>(readFavs);
-  const toggle = useCallback((slug: string) => {
-    setFavs((cur) => {
-      const next = cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug];
-      try {
-        localStorage.setItem(FAV_KEY, JSON.stringify(next));
-      } catch {
-        /* storage unavailable — favourites just won't persist */
-      }
-      return next;
-    });
-  }, []);
-  return { favs, toggle };
-}
+export const useFavs = () => useFavourites('boards');
 
 export const fmtNum = (n: number) => n.toLocaleString('en-US');
 
@@ -112,3 +89,14 @@ export const selectCls = 'rounded-md border border-white/15 bg-ink-2 px-2 py-1.5
 export const chip = (on: boolean) =>
   `rounded-full border px-3.5 py-1.5 text-xs font-semibold tracking-wide transition ${on ? 'border-[#c9a24b] bg-[#c9a24b] text-ink' : 'border-white/15 text-mist hover:border-white/40 hover:text-bone'}`;
 export const linkBtn = 'text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline';
+
+/** ▲ / ▼ with the number of places moved; renders nothing when there is no change or no history. */
+export function Move({ by }: { by?: number }) {
+  if (!by) return null;
+  return (
+    <span className={`ml-1.5 text-[11px] font-semibold ${by > 0 ? 'text-[#4fae8a]' : 'text-[#e5132b]'}`} title={`${by > 0 ? 'Up' : 'Down'} ${Math.abs(by)} since the last ranking change`}>
+      {by > 0 ? '▲' : '▼'}
+      {Math.abs(by)}
+    </span>
+  );
+}

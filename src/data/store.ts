@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import type { Board } from './boards';
 import type { League } from './leagues';
 import type { Entry, Player } from './players';
@@ -36,6 +37,8 @@ export type Dataset = {
   umpireOrder: string[];
   leagues: League[];
   info: Info;
+  /** Past board rankings, oldest first; used for rank movement. */
+  rankHistory?: { at: string | null; ranks: Record<string, Record<string, number>> }[];
 };
 
 export const store: Dataset = {
@@ -47,6 +50,9 @@ export const store: Dataset = {
   info: { tournaments: [], tournamentAwards: [], hallOfFame: [], councils: [] },
 };
 
+/** In the native apps the page is served from the device, so live data comes from the deployed site. */
+const DATA_URL = Capacitor.isNativePlatform() ? 'https://YOUR-APP.vercel.app/iocf-data.json' : '/iocf-data.json';
+
 export const dataState: { origin: 'live' | 'snapshot' | 'none' } = { origin: 'none' };
 
 const looksValid = (d: unknown): d is Dataset => !!d && typeof d === 'object' && Array.isArray((d as Dataset).boards) && (d as Dataset).boards.length > 0 && Array.isArray((d as Dataset).leagues);
@@ -56,7 +62,7 @@ export async function initData(): Promise<void> {
   try {
     const ctl = new AbortController();
     const timer = window.setTimeout(() => ctl.abort(), 10000);
-    const res = await fetch('/iocf-data.json', { cache: 'no-cache', signal: ctl.signal });
+    const res = await fetch(DATA_URL, { cache: 'no-cache', signal: ctl.signal });
     window.clearTimeout(timer);
     if (res.ok) {
       const json: unknown = await res.json();

@@ -1,3 +1,4 @@
+import { playerPhotos } from './photos';
 import { store } from './store';
 
 /**
@@ -74,7 +75,7 @@ export type Player = {
 /** Explicit records that replace placeholders, keyed by player id. Add real data here. */
 const overrides: Record<string, Partial<Omit<Player, 'id' | 'boardId'>>> = {};
 
-const players: Player[] = store.players.map((p) => ({ ...p, ...overrides[p.id] }));
+const players: Player[] = store.players.map((p) => ({ ...p, photo: playerPhotos[p.id] ?? p.photo, ...overrides[p.id] }));
 
 export async function loadPlayers(): Promise<Player[]> {
   return players;

@@ -93,3 +93,26 @@ export const topAchievers = (players: Player[], n = 5) =>
 
 /** Rank 1 -> 100%, last rank -> small but visible. */
 export const strength = (rank: number, total: number) => Math.max(4, ((total - rank + 1) / total) * 100);
+
+const REGIONS: Record<string, string[]> = {
+  Asia: ['Bangladesh', 'Qatar', 'India', 'Pakistan', 'Sri Lanka', 'UAE', 'Nepal', 'Japan', 'Afghanistan'],
+  Europe: ['England', 'Netherlands', 'Italy', 'Scotland', 'Ireland', 'Portugal', 'Spain'],
+  Oceania: ['New Zealand', 'Australia', 'Papua New Guinea'],
+  Africa: ['South Africa', 'Zimbabwe', 'Uganda', 'Kenya'],
+  'North America': ['Canada', 'USA'],
+  Caribbean: ['West Indies'],
+};
+export const REGION_ORDER = Object.keys(REGIONS);
+/** Geographic region of a board (a fixed lookup; the sheet has no region column). */
+export const regionOf = (b: Board) => REGION_ORDER.find((r) => REGIONS[r].includes(b.name)) ?? 'Other';
+
+/**
+ * Change in rank since the rankings last changed: positive = moved up. Needs at least one earlier snapshot in the
+ * sync's rank history, so it is undefined until the rankings have changed once.
+ */
+export function movement(b: Board, format = 'Overall'): number | undefined {
+  const history = store.rankHistory ?? [];
+  const before = history[history.length - 1]?.ranks[b.name]?.[format];
+  const now = rankIn(b, format)?.rank;
+  return before === undefined || now === undefined ? undefined : before - now;
+}

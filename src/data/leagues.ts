@@ -83,3 +83,41 @@ export function standings(league: League) {
   }
   return [...rows.values()].sort((a, b) => b.won - a.won || a.lost - b.lost || a.team.localeCompare(b.team));
 }
+
+/** Where matches were played and who won them. */
+export function venuesOf(league: League) {
+  const m = new Map<string, { venue: string; matches: number; wins: Map<string, number> }>();
+  for (const x of league.matches) {
+    if (!x.venue) continue;
+    const e = m.get(x.venue) ?? { venue: x.venue, matches: 0, wins: new Map<string, number>() };
+    e.matches += 1;
+    if (x.winner) e.wins.set(x.winner, (e.wins.get(x.winner) ?? 0) + 1);
+    m.set(x.venue, e);
+  }
+  return [...m.values()]
+    .map((e) => ({ venue: e.venue, matches: e.matches, topWinner: [...e.wins.entries()].sort((a, b) => b[1] - a[1])[0] }))
+    .sort((a, b) => b.matches - a.matches || a.venue.localeCompare(b.venue));
+}
+
+/** Results between two teams of one league. */
+export function headToHead(league: League, a: string, b: string) {
+  const games = league.matches.filter((m) => m.teams.includes(a) && m.teams.includes(b));
+  return { games, aWins: games.filter((m) => m.winner === a).length, bWins: games.filter((m) => m.winner === b).length };
+}
+
+/** Auction summary: what each squad cost and what is left of the purse (from the team's "Remaining Purse" note). */
+export function auction(league: League) {
+  return league.teams
+    .map((t) => {
+      const note = (t.notes ?? []).map((n) => /purse\D*([\d,]+)/i.exec(n)?.[1]).find(Boolean);
+      const priced = t.players.filter((p) => p.price !== undefined);
+      const top = [...priced].sort((a, b) => (b.price ?? 0) - (a.price ?? 0))[0];
+      return {
+        team: t,
+        spent: priced.reduce((n, p) => n + (p.price ?? 0), 0),
+        purse: note ? Number(note.replace(/,/g, '')) : undefined,
+        top,
+      };
+    })
+    .sort((a, b) => b.spent - a.spent);
+}
