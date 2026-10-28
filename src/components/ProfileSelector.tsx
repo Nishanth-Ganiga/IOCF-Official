@@ -17,6 +17,13 @@ const EMBLEMS: Record<Exclude<ProfileId, 'main'>, ReactNode> = {
       <path d="M3.5 9c0 4 1.5 7 4 8M20.5 9c0 4-1.5 7-4 8" opacity="0.6" />
     </>
   ),
+  // federation shield with a star
+  board: (
+    <>
+      <path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z" />
+      <path d="m12 8.5 1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.3-2.3 1.3.5-2.5-1.8-1.7 2.5-.3z" opacity="0.7" />
+    </>
+  ),
   // bat and ball
   player: (
     <>

@@ -563,7 +563,7 @@ export const introSlides: IntroSlide[] = [
   },
 ];
 
-export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues';
+export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'board';
 export type SectionId = 'about' | 'journey' | 'originals' | 'picks' | 'skills' | 'moments' | 'story';
 
 export const viewerProfiles: {
@@ -586,6 +586,13 @@ export const viewerProfiles: {
     blurb: 'Board management, governance & council updates',
     color: '#6b1229',
     order: ['story', 'moments', 'skills', 'originals', 'about', 'journey', 'picks'],
+  },
+  {
+    id: 'board',
+    name: 'Board',
+    blurb: 'Boards, rankings, sponsors & squads',
+    color: '#1f3a5f',
+    order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
   },
   {
     id: 'player',

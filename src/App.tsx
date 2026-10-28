@@ -8,6 +8,7 @@ import ProfileSelector from './components/ProfileSelector';
 import Navbar from './components/Navbar';
 import IocfHome from './components/IocfHome';
 import IocfChairmen from './components/IocfChairmen';
+import IocfBoards from './components/IocfBoards';
 import IocfPlayers from './components/IocfPlayers';
 import IocfUmpires from './components/IocfUmpires';
 import IocfLeagues from './components/IocfLeagues';
@@ -124,6 +125,8 @@ function Series() {
             <IocfHome profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'chairman' ? (
             <IocfChairmen profileId={profileId} onSwitch={pickProfile} />
+          ) : profileId === 'board' ? (
+            <IocfBoards profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'player' ? (
             <IocfPlayers profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'leagues' ? (
