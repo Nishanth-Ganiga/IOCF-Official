@@ -81,6 +81,9 @@ export default function IocfPlayers({ profileId, onSwitch }: { profileId: Profil
   if (failed) body = <Notice tone="error">The player directory could not be loaded. Please refresh the page to try again.</Notice>;
   else if (!data) body = <Loading />;
   else if (!boardId) body = <Directory data={data} />;
+  else if (boardId === 'all') body = <AllPlayers data={data} />;
+  else if (boardId === 'achievements') body = <AchievementsWall data={data} />;
+  else if (boardId === 'highlights') body = <HighlightsGallery data={data} />;
   else if (!board) body = <NotFound what="board" />;
   else if (!playerId) body = <PlayerList board={board} data={data} />;
   else if (!player) body = <NotFound what="player" board={board} />;
@@ -187,6 +190,12 @@ export const searchInput = 'w-full rounded-lg border border-white/15 bg-ink-2 px
 
 type Data = NonNullable<ReturnType<typeof useData>['data']>;
 
+const BROWSE = [
+  { route: 'all', title: 'ALL PLAYERS', blurb: 'Every player in one list. Filter by board, tournament or achievements, and jump by letter.' },
+  { route: 'achievements', title: 'ACHIEVEMENTS WALL', blurb: 'Award winners grouped by tournament.' },
+  { route: 'highlights', title: 'HIGHLIGHTS', blurb: 'Career highlight gallery, with video links as they are added.' },
+];
+
 function Directory({ data }: { data: Data }) {
   const [query, setQuery] = useState('');
   const counts = useMemo(() => {
@@ -225,6 +234,24 @@ function Directory({ data }: { data: Data }) {
             <img src={LOGO.src} srcSet={LOGO.srcSet} sizes="(max-width: 1024px) 52vw, 24rem" alt={LOGO.alt} className="h-full w-full object-contain drop-shadow-[0_24px_60px_rgba(0,0,0,0.6)]" />
           </motion.div>
         </div>
+      </section>
+
+      <section aria-label="Browse players" className="gutter pt-4">
+        <ul className="grid gap-4 sm:grid-cols-3">
+          {BROWSE.map((l) => (
+            <li key={l.route}>
+              <button
+                type="button"
+                onClick={() => navigate(l.route)}
+                className="group flex h-full w-full flex-col gap-2 rounded-2xl border border-white/10 bg-ink-2 p-5 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+              >
+                <span className="font-display text-2xl tracking-wide text-bone">{l.title}</span>
+                <span className="text-xs leading-relaxed text-mist">{l.blurb}</span>
+                <span className="mt-auto pt-2 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">OPEN →</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section id="boards" aria-label="Boards" className="gutter py-10 sm:py-14">
@@ -275,21 +302,189 @@ function Directory({ data }: { data: Data }) {
   );
 }
 
-/* ---------- 2. a board's player list ---------- */
+/* ---------- 2. rosters: a board's squad, or every player ---------- */
 
 type Sort = 'default' | 'asc' | 'desc';
 
-function PlayerList({ board, data }: { board: Board; data: Data }) {
-  const boardId = data.b.boardSlug(board);
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const letterOf = (name: string) => {
+  const c = name.trim().charAt(0).toUpperCase();
+  return c >= 'A' && c <= 'Z' ? c : '#';
+};
+const tournamentsOf = (p: Player) => (p.tournaments ?? []).map((t) => t.title);
+const filterBtn = (on: boolean) =>
+  `rounded-full border px-3.5 py-1.5 text-xs font-semibold tracking-wide transition ${on ? 'border-[#c9a24b] bg-[#c9a24b] text-ink' : 'border-white/15 text-mist hover:border-white/40 hover:text-bone'}`;
+const selectCls = 'rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]';
+
+function PlayerCard({ player, board }: { player: Player; board?: Board }) {
+  const awards = player.achievements?.length ?? 0;
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(player.boardId, player.id)}
+      aria-label={`View profile of ${player.name} (${board?.name ?? player.boardId}, ID ${player.id})`}
+      className="group flex w-full flex-col gap-4 rounded-2xl border border-white/10 bg-ink-2 p-4 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+    >
+      <span className="flex items-center gap-4">
+        <Avatar player={player} size="h-16 w-16" />
+        <span className="min-w-0">
+          <span className="block truncate text-base font-semibold text-bone">{player.name}</span>
+          {board && (
+            <span className="mt-1 flex items-center gap-2 text-xs text-mist">
+              <Flag board={board} className="text-base" />
+              {board.name}
+            </span>
+          )}
+          {awards > 0 && (
+            <span className="mt-1 block text-[11px] text-[#c9a24b]">
+              {awards} {awards === 1 ? 'award' : 'awards'}
+            </span>
+          )}
+        </span>
+      </span>
+      <span className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW PROFILE →</span>
+    </button>
+  );
+}
+
+function Roster({ players, data, boardId, label }: { players: Player[]; data: Data; boardId?: string; label: string }) {
+  const { scrollTo } = useSmoothScroll();
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<Sort>('default');
-  const all = useMemo(() => data.players.filter((p) => p.boardId === boardId), [data, boardId]);
+  const [sort, setSort] = useState<Sort>('asc');
+  const [board, setBoard] = useState('');
+  const [tournament, setTournament] = useState('');
+  const [awardsOnly, setAwardsOnly] = useState(false);
+
+  const boardBySlug = useMemo(() => new Map(data.b.boards.map((b) => [data.b.boardSlug(b), b])), [data]);
+  const tournaments = useMemo(() => [...new Set(players.flatMap(tournamentsOf))].sort(), [players]);
+  const boardOptions = useMemo(() => [...new Set(players.map((p) => p.boardId))].map((id) => boardBySlug.get(id)).filter((b): b is Board => !!b), [players, boardBySlug]);
 
   const q = query.trim().toLowerCase();
-  const visible = all
+  const visible = players
     .filter((p) => !q || p.name.toLowerCase().includes(q))
+    .filter((p) => !board || p.boardId === board)
+    .filter((p) => !tournament || tournamentsOf(p).includes(tournament))
+    .filter((p) => !awardsOnly || (p.achievements?.length ?? 0) > 0)
     .sort((a, b) => (sort === 'default' ? 0 : (sort === 'asc' ? 1 : -1) * a.name.localeCompare(b.name)));
 
+  const grouped = sort !== 'default';
+  const groups = useMemo(() => {
+    if (!grouped) return [{ letter: '', items: visible }];
+    const m = new Map<string, Player[]>();
+    visible.forEach((p) => m.set(letterOf(p.name), [...(m.get(letterOf(p.name)) ?? []), p]));
+    return [...m.entries()].map(([letter, items]) => ({ letter, items }));
+  }, [visible, grouped]);
+  const present = new Set(groups.map((g) => g.letter));
+  const filtered = Boolean(q || board || tournament || awardsOnly);
+  const clear = () => {
+    setQuery('');
+    setBoard('');
+    setTournament('');
+    setAwardsOnly(false);
+  };
+
+  return (
+    <>
+      <div className="mb-4 mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${label}`} aria-label={`Search ${label}`} className={searchInput} />
+        <label className="flex items-center gap-2 text-xs text-smoke">
+          Sort by name
+          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className={selectCls}>
+            <option value="asc">A → Z</option>
+            <option value="desc">Z → A</option>
+            <option value="default">Default order</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        {!boardId && (
+          <select value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Filter by board" className={selectCls}>
+            <option value="">All boards</option>
+            {boardOptions.map((b) => (
+              <option key={b.name} value={data.b.boardSlug(b)}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <select value={tournament} onChange={(e) => setTournament(e.target.value)} aria-label="Filter by tournament" className={selectCls}>
+          <option value="">All tournaments</option>
+          {tournaments.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <button type="button" aria-pressed={awardsOnly} onClick={() => setAwardsOnly((v) => !v)} className={filterBtn(awardsOnly)}>
+          Has achievements
+        </button>
+        {filtered && (
+          <button type="button" onClick={clear} className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+            CLEAR FILTERS
+          </button>
+        )}
+      </div>
+
+      {grouped && (
+        <nav aria-label="Jump to letter" className="mb-4 flex flex-wrap gap-1">
+          {[...LETTERS, '#'].map((l) => {
+            const on = present.has(l);
+            return (
+              <button
+                key={l}
+                type="button"
+                disabled={!on}
+                onClick={() => scrollTo(`#letter-${l === '#' ? 'other' : l}`, { offset: -96 })}
+                aria-label={`Jump to ${l}`}
+                className={`h-7 w-7 rounded-md text-xs font-semibold transition ${on ? 'border border-white/15 text-bone hover:border-[#c9a24b] hover:text-[#c9a24b]' : 'cursor-not-allowed text-white/20'}`}
+              >
+                {l}
+              </button>
+            );
+          })}
+        </nav>
+      )}
+
+      <p role="status" aria-live="polite" className="mb-4 text-xs text-smoke">
+        Showing {visible.length} of {players.length} players
+      </p>
+
+      {players.length === 0 ? (
+        <Notice tone="info">No players have been added yet.</Notice>
+      ) : visible.length === 0 ? (
+        <div className="rounded-xl border border-white/10 bg-ink-2 px-5 py-12 text-center">
+          <p className="text-sm text-bone">No players match your filters.</p>
+          <button type="button" onClick={clear} className="mt-4 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+            CLEAR FILTERS
+          </button>
+        </div>
+      ) : (
+        groups.map((g) => (
+          <section key={g.letter || 'all'} aria-label={g.letter ? `Players starting with ${g.letter}` : undefined} className="mb-6">
+            {g.letter && (
+              <h2 id={`letter-${g.letter === '#' ? 'other' : g.letter}`} className="mb-3 border-b border-white/10 pb-1 font-display text-2xl tracking-wide text-[#c9a24b]">
+                {g.letter}
+              </h2>
+            )}
+            <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {g.items.map((p) => (
+                <li key={p.id}>
+                  <PlayerCard player={p} board={boardBySlug.get(p.boardId)} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      )}
+    </>
+  );
+}
+
+/** A board's whole squad on one page. */
+function PlayerList({ board, data }: { board: Board; data: Data }) {
+  const boardId = data.b.boardSlug(board);
+  const all = useMemo(() => data.players.filter((p) => p.boardId === boardId), [data, boardId]);
   return (
     <div className="gutter pb-16 pt-28">
       <Breadcrumb items={[{ label: 'Player Directory', onClick: () => navigate() }, { label: board.name }]} />
@@ -298,60 +493,218 @@ function PlayerList({ board, data }: { board: Board; data: Data }) {
       </div>
       <header className="mt-6 flex items-center justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{all.length} PLAYERS</p>
+          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{all.length} PLAYERS · FULL SQUAD</p>
           <h1 className="mt-1 font-display text-[clamp(2.4rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{board.name.toUpperCase()}</h1>
         </div>
         <Flag board={board} className="text-5xl" />
       </header>
+      <Roster players={all} data={data} boardId={boardId} label={`${board.name} players`} />
+    </div>
+  );
+}
 
-      <div className="mb-4 mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${board.name} players`} aria-label={`Search ${board.name} players`} className={searchInput} />
-        <label className="flex items-center gap-2 text-xs text-smoke">
-          Sort by name
-          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]">
-            <option value="default">Default order</option>
-            <option value="asc">A → Z</option>
-            <option value="desc">Z → A</option>
-          </select>
-        </label>
+function AllPlayers({ data }: { data: Data }) {
+  return (
+    <div className="gutter pb-16 pt-28">
+      <Breadcrumb items={[{ label: 'Player Directory', onClick: () => navigate() }, { label: 'All Players' }]} />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate()}>BACK TO DIRECTORY</BackButton>
       </div>
-      <p role="status" aria-live="polite" className="mb-4 text-xs text-smoke">
-        Showing {visible.length} of {all.length} players
-      </p>
+      <header className="mt-6">
+        <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{data.players.length} PLAYERS · {data.b.boards.length} BOARDS</p>
+        <h1 className="mt-1 font-display text-[clamp(2.4rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">ALL PLAYERS</h1>
+      </header>
+      <Roster players={data.players} data={data} label="all players" />
+    </div>
+  );
+}
 
-      {all.length === 0 ? (
-        <Notice tone="info">No players have been added for this board yet.</Notice>
-      ) : visible.length === 0 ? (
-        <div className="rounded-xl border border-white/10 bg-ink-2 px-5 py-12 text-center">
-          <p className="text-sm text-bone">No players match your search.</p>
-          <button type="button" onClick={() => setQuery('')} className="mt-4 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
-            CLEAR SEARCH
-          </button>
-        </div>
-      ) : (
-        <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visible.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                onClick={() => navigate(boardId, p.id)}
-                aria-label={`View profile of ${p.name} (${board.name}, ID ${p.id})`}
-                className="group flex w-full flex-col gap-4 rounded-2xl border border-white/10 bg-ink-2 p-4 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
-              >
-                <span className="flex items-center gap-4">
-                  <Avatar player={p} size="h-16 w-16" />
-                  <span className="min-w-0">
-                    <span className="block truncate text-base font-semibold text-bone">{p.name}</span>
-                    <span className="mt-1 flex items-center gap-2 text-xs text-mist">
-                      <Flag board={board} className="text-base" />
-                      {board.name}
-                    </span>
-                  </span>
-                </span>
-                <span className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW PROFILE →</span>
-              </button>
-            </li>
+/* ---------- 2b. achievements wall ---------- */
+
+const tournamentOfAward = (e: Entry) => (e.detail ?? '').split(' · ')[0].trim() || 'Other awards';
+const countOfAward = (e: Entry) => Number(/×(\d+)/.exec(e.detail ?? '')?.[1] ?? 1);
+/** Some sheet cells hold a credit amount after "×" (e.g. ×200000); only small numbers are real repeat counts. */
+const repeatOf = (e: Entry) => (countOfAward(e) <= 50 ? countOfAward(e) : 1);
+
+function AchievementsWall({ data }: { data: Data }) {
+  const { scrollTo } = useSmoothScroll();
+  const [query, setQuery] = useState('');
+  const [board, setBoard] = useState('');
+  const boardBySlug = useMemo(() => new Map(data.b.boards.map((b) => [data.b.boardSlug(b), b])), [data]);
+
+  const q = query.trim().toLowerCase();
+  const groups = useMemo(() => {
+    const m = new Map<string, Map<string, { player: Player; awards: Entry[] }>>();
+    for (const p of data.players) {
+      if (board && p.boardId !== board) continue;
+      if (q && !p.name.toLowerCase().includes(q)) continue;
+      for (const e of p.achievements ?? []) {
+        const t = tournamentOfAward(e);
+        const byPlayer = m.get(t) ?? new Map();
+        const row = byPlayer.get(p.id) ?? { player: p, awards: [] };
+        row.awards.push(e);
+        byPlayer.set(p.id, row);
+        m.set(t, byPlayer);
+      }
+    }
+    return [...m.entries()]
+      .map(([tournament, byPlayer]) => ({
+        tournament,
+        rows: [...byPlayer.values()].sort((a, b) => b.awards.length - a.awards.length || a.player.name.localeCompare(b.player.name)),
+      }))
+      .sort((a, b) => b.rows.length - a.rows.length || a.tournament.localeCompare(b.tournament));
+  }, [data, board, q]);
+
+  const total = new Set(groups.flatMap((g) => g.rows.map((r) => r.player.id))).size;
+
+  return (
+    <div className="gutter pb-16 pt-28">
+      <Breadcrumb items={[{ label: 'Player Directory', onClick: () => navigate() }, { label: 'Achievements Wall' }]} />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate()}>BACK TO DIRECTORY</BackButton>
+      </div>
+      <header className="mt-6">
+        <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">
+          {total} AWARD-WINNING PLAYERS · {groups.length} TOURNAMENTS
+        </p>
+        <h1 className="mt-1 font-display text-[clamp(2.4rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">ACHIEVEMENTS WALL</h1>
+      </header>
+
+      <div className="mb-4 mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search winners" aria-label="Search winners" className={searchInput} />
+        <select value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Filter by board" className={selectCls}>
+          <option value="">All boards</option>
+          {data.b.boards.map((b) => (
+            <option key={b.name} value={data.b.boardSlug(b)}>
+              {b.name}
+            </option>
           ))}
+        </select>
+      </div>
+
+      {groups.length > 0 && (
+        <nav aria-label="Jump to tournament" className="mb-8 flex flex-wrap gap-2">
+          {groups.map((g) => (
+            <button key={g.tournament} type="button" onClick={() => scrollTo(`#wall-${slug(g.tournament)}`, { offset: -96 })} className={filterBtn(false)}>
+              {g.tournament}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {groups.length === 0 ? (
+        <Notice tone="info">No achievements match your search.</Notice>
+      ) : (
+        groups.map((g) => (
+          <section key={g.tournament} id={`wall-${slug(g.tournament)}`} aria-label={g.tournament} className="mb-10">
+            <h2 className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 pb-2">
+              <span className="font-display text-2xl tracking-wide text-bone sm:text-3xl">{g.tournament}</span>
+              <span className="text-xs text-smoke">{g.rows.length} {g.rows.length === 1 ? 'player' : 'players'}</span>
+            </h2>
+            <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {g.rows.map(({ player, awards }) => {
+                const b = boardBySlug.get(player.boardId);
+                return (
+                  <li key={player.id}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(player.boardId, player.id)}
+                      aria-label={`View profile of ${player.name}`}
+                      className="flex h-full w-full flex-col gap-3 rounded-2xl border border-white/10 bg-ink-2 p-4 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+                    >
+                      <span className="flex items-center gap-3">
+                        <Avatar player={player} size="h-12 w-12" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold text-bone">{player.name}</span>
+                          {b && (
+                            <span className="flex items-center gap-1.5 text-xs text-mist">
+                              <Flag board={b} className="text-sm" />
+                              {b.name}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      <span className="flex flex-wrap gap-1.5">
+                        {awards.map((a, i) => (
+                          <span key={i} className="rounded-full border border-[#c9a24b]/40 px-2.5 py-1 text-[11px] text-bone">
+                            {a.title}
+                            {repeatOf(a) > 1 && <span className="text-[#c9a24b]"> ×{repeatOf(a)}</span>}
+                          </span>
+                        ))}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))
+      )}
+    </div>
+  );
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+/* ---------- 2c. highlights gallery ---------- */
+
+function HighlightsGallery({ data }: { data: Data }) {
+  const boardBySlug = useMemo(() => new Map(data.b.boards.map((b) => [data.b.boardSlug(b), b])), [data]);
+  const items = useMemo(
+    () => data.players.flatMap((p) => (p.highlights ?? []).map((h) => ({ player: p, highlight: h }))),
+    [data],
+  );
+
+  return (
+    <div className="gutter pb-16 pt-28">
+      <Breadcrumb items={[{ label: 'Player Directory', onClick: () => navigate() }, { label: 'Highlights' }]} />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate()}>BACK TO DIRECTORY</BackButton>
+      </div>
+      <header className="mt-6">
+        <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{items.length} HIGHLIGHTS</p>
+        <h1 className="mt-1 font-display text-[clamp(2.4rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">PLAYER HIGHLIGHTS</h1>
+      </header>
+
+      {items.length === 0 ? (
+        <Notice tone="info">No highlights have been added yet.</Notice>
+      ) : (
+        <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map(({ player, highlight }, i) => {
+            const b = boardBySlug.get(player.boardId);
+            return (
+              <li key={`${player.id}-${i}`} className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-ink-2 p-5">
+                <div className="flex items-center gap-3">
+                  <Avatar player={player} size="h-14 w-14" />
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold text-bone">{player.name}</p>
+                    {b && (
+                      <p className="flex items-center gap-1.5 text-xs text-mist">
+                        <Flag board={b} className="text-sm" />
+                        {b.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="border-l border-[#c9a24b]/40 pl-3">
+                  <p className="text-sm font-semibold text-bone">{highlight.title}</p>
+                  {highlight.detail && <p className="mt-1 text-[13px] leading-relaxed text-mist">{highlight.detail}</p>}
+                </div>
+                <div className="mt-auto flex items-center justify-between gap-3">
+                  {highlight.video ? (
+                    <a href={highlight.video} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+                      ▶ WATCH VIDEO
+                    </a>
+                  ) : (
+                    <span className="text-xs text-smoke">Video coming soon</span>
+                  )}
+                  <button type="button" onClick={() => navigate(player.boardId, player.id)} className="text-xs font-semibold tracking-[0.2em] text-mist transition hover:text-bone">
+                    PROFILE →
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -513,6 +866,11 @@ export function EntryList({ entries }: { entries?: Entry[] }) {
             {e.date && <p className="text-[11px] text-smoke">{e.date}</p>}
           </div>
           {e.detail && <p className="mt-1 text-[13px] leading-relaxed text-mist">{e.detail}</p>}
+          {e.video && (
+            <a href={e.video} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+              ▶ WATCH VIDEO
+            </a>
+          )}
         </li>
       ))}
     </ul>

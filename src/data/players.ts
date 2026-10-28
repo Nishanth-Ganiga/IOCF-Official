@@ -54,7 +54,7 @@ export type BattingStats = Partial<Record<BattingKey, StatValue>>;
 export type BowlingStats = Partial<Record<BowlingKey, StatValue>>;
 
 /** One line in a list section (recent performance, tournament, achievement, ranking, highlight). */
-export type Entry = { title: string; date?: string; detail?: string };
+export type Entry = { title: string; date?: string; detail?: string; /** Optional video link (e.g. YouTube) — shown on the highlights gallery and the profile. */ video?: string };
 
 export type Player = {
   id: string;
