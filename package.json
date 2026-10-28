@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "images": "node scripts/build-images.mjs",
+    "chairmen": "node scripts/build-chairmen.mjs",
     "sync": "node scripts/sync-sheet.mjs",
     "serve": "node server/serve.mjs",
     "start": "npm run build && npm run serve",

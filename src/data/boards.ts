@@ -19,6 +19,7 @@ export type Board = {
   flag?: string;
   /** A board counts as "Available" once its chairman's name is entered. */
   chairman?: string;
+  /** Defaults to /chairmen/<slug>.webp (see scripts/build-chairmen.mjs). */
   portrait?: string;
   ceo?: string;
   sponsors?: string[];
@@ -72,4 +73,4 @@ export const boards: Board[] = baseBoards
     const i = store.boards.find((x) => x.name === b.name);
     return i ? { ...b, chairman: b.chairman ?? i.chairman, ceo: i.ceo, sponsors: i.sponsors, facts: i.facts, rankings: i.rankings, achievements: b.achievements ?? i.achievements } : b;
   })
-  .map((b) => ({ ...b, vision: b.vision ?? visions[boardSlug(b)] }));
+  .map((b) => ({ ...b, vision: b.vision ?? visions[boardSlug(b)], portrait: b.portrait ?? `/chairmen/${boardSlug(b)}.webp` }));

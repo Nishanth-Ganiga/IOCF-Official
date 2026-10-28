@@ -237,8 +237,10 @@ export function Flag({ board, className = 'text-3xl' }: { board: Board; classNam
 }
 
 function Portrait({ board, size }: { board: Board; size: string }) {
+  // Two chairmen ("A & B") share one wide 2:1 photo, so the frame widens to fit both.
+  const dual = Boolean(board.chairman?.includes(' & '));
   return (
-    <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-ink-3 ${size}`}>
+    <div style={dual ? { aspectRatio: '2 / 1', width: 'auto' } : undefined} className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-ink-3 ${size}`}>
       {board.portrait ? (
         <img src={board.portrait} alt={`${board.chairman ?? board.name} portrait`} className="h-full w-full object-cover" />
       ) : (
