@@ -82,6 +82,8 @@ const item = {
   show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.8, ease: EASE } },
 };
 
+const INSTAGRAM_URL = 'https://www.instagram.com/iocf_official/';
+
 export default function IocfHome({ profileId, onSwitch }: { profileId: ProfileId; onSwitch: (id: ProfileId) => void }) {
   const { scrollTo } = useSmoothScroll();
   const [hash, setHash] = useState(window.location.hash);
@@ -137,6 +139,22 @@ export default function IocfHome({ profileId, onSwitch }: { profileId: ProfileId
               <motion.p variants={item} className="mt-5 text-[10px] font-semibold uppercase tracking-[0.18em] text-mist sm:text-xs sm:tracking-[0.3em]">
                 GLOBAL GOVERNING BODY &nbsp;•&nbsp; INTERNATIONAL BOARDS &nbsp;•&nbsp; COMPETITIVE CRICKET
               </motion.p>
+              <motion.div variants={item} className="mt-7">
+                <a
+                  href={INSTAGRAM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-[#c9a24b] px-5 py-2.5 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition hover:bg-[#c9a24b] hover:text-ink"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
+                    <rect x="3" y="3" width="18" height="18" rx="5" />
+                    <circle cx="12" cy="12" r="4" />
+                    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                  </svg>
+                  VISIT OUR INSTAGRAM
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              </motion.div>
             </motion.div>
 
             <motion.div
