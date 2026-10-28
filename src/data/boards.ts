@@ -1,3 +1,4 @@
+import { visions } from './chairmanContent';
 import { store } from './store';
 
 /** The 26 IOCF boards, in directory order. Chairman details are filled in here once confirmed. */
@@ -66,7 +67,9 @@ const baseBoards: Board[] = [
 ];
 
 /** Base list merged with data imported from the live dataset (see store.ts). Manual edits can go in the base list. */
-export const boards: Board[] = baseBoards.map((b) => {
-  const i = store.boards.find((x) => x.name === b.name);
-  return i ? { ...b, chairman: b.chairman ?? i.chairman, ceo: i.ceo, sponsors: i.sponsors, facts: i.facts, rankings: i.rankings, achievements: b.achievements ?? i.achievements } : b;
-});
+export const boards: Board[] = baseBoards
+  .map((b) => {
+    const i = store.boards.find((x) => x.name === b.name);
+    return i ? { ...b, chairman: b.chairman ?? i.chairman, ceo: i.ceo, sponsors: i.sponsors, facts: i.facts, rankings: i.rankings, achievements: b.achievements ?? i.achievements } : b;
+  })
+  .map((b) => ({ ...b, vision: b.vision ?? visions[boardSlug(b)] }));

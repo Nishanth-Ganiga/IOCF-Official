@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Board } from '../data/boards';
+import { councilGroups, councilOf, overallRank, sponsorsOf } from '../data/boardInsights';
+import { announcementsFor } from '../data/chairmanContent';
 import type { ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import { EASE } from './fx';
@@ -304,6 +306,108 @@ function BoardStats({ board, compact }: { board: Board; compact?: boolean }) {
   );
 }
 
+/** The council this board sits in, and its fellow members. */
+function CouncilPanel({ board, mod }: { board: Board; mod: BoardsModule }) {
+  const groups = useMemo(() => councilGroups(mod.boards), [mod]);
+  const name = councilOf(board, groups);
+  const members = (groups.find((g) => g.name === name)?.members ?? [])
+    .map((n) => mod.boards.find((b) => b.name === n))
+    .filter((b): b is Board => !!b)
+    .sort((a, b) => (overallRank(a) ?? 999) - (overallRank(b) ?? 999));
+  return (
+    <div>
+      <p className="text-[10px] font-semibold tracking-[0.22em] text-smoke">COUNCIL</p>
+      {name ? (
+        <>
+          <p className="mt-2 text-sm font-semibold text-bone">{name}</p>
+          <ul className="mt-3 space-y-1.5">
+            {members.map((m) => (
+              <li key={m.name}>
+                <button
+                  type="button"
+                  disabled={m.name === board.name}
+                  onClick={() => {
+                    window.location.hash = `${ROUTE}${mod.boardSlug(m)}`;
+                  }}
+                  className="flex w-full items-center gap-2 text-left text-[13px] text-mist enabled:hover:text-bone"
+                >
+                  <Flag board={m} className="text-base" />
+                  <span className={m.name === board.name ? 'font-semibold text-[#c9a24b]' : ''}>{m.name}</span>
+                  {overallRank(m) !== undefined && <span className="ml-auto text-[11px] text-smoke">#{overallRank(m)}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="mt-2 text-[13px] leading-relaxed text-smoke">This board has not been placed in a council yet.</p>
+      )}
+    </div>
+  );
+}
+
+function SponsorPanel({ board }: { board: Board }) {
+  const sponsors = sponsorsOf(board);
+  return (
+    <div>
+      <p className="text-[10px] font-semibold tracking-[0.22em] text-smoke">SPONSORS</p>
+      {sponsors.length ? (
+        <ul className="mt-3 space-y-2.5">
+          {sponsors.map((s) => (
+            <li key={s.role + s.name} className="border-l border-[#c9a24b]/40 pl-3">
+              <p className="text-[11px] text-smoke">{s.role}</p>
+              <p className="text-sm font-semibold text-bone">{s.name}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-[13px] leading-relaxed text-smoke">No sponsors announced yet.</p>
+      )}
+    </div>
+  );
+}
+
+const fmtDate = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+/** Governance announcements for this board, plus federation-wide ones. */
+function Announcements({ board, mod }: { board: Board; mod: BoardsModule }) {
+  const items = announcementsFor(mod.boardSlug(board));
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold tracking-[0.22em] text-smoke">GOVERNANCE ANNOUNCEMENTS</p>
+        {items.length === 0 && <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em] text-smoke">NONE YET</span>}
+      </div>
+      {items.length === 0 ? (
+        <p className="mt-2 text-[13px] leading-relaxed text-smoke">Council decisions and board updates will be posted here.</p>
+      ) : (
+        <ul className="mt-3 space-y-4">
+          {items.map((a) => (
+            <li key={a.id} className="border-l border-[#c9a24b]/40 pl-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <p className="text-sm font-semibold text-bone">{a.title}</p>
+                <p className="text-[11px] text-smoke">
+                  {fmtDate(a.date)}
+                  {!a.board && ' · Federation-wide'}
+                </p>
+              </div>
+              {a.body && <p className="mt-1 text-[13px] leading-relaxed text-mist">{a.body}</p>}
+              {a.link && (
+                <a href={a.link} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+                  READ MORE →
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function BoardCard({ board, mod }: { board: Board; mod: BoardsModule }) {
   const available = mod.isAvailable(board);
   const open = () => {
@@ -396,13 +500,33 @@ function BoardDetail({ board, mod }: { board: Board; mod: BoardsModule }) {
           <BoardStats board={board} />
         </div>
 
-        <div className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
-          <Contributions board={board} />
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-ink-2 p-5">
+            <CouncilPanel board={board} mod={mod} />
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-ink-2 p-5">
+            <SponsorPanel board={board} />
+          </div>
         </div>
 
         <div className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
           <p className="text-[10px] font-semibold tracking-[0.22em] text-smoke">VISION / MESSAGE</p>
-          <p className="mt-2 text-sm italic leading-relaxed text-mist">{board.vision ?? 'Message will be shared soon.'}</p>
+          {board.vision ? (
+            <p className="mt-2 border-l border-[#c9a24b]/40 pl-3 text-sm italic leading-relaxed text-mist">“{board.vision}”</p>
+          ) : (
+            <p className="mt-2 text-sm leading-relaxed text-smoke">
+              <span className="mr-2 rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em]">COMING SOON</span>
+              {board.chairman ? `${board.chairman} has not shared a message yet.` : 'The chairman has not shared a message yet.'}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
+          <Announcements board={board} mod={mod} />
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
+          <Contributions board={board} />
         </div>
       </div>
     </motion.div>
