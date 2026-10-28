@@ -11,13 +11,15 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  * previous run's, the previous run's rankings are appended. Unchanged syncs leave the history alone, so the
  * movement shown on the site stays until the rankings change again.
  */
-export function withRankHistory(dataset, priorFile) {
-  let prior = null;
+export function readPrior(file) {
   try {
-    prior = JSON.parse(fs.readFileSync(priorFile, 'utf8'));
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    /* first run, or the previous file is unreadable */
+    return null; // first run, or the previous file is unreadable
   }
+}
+
+export function withRankHistory(dataset, prior) {
   const history = Array.isArray(prior?.rankHistory) ? [...prior.rankHistory] : [];
   if (prior?.boards?.length) {
     const priorRanks = ranksOf(prior.boards);

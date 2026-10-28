@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildDataset, readWorkbook } from './index.mjs';
-import { withRankHistory } from './history.mjs';
+import { readPrior, withRankHistory } from './history.mjs';
 
 export function loadConfig(root = process.cwd()) {
   let file = {};
@@ -52,11 +52,8 @@ function writeAtomic(file, text) {
   fs.renameSync(tmp, file);
 }
 
-/**
- * One sync run: read the source, build the dataset, validate it and write it to every output path.
- * Throws (leaving existing outputs untouched) if anything is wrong, so a bad edit in the sheet never breaks the site.
- */
-export async function syncOnce({ sheetUrl, sheetFile, outputs }) {
+/** Reads the sheet (or a local .xlsx) and returns the validated dataset, without writing anything. Throws if the sheet looks wrong. */
+export async function buildFromSource({ sheetUrl, sheetFile }) {
   let book;
   let source;
   if (sheetFile) {
@@ -68,9 +65,17 @@ export async function syncOnce({ sheetUrl, sheetFile, outputs }) {
   } else {
     throw new Error('No sheet configured. Set "sheetUrl" in iocf.config.json (or the IOCF_SHEET_URL environment variable).');
   }
-  const built = buildDataset(book, { source });
-  const { report } = built;
-  const dataset = withRankHistory(built.dataset, outputs[0]);
+  const { dataset, report } = buildDataset(book, { source });
+  return { dataset, report, source };
+}
+
+/**
+ * One sync run: read the source, build the dataset, validate it and write it to every output path.
+ * Throws (leaving existing outputs untouched) if anything is wrong, so a bad edit in the sheet never breaks the site.
+ */
+export async function syncOnce({ sheetUrl, sheetFile, outputs }) {
+  const { dataset: built, report, source } = await buildFromSource({ sheetUrl, sheetFile });
+  const dataset = withRankHistory(built, readPrior(outputs[0]));
   const text = JSON.stringify(dataset);
   for (const out of outputs) writeAtomic(out, text);
   return { generatedAt: dataset.generatedAt, source, report };

@@ -50,8 +50,13 @@ export const store: Dataset = {
   info: { tournaments: [], tournamentAwards: [], hallOfFame: [], councils: [] },
 };
 
-/** In the native apps the page is served from the device, so live data comes from the deployed site. */
-const DATA_URL = Capacitor.isNativePlatform() ? 'https://YOUR-APP.vercel.app/iocf-data.json' : '/iocf-data.json';
+/**
+ * Where live data comes from, in order. `/api/iocf-data` reads the Google Sheet on Vercel (cached a few minutes);
+ * `/iocf-data.json` is the last synced copy (served by the Fly server, or committed on Vercel). In the native apps the
+ * page is served from the device, so the deployed site's address is used instead (replace YOUR-APP below).
+ */
+const SITE = Capacitor.isNativePlatform() ? 'https://YOUR-APP.vercel.app' : '';
+const DATA_URLS = [`${SITE}/api/iocf-data`, `${SITE}/iocf-data.json`];
 
 export const dataState: { origin: 'live' | 'snapshot' | 'none' } = { origin: 'none' };
 
@@ -59,21 +64,22 @@ const looksValid = (d: unknown): d is Dataset => !!d && typeof d === 'object' &&
 
 /** Load the dataset into `store`. Never throws; the app renders with whatever could be loaded. */
 export async function initData(): Promise<void> {
-  try {
-    const ctl = new AbortController();
-    const timer = window.setTimeout(() => ctl.abort(), 10000);
-    const res = await fetch(DATA_URL, { cache: 'no-cache', signal: ctl.signal });
-    window.clearTimeout(timer);
-    if (res.ok) {
+  for (const url of DATA_URLS) {
+    try {
+      const ctl = new AbortController();
+      const timer = window.setTimeout(() => ctl.abort(), 10000);
+      const res = await fetch(url, { cache: 'no-cache', signal: ctl.signal });
+      window.clearTimeout(timer);
+      if (!res.ok) continue;
       const json: unknown = await res.json();
       if (looksValid(json)) {
         Object.assign(store, json);
         dataState.origin = 'live';
         return;
       }
+    } catch {
+      /* try the next source, then the bundled snapshot */
     }
-  } catch {
-    /* fall through to the bundled snapshot */
   }
   try {
     const snap = (await import('./snapshot.json')).default as unknown;
