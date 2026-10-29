@@ -2,6 +2,10 @@
 
 The official app of the **International Online Cricket Federation**: boards, chairmen, players, umpires, franchise leagues and major tournaments, all driven by one Google Sheet. It runs as a website and as an Android / iOS app.
 
+**Live site: https://iocf-official.vercel.app/**
+
+Open it to explore everything in the app: the federation overview, all 26 boards and their chairpersons, players and umpires, the franchise leagues with full player statistics, and the major tournaments with their results, awards and player statistics. It is updated from the IOCF Google Sheet, so it always shows the latest data.
+
 ## Profiles
 
 After the opening sequence, visitors choose who is watching. Each profile is its own section of the app.
