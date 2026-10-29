@@ -21,10 +21,16 @@ const FILES = {
   'lone-warrior': 'Lone Warrior 2026.csv',
 };
 
+// Tournaments where only players who scored runs or took wickets are kept (the others are just squad members).
+const ONLY_RUNS_OR_WICKETS = new Set(['lone-warrior']);
+const RUNS = FIELD_NAMES.indexOf('runs');
+const WICKETS = FIELD_NAMES.indexOf('wickets');
+
 const out = { fields: FIELD_NAMES, tournaments: {} };
 let total = 0;
 for (const [id, file] of Object.entries(FILES)) {
   const t = readScorerCsv(`${DIR}/${file}`);
+  if (ONLY_RUNS_OR_WICKETS.has(id)) t.rows = t.rows.filter((r) => (r[RUNS] ?? 0) > 0 || (r[WICKETS] ?? 0) > 0);
   out.tournaments[id] = t;
   total += t.rows.length;
   console.log(`${id}: ${t.rows.length} players (${t.title}, ${t.tour})`);
