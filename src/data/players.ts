@@ -75,7 +75,15 @@ export type Player = {
 /** Explicit records that replace placeholders, keyed by player id. Add real data here. */
 const overrides: Record<string, Partial<Omit<Player, 'id' | 'boardId'>>> = {};
 
-const players: Player[] = store.players.map((p) => ({ ...p, photo: playerPhotos[p.id] ?? p.photo, ...overrides[p.id] }));
+/**
+ * Players missing from the sheet's roster (e.g. a chairman who also plays). Each is added only while its board has no
+ * player of the same name, so it steps aside once the sheet lists them.
+ */
+const extraPlayers: Player[] = [{ id: 'south-africa-srinidhi', boardId: 'south-africa', name: 'Srinidhi' }];
+
+const listed = (e: Player) => store.players.some((p) => p.boardId === e.boardId && p.name.trim().toLowerCase() === e.name.toLowerCase());
+
+const players: Player[] = [...store.players, ...extraPlayers.filter((e) => !listed(e))].map((p) => ({ ...p, photo: playerPhotos[p.id] ?? p.photo, ...overrides[p.id] }));
 
 export async function loadPlayers(): Promise<Player[]> {
   return players;
