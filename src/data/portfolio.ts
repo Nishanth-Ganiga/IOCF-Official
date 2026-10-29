@@ -563,7 +563,7 @@ export const introSlides: IntroSlide[] = [
   },
 ];
 
-export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'board';
+export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'tournaments' | 'board';
 export type SectionId = 'about' | 'journey' | 'originals' | 'picks' | 'skills' | 'moments' | 'story';
 
 export const viewerProfiles: {
@@ -613,6 +613,13 @@ export const viewerProfiles: {
     name: 'Franchise Leagues',
     blurb: 'Teams, squads, results & league awards',
     color: '#4a3414',
+    order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
+  },
+  {
+    id: 'tournaments',
+    name: 'Major Tournaments',
+    blurb: 'IOCF world tournaments, results & awards',
+    color: '#3b1f5e',
     order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
   },
 ];

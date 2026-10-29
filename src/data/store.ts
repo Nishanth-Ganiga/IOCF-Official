@@ -3,6 +3,7 @@ import type { Board } from './boards';
 import type { League } from './leagues';
 import type { Entry, Player } from './players';
 import type { Tournament } from './iocfInfo';
+import type { MajorTournament } from './tournaments';
 import type { Umpire } from './umpires';
 
 /**
@@ -36,6 +37,8 @@ export type Dataset = {
   umpires: Umpire[];
   umpireOrder: string[];
   leagues: League[];
+  /** The Major Tournaments profile (T20 World Cup, Euro Cup, …). Absent in data synced before it existed. */
+  majorTournaments?: MajorTournament[];
   info: Info;
   /** Past board rankings, oldest first; used for rank movement. */
   rankHistory?: { at: string | null; ranks: Record<string, Record<string, number>> }[];
@@ -47,6 +50,7 @@ export const store: Dataset = {
   umpires: [],
   umpireOrder: [],
   leagues: [],
+  majorTournaments: [],
   info: { tournaments: [], tournamentAwards: [], hallOfFame: [], councils: [] },
 };
 

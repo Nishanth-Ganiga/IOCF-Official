@@ -39,6 +39,14 @@ const EMBLEMS: Record<Exclude<ProfileId, 'main'>, ReactNode> = {
       <path d="M12 13v4M8.5 20h7M10 17h4" />
     </>
   ),
+  // globe topped with a star
+  tournaments: (
+    <>
+      <circle cx="12" cy="14" r="6.5" />
+      <path d="M5.5 14h13M12 7.5c-2.2 2-2.2 11 0 13M12 7.5c2.2 2 2.2 11 0 13" opacity="0.7" />
+      <path d="m12 1.8.9 1.9 2.1.3-1.5 1.5.4 2.1-1.9-1-1.9 1 .4-2.1L9 4l2.1-.3z" />
+    </>
+  ),
   // stumps with bails, and a raised-finger "out" signal
   umpire: (
     <>

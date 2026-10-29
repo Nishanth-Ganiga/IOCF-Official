@@ -12,6 +12,7 @@ import IocfBoards from './components/IocfBoards';
 import IocfPlayers from './components/IocfPlayers';
 import IocfUmpires from './components/IocfUmpires';
 import IocfLeagues from './components/IocfLeagues';
+import IocfTournaments from './components/IocfTournaments';
 import Hero from './components/Hero';
 import ContinueWatching from './components/ContinueWatching';
 import Scene from './components/Scene';
@@ -131,6 +132,8 @@ function Series() {
             <IocfPlayers profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'leagues' ? (
             <IocfLeagues profileId={profileId} onSwitch={pickProfile} />
+          ) : profileId === 'tournaments' ? (
+            <IocfTournaments profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'umpire' ? (
             <IocfUmpires profileId={profileId} onSwitch={pickProfile} />
           ) : (
