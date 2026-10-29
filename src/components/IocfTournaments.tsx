@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ProfileId } from '../data/portfolio';
+import { dataState } from '../data/store';
 import { describeEdition, majorTournaments, type MajorTournament, type TournamentEdition, type TournamentSection } from '../data/tournaments';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import { EASE } from './fx';
@@ -163,7 +164,7 @@ function IndexPage({ tournaments }: { tournaments: MajorTournament[] }) {
         {tournaments.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-ink-2 px-5 py-12 text-center">
             <p className="text-sm text-bone">The tournament sheets could not be loaded.</p>
-            <p className="mt-1 text-xs text-smoke">Please refresh the page to try again.</p>
+            <p className="mt-1 text-xs text-smoke">Please refresh the page to try again. (Data source: {dataState.origin}.)</p>
           </div>
         ) : (
           <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

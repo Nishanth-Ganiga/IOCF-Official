@@ -66,6 +66,20 @@ export const dataState: { origin: 'live' | 'snapshot' | 'none' } = { origin: 'no
 
 const looksValid = (d: unknown): d is Dataset => !!d && typeof d === 'object' && Array.isArray((d as Dataset).boards) && (d as Dataset).boards.length > 0 && Array.isArray((d as Dataset).leagues);
 
+/**
+ * The live sheet may not (yet) have the Major Tournaments tabs under the names the sync expects; when it returns none,
+ * use the ones bundled with the last local sync so the profile is never empty.
+ */
+async function fillMajorTournaments(): Promise<void> {
+  if (store.majorTournaments?.length) return;
+  try {
+    const snap = (await import('./snapshot.json')).default as unknown as Dataset;
+    if (snap.majorTournaments?.length) store.majorTournaments = snap.majorTournaments;
+  } catch {
+    /* no bundled copy: the profile shows its empty state */
+  }
+}
+
 /** Load the dataset into `store`. Never throws; the app renders with whatever could be loaded. */
 export async function initData(): Promise<void> {
   for (const url of DATA_URLS) {
@@ -79,6 +93,7 @@ export async function initData(): Promise<void> {
       if (looksValid(json)) {
         Object.assign(store, json);
         dataState.origin = 'live';
+        await fillMajorTournaments();
         return;
       }
     } catch {
