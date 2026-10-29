@@ -104,6 +104,67 @@ const SQUAD_ALIASES: Record<string, string> = {
   'hundred/southernbraves/Anand Ajikumar': 'Anand AKJ',
 };
 
+/** Turns the compact rows of a scorer export (see scripts/lib/scorer-csv.mjs) into player records. */
+export function decodePlayers(fields: string[], rows: (string | number | null)[][]): PlayerStats[] {
+  const used = new Map<string, number>();
+  return rows.map((row) => {
+    const o: Record<string, string | number | null> = {};
+    fields.forEach((f, i) => (o[f] = row[i]));
+    const hs = String(o.hs ?? '');
+    const fast = (v: unknown) => {
+      const m2 = /\((\d+)\)/.exec(String(v ?? ''));
+      return m2 ? Number(m2[1]) : null;
+    };
+    const best = String(o.best ?? '').trim();
+    // ids repeat only if two players of a team share a name; number the later ones
+    const base = slug(String(o.name)) || 'player';
+    const key = `${norm(String(o.team))}/${base}`;
+    const n = (used.get(key) ?? 0) + 1;
+    used.set(key, n);
+    const num = (k: string) => (typeof o[k] === 'number' ? (o[k] as number) : 0);
+    const p: PlayerStats = {
+      id: n === 1 ? base : `${base}-${n}`,
+      name: String(o.name),
+      team: String(o.team),
+      matches: num('matches'),
+      pom: num('pom'),
+      batInn: num('batInn'),
+      runs: num('runs'),
+      avg: num('avg'),
+      sr: num('sr'),
+      thirties: num('thirties'),
+      fifties: num('fifties'),
+      hundreds: num('hundreds'),
+      hs: hs ? parseInt(hs, 10) : null,
+      hsNotOut: hs.endsWith('*'),
+      sixes: num('sixes'),
+      fours: num('fours'),
+      balls: num('balls'),
+      notOuts: num('notOuts'),
+      most6: num('most6'),
+      most4: num('most4'),
+      fast50: fast(o.fast50),
+      fast100: fast(o.fast100),
+      bowlInn: num('bowlInn'),
+      wickets: num('wickets'),
+      runsConceded: num('runsConceded'),
+      maidens: num('maidens'),
+      bowlAvg: num('bowlAvg'),
+      bowlSr: num('bowlSr'),
+      economy: num('economy'),
+      threeW: num('threeW'),
+      fiveW: num('fiveW'),
+      best: best && best !== '0' ? best : null,
+      ballsBowled: num('ballsBowled'),
+      dots: num('dots'),
+      catches: num('catches'),
+      stumpings: num('stumpings'),
+      runOuts: num('runOuts'),
+    };
+    return p;
+  });
+}
+
 let cache: Promise<AllStats> | null = null;
 
 /** Loads and decodes the stats (a separate chunk, fetched the first time a league page needs it). */
@@ -111,66 +172,7 @@ export function loadLeagueStats(): Promise<AllStats> {
   cache ??= import('./leagueStats.json').then((m) => {
     const raw = m.default as unknown as Raw;
     const out: AllStats = {};
-    for (const [leagueId, l] of Object.entries(raw.leagues)) {
-      const used = new Map<string, number>();
-      const players = l.rows.map((row) => {
-        const o: Record<string, string | number | null> = {};
-        raw.fields.forEach((f, i) => (o[f] = row[i]));
-        const hs = String(o.hs ?? '');
-        const fast = (v: unknown) => {
-          const m2 = /\((\d+)\)/.exec(String(v ?? ''));
-          return m2 ? Number(m2[1]) : null;
-        };
-        const best = String(o.best ?? '').trim();
-        // ids repeat only if two players of a team share a name; number the later ones
-        const base = slug(String(o.name)) || 'player';
-        const key = `${norm(String(o.team))}/${base}`;
-        const n = (used.get(key) ?? 0) + 1;
-        used.set(key, n);
-        const num = (k: string) => (typeof o[k] === 'number' ? (o[k] as number) : 0);
-        const p: PlayerStats = {
-          id: n === 1 ? base : `${base}-${n}`,
-          name: String(o.name),
-          team: String(o.team),
-          matches: num('matches'),
-          pom: num('pom'),
-          batInn: num('batInn'),
-          runs: num('runs'),
-          avg: num('avg'),
-          sr: num('sr'),
-          thirties: num('thirties'),
-          fifties: num('fifties'),
-          hundreds: num('hundreds'),
-          hs: hs ? parseInt(hs, 10) : null,
-          hsNotOut: hs.endsWith('*'),
-          sixes: num('sixes'),
-          fours: num('fours'),
-          balls: num('balls'),
-          notOuts: num('notOuts'),
-          most6: num('most6'),
-          most4: num('most4'),
-          fast50: fast(o.fast50),
-          fast100: fast(o.fast100),
-          bowlInn: num('bowlInn'),
-          wickets: num('wickets'),
-          runsConceded: num('runsConceded'),
-          maidens: num('maidens'),
-          bowlAvg: num('bowlAvg'),
-          bowlSr: num('bowlSr'),
-          economy: num('economy'),
-          threeW: num('threeW'),
-          fiveW: num('fiveW'),
-          best: best && best !== '0' ? best : null,
-          ballsBowled: num('ballsBowled'),
-          dots: num('dots'),
-          catches: num('catches'),
-          stumpings: num('stumpings'),
-          runOuts: num('runOuts'),
-        };
-        return p;
-      });
-      out[leagueId] = { title: l.title, tour: l.tour, players };
-    }
+    for (const [leagueId, l] of Object.entries(raw.leagues)) out[leagueId] = { title: l.title, tour: l.tour, players: decodePlayers(raw.fields, l.rows) };
     return out;
   });
   return cache;

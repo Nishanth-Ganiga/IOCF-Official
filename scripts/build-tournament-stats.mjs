@@ -1,0 +1,33 @@
+// Builds src/data/tournamentStats.json from the STUMPS scorer exports in
+// "All Assests/All 2026 Major Tournaments Stats" (one CSV per Major Tournament).
+// Usage: npm run tournament-stats
+import { writeFileSync } from 'node:fs';
+import { FIELD_NAMES, readScorerCsv } from './lib/scorer-csv.mjs';
+
+const DIR = 'All Assests/All 2026 Major Tournaments Stats';
+const OUT = 'src/data/tournamentStats.json';
+
+// tournament id (see scripts/sync/tournaments.mjs) -> CSV file
+const FILES = {
+  't20-world-cup': 'T20 World Cup 2026.csv',
+  'euro-cup': 'Euro Cup 2026.csv',
+  'oceania-cup': 'Oceania Cup 2026.csv',
+  'asia-cup': 'ASIA CUP 2026.csv',
+  'associate-nations-cup': 'Associate Nations Cup 2026.csv',
+  'odi-world-cup': 'ODI World Cup_.csv',
+  'world-test-championship': 'World Test championship 2026.csv',
+  'emerging-talents-league': 'Emerging Talents league 2026.csv',
+  'womens-global-league': 'Women_s Global League_.csv',
+  'lone-warrior': 'Lone Warrior 2026.csv',
+};
+
+const out = { fields: FIELD_NAMES, tournaments: {} };
+let total = 0;
+for (const [id, file] of Object.entries(FILES)) {
+  const t = readScorerCsv(`${DIR}/${file}`);
+  out.tournaments[id] = t;
+  total += t.rows.length;
+  console.log(`${id}: ${t.rows.length} players (${t.title}, ${t.tour})`);
+}
+writeFileSync(OUT, JSON.stringify(out));
+console.log(`wrote ${OUT} — ${total} player rows`);

@@ -10,6 +10,7 @@
     "images": "node scripts/build-images.mjs",
     "chairmen": "node scripts/build-chairmen.mjs",
     "league-stats": "node scripts/build-league-stats.mjs",
+    "tournament-stats": "node scripts/build-tournament-stats.mjs",
     "sync": "node scripts/sync-sheet.mjs",
     "serve": "node server/serve.mjs",
     "start": "npm run build && npm run serve",
