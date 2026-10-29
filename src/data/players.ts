@@ -79,7 +79,10 @@ const overrides: Record<string, Partial<Omit<Player, 'id' | 'boardId'>>> = {};
  * Players missing from the sheet's roster (e.g. a chairman who also plays). Each is added only while its board has no
  * player of the same name, so it steps aside once the sheet lists them.
  */
-const extraPlayers: Player[] = [{ id: 'south-africa-srinidhi', boardId: 'south-africa', name: 'Srinidhi' }];
+const extraPlayers: Player[] = [
+  { id: 'south-africa-srinidhi', boardId: 'south-africa', name: 'Srinidhi' },
+  { id: 'papua-new-guinea-aman-raj-singh', boardId: 'papua-new-guinea', name: 'Aman Raj Singh' },
+];
 
 const listed = (e: Player) => store.players.some((p) => p.boardId === e.boardId && p.name.trim().toLowerCase() === e.name.toLowerCase());
 
