@@ -83,7 +83,7 @@ export default function MyIocf({ onSwitch }: { onSwitch: (id: ProfileId) => void
               const league = data.leagues.find((l) => l.id === leagueId);
               const team = league?.teams.find((t) => t.id === teamId);
               return team && league && (
-                <button type="button" onClick={() => open('leagues', `#/leagues/${leagueId}/${teamId}`)} className={linkCls}>
+                <button type="button" onClick={() => open('leagues', `#/leagues/${leagueId}/season-1/${teamId}`)} className={linkCls}>
                   {team.name} <span className="text-xs text-smoke">· {league.shortName}</span>
                 </button>
               );

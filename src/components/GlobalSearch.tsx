@@ -74,7 +74,7 @@ export default function GlobalSearch({
       players.filter((p) => match(p.name)).forEach((p) => out.push({ key: `p-${p.id}`, group: 'Players', label: p.name, sub: boardName(p.boardId), run: () => jump('player', `#/players/${p.boardId}/${p.id}`) }));
       umpires.filter((u) => match(u.name) && u.name !== 'Umpire').forEach((u) => out.push({ key: `u-${u.id}`, group: 'Umpires', label: u.name, sub: boardName(u.boardId), run: () => jump('umpire', `#/umpires/u/${u.id}`) }));
       leagues.filter((l) => match(l.name) || match(l.shortName)).forEach((l) => out.push({ key: `l-${l.id}`, group: 'Leagues', label: l.name, sub: l.status, run: () => jump('leagues', `#/leagues/${l.id}`) }));
-      leagues.forEach((l) => l.teams.filter((t) => match(t.name)).forEach((t) => out.push({ key: `t-${l.id}-${t.id}`, group: 'Teams', label: t.name, sub: l.shortName, run: () => jump('leagues', `#/leagues/${l.id}/${t.id}`) })));
+      leagues.forEach((l) => l.teams.filter((t) => match(t.name)).forEach((t) => out.push({ key: `t-${l.id}-${t.id}`, group: 'Teams', label: t.name, sub: l.shortName, run: () => jump('leagues', `#/leagues/${l.id}/season-1/${t.id}`) })));
     }
     return out.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || rank(a.label) - rank(b.label));
     // eslint-disable-next-line react-hooks/exhaustive-deps

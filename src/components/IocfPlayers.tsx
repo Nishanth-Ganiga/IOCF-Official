@@ -855,7 +855,7 @@ function PlayerProfile({ board, player, onSwitch }: { board: Board; player: Play
                   <button
                     type="button"
                     onClick={() => {
-                      window.location.hash = `#/leagues/${st.league.id}/${st.team.id}`;
+                      window.location.hash = `#/leagues/${st.league.id}/season-1/${st.team.id}`;
                       onSwitch('leagues');
                     }}
                     className="text-sm font-semibold text-bone hover:text-[#c9a24b]"

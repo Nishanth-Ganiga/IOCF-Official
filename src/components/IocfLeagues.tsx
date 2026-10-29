@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Board } from '../data/boards';
 import type { League, LeagueMatch, LeagueTeam } from '../data/leagues';
+import {
+  hasStats, leagueSummary, loadLeagueStats, otherStints, playersOf, SEASON_ID, SEASON_LABEL, seasonsOf, teamTotals, type AllStats, type StatPlayer,
+} from '../data/leagueStats';
 import type { ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import { EASE } from './fx';
@@ -23,7 +26,7 @@ const item = {
   show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.8, ease: EASE } },
 };
 
-/** Routes: `#/leagues`, `#/leagues/<leagueId>`, `#/leagues/<leagueId>/<teamId>`. */
+/** Routes: `#/leagues`, `#/leagues/<league>`, `.../<season>`, `.../<season>/<team>`, `.../<season>/<team>/<player>`. */
 function readRoute() {
   const h = window.location.hash;
   if (!h.startsWith(ROUTE)) return [] as string[];
@@ -43,11 +46,11 @@ const navigate = (...parts: string[]) => {
 };
 
 function useData() {
-  const [data, setData] = useState<{ m: LeaguesModule; leagues: League[]; boards: Board[] } | null>(null);
+  const [data, setData] = useState<{ m: LeaguesModule; leagues: League[]; boards: Board[]; all: AllStats | null } | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    Promise.all([import('../data/leagues'), import('../data/boards')])
-      .then(async ([m, b]: [LeaguesModule, BoardsModule]) => setData({ m, leagues: await m.loadLeagues(), boards: b.boards }))
+    Promise.all([import('../data/leagues'), import('../data/boards'), loadLeagueStats().catch(() => null)])
+      .then(async ([m, b, all]: [LeaguesModule, BoardsModule, AllStats | null]) => setData({ m, leagues: await m.loadLeagues(), boards: b.boards, all }))
       .catch(() => setFailed(true));
   }, []);
   return { data, failed };
@@ -59,11 +62,18 @@ const fmt = (n?: number) => (n === undefined ? MISSING : n.toLocaleString('en-US
 export default function IocfLeagues({ profileId, onSwitch }: { profileId: ProfileId; onSwitch: (id: ProfileId) => void }) {
   const { scrollTo } = useSmoothScroll();
   const { data, failed } = useData();
-  const [leagueId, teamId] = useRoute();
+  const parts = useRoute();
+  // links made before seasons existed were `#/leagues/<league>/<team>`; they now open that team in Season 1
+  const legacy = parts.length >= 2 && parts[1] !== SEASON_ID;
+  const [leagueId, seasonId, teamId, playerId] = legacy ? [parts[0], SEASON_ID, parts[1], parts[2]] : parts;
+
+  useEffect(() => {
+    if (legacy) history.replaceState(null, '', [ROUTE, leagueId, SEASON_ID, teamId, playerId].filter(Boolean).map((x, i) => (i ? encodeURIComponent(x!) : x)).join('/'));
+  }, [legacy, leagueId, teamId, playerId]);
 
   useEffect(() => {
     scrollTo(0, { offset: 0 });
-  }, [leagueId, teamId, scrollTo]);
+  }, [leagueId, seasonId, teamId, playerId, scrollTo]);
 
   const go = (id: string) => {
     const scroll = () => scrollTo(id === 'top' ? 0 : `#${id}`, { offset: id === 'top' ? 0 : -72 });
@@ -85,9 +95,15 @@ export default function IocfLeagues({ profileId, onSwitch }: { profileId: Profil
     const league = data.leagues.find((l) => l.id === leagueId);
     const team = league && teamId ? league.teams.find((t) => t.id === teamId) : undefined;
     if (!league) body = <NotFound what="league" />;
+    else if (!seasonId) body = <SeasonsPage league={league} data={data} />;
+    else if (!seasonsOf(league).some((s) => s.id === seasonId)) body = <NotFound what="season" back={{ label: league.name, to: [league.id] }} />;
     else if (!teamId) body = <LeaguePage league={league} data={data} />;
-    else if (!team) body = <NotFound what="team" league={league} />;
-    else body = <TeamPage league={league} team={team} data={data} />;
+    else if (!team) body = <NotFound what="team" back={{ label: `${league.name} · ${SEASON_LABEL}`, to: [league.id, SEASON_ID] }} />;
+    else if (!playerId) body = <TeamPage league={league} team={team} data={data} />;
+    else {
+      const player = playersOf(data.all, league, team).find((p) => p.id === playerId);
+      body = player ? <PlayerPage league={league} team={team} player={player} data={data} /> : <NotFound what="player" back={{ label: team.name, to: [league.id, SEASON_ID, team.id] }} />;
+    }
   }
 
   return (
@@ -101,12 +117,12 @@ export default function IocfLeagues({ profileId, onSwitch }: { profileId: Profil
   );
 }
 
-function NotFound({ what, league }: { what: string; league?: League }) {
+function NotFound({ what, back }: { what: string; back?: { label: string; to: string[] } }) {
   return (
     <div className="gutter pt-32 text-center">
       <p className="text-sm text-mist">That {what} could not be found.</p>
-      <button type="button" onClick={() => (league ? navigate(league.id) : navigate())} className="mt-4 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
-        {league ? `BACK TO ${league.name.toUpperCase()}` : 'BACK TO FRANCHISE LEAGUES'}
+      <button type="button" onClick={() => (back ? navigate(...back.to) : navigate())} className="mt-4 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] hover:underline">
+        {back ? `BACK TO ${back.label.toUpperCase()}` : 'BACK TO FRANCHISE LEAGUES'}
       </button>
     </div>
   );
@@ -207,7 +223,67 @@ function LeagueIndex({ data }: { data: Data }) {
   );
 }
 
-/* ---------- 2. a league ---------- */
+/* ---------- 2. a league's seasons ---------- */
+
+function SeasonsPage({ league, data }: { league: League; data: Data }) {
+  const seasons = seasonsOf(league);
+  const players = hasStats(data.all, league) ? leagueSummary(data.all, league).players : 0;
+  return (
+    <div className="gutter pb-16 pt-28">
+      <Breadcrumb items={[{ label: 'Franchise Leagues', onClick: () => navigate() }, { label: league.name }]} />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate()}>BACK TO LEAGUES</BackButton>
+      </div>
+      <header className="mt-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{league.shortName}</p>
+          <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{league.name.toUpperCase()}</h1>
+          {league.host && (
+            <p className="mt-3 flex items-center gap-2 text-sm text-mist">
+              <BoardFlag name={league.host} data={data} /> Host: {league.host}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-3">
+          <StatusBadge status={league.status} />
+          <ShareButton />
+        </div>
+      </header>
+
+      <section className="mt-8" aria-label="Seasons">
+        <h2 className="mb-1 text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">SEASONS ({seasons.length})</h2>
+        <p className="mb-4 text-sm text-mist">Choose a season to see its winners, awards, matches, teams and every player's stats.</p>
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {seasons.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => navigate(league.id, s.id)}
+                aria-label={`Open ${league.name} ${s.label}`}
+                className="group flex h-full w-full flex-col gap-3 rounded-2xl border border-white/10 bg-ink-2 p-5 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">{league.shortName}</span>
+                  <StatusBadge status={league.status} />
+                </span>
+                <span className="font-display text-4xl leading-tight tracking-wide text-bone">{s.label.toUpperCase()}</span>
+                <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-mist">
+                  <span>{league.teams.length} teams</span>
+                  <span>{league.matches.length} matches</span>
+                  {players > 0 && <span>{players} players</span>}
+                </span>
+                <span className="text-xs text-smoke">{league.champions ? `Champions: ${league.champions}` : 'Champions: not recorded'}</span>
+                <span className="mt-auto pt-2 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW {s.label.toUpperCase()} →</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+/* ---------- 3. a season of a league ---------- */
 
 function MatchRow({ m, data }: { m: LeagueMatch; data: Data }) {
   void data;
@@ -251,15 +327,27 @@ function LeaguePage({ league, data }: { league: League; data: Data }) {
     { label: 'Fair Play award', value: league.fairPlay },
   ].filter((f) => f.value);
 
+  const summary = useMemo(() => (hasStats(data.all, league) ? leagueSummary(data.all, league) : null), [data, league]);
+  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const sections = [
+    { id: 'winners', label: 'Winners' },
+    ...(league.awards.length ? [{ id: 'awards', label: 'Awards' }] : []),
+    ...(summary ? [{ id: 'leaders', label: 'Leaders' }] : []),
+    { id: 'results', label: 'Matches' },
+    { id: 'teams', label: 'Teams' },
+  ];
+
   return (
     <div className="gutter pb-16 pt-28">
-      <Breadcrumb items={[{ label: 'Franchise Leagues', onClick: () => navigate() }, { label: league.name }]} />
+      <Breadcrumb items={[{ label: 'Franchise Leagues', onClick: () => navigate() }, { label: league.name, onClick: () => navigate(league.id) }, { label: SEASON_LABEL }]} />
       <div className="mt-3">
-        <BackButton onClick={() => navigate()}>BACK TO LEAGUES</BackButton>
+        <BackButton onClick={() => navigate(league.id)}>BACK TO {league.shortName} SEASONS</BackButton>
       </div>
       <header className="mt-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{league.shortName}</p>
+          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">
+            {league.shortName} · {SEASON_LABEL.toUpperCase()}
+          </p>
           <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{league.name.toUpperCase()}</h1>
         </div>
         <div className="flex flex-col items-end gap-3">
@@ -268,55 +356,91 @@ function LeaguePage({ league, data }: { league: League; data: Data }) {
         </div>
       </header>
 
-      <Card title="LEAGUE SUMMARY" className="mt-6">
-        {facts.length > 0 ? (
-          <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {facts.map((f) => (
-              <div key={f.label}>
-                <dt className="text-[10px] font-semibold tracking-[0.22em] text-smoke">{f.label.toUpperCase()}</dt>
-                <dd className="mt-1 flex items-center gap-2 text-sm text-bone">
-                  {f.label === 'Host board' && <BoardFlag name={f.value} data={data} />}
-                  {f.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <p className="text-sm text-smoke">No results have been recorded for this league yet.</p>
-        )}
-        {league.status === 'Cancelled' && <p className="mt-4 text-sm text-mist">This tournament was cancelled before completion; the matches that were played are listed below.</p>}
-      </Card>
+      <nav aria-label="On this page" className="mt-5 flex flex-wrap gap-2">
+        {sections.map((x) => (
+          <button key={x.id} type="button" onClick={() => jump(x.id)} className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-semibold tracking-wide text-mist transition hover:border-[#c9a24b] hover:text-[#c9a24b]">
+            {x.label}
+          </button>
+        ))}
+      </nav>
 
-      <section className="mt-8" aria-label="Teams">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">TEAMS ({league.teams.length})</h2>
-          <input type="search" value={teamQuery} onChange={(e) => setTeamQuery(e.target.value)} placeholder="Search teams" aria-label="Search teams" className={searchInput} />
-        </div>
-        {teams.length === 0 ? (
-          <p className="rounded-xl border border-white/10 bg-ink-2 px-5 py-8 text-center text-sm text-mist">No teams match your search.</p>
-        ) : (
-          <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {teams.map((t) => {
-              const badge = t.name === league.champions ? 'CHAMPIONS' : t.name === league.runnersUp ? 'RUNNERS-UP' : t.name === league.fairPlay ? 'FAIR PLAY' : null;
-              return (
-                <li key={t.id}>
-                  <button
-                    type="button"
-                    onClick={() => navigate(league.id, t.id)}
-                    aria-label={`Open team ${t.name}`}
-                    className="group flex h-full w-full flex-col gap-2 rounded-2xl border border-white/10 bg-ink-2 p-4 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
-                  >
-                    <span className="text-base font-semibold text-bone">{t.name}</span>
-                    <span className="text-xs text-mist">{t.players.length} players</span>
-                    {badge && <span className="w-fit rounded border border-[#c9a24b]/50 px-1.5 py-px text-[10px] font-semibold tracking-wider text-[#c9a24b]">{badge}</span>}
-                    <span className="mt-auto pt-2 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW TEAM →</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <section id="winners" className="mt-6 scroll-mt-24">
+        <Card title="WINNERS & SUMMARY">
+          {facts.length > 0 ? (
+            <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              {facts.map((f) => (
+                <div key={f.label}>
+                  <dt className="text-[10px] font-semibold tracking-[0.22em] text-smoke">{f.label.toUpperCase()}</dt>
+                  <dd className="mt-1 flex items-center gap-2 text-sm text-bone">
+                    {f.label === 'Host board' && <BoardFlag name={f.value} data={data} />}
+                    {f.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-sm text-smoke">No results have been recorded for this league yet.</p>
+          )}
+          {league.status === 'Cancelled' && <p className="mt-4 text-sm text-mist">This tournament was cancelled before completion; the matches that were played are listed below.</p>}
+          {summary && (
+            <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-white/5 pt-4 sm:grid-cols-5">
+              <Fact label="Teams" value={String(league.teams.length)} />
+              <Fact label="Matches" value={String(league.matches.length)} />
+              <Fact label="Runs scored" value={fmt(summary.runs)} />
+              <Fact label="Wickets" value={fmt(summary.wickets)} />
+              <Fact label="Sixes" value={fmt(summary.sixes)} />
+            </dl>
+          )}
+        </Card>
       </section>
+
+      {league.awards.length > 0 && (
+        <section id="awards" className="scroll-mt-24">
+          <Card title="TOURNAMENT AWARDS" className="mt-8">
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {league.awards.map((a) => (
+                <li key={a.award} className="rounded-lg bg-ink-3 px-4 py-3">
+                  <p className="text-[11px] font-semibold tracking-wide text-[#c9a24b]">{a.award}</p>
+                  <p className="mt-1 text-sm text-bone">{a.winner ?? MISSING}</p>
+                  <p className="text-[12px] text-mist">{[a.team, a.board].filter(Boolean).join(' · ')}</p>
+                  {a.credits !== undefined && <p className="text-[11px] text-smoke">{fmt(a.credits)} credits</p>}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </section>
+      )}
+
+      {summary && (
+        <section id="leaders" className="scroll-mt-24">
+          <Card title="SEASON LEADERS" className="mt-8">
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { title: 'Most runs', rows: summary.runsLeaders, value: (e: (typeof summary.runsLeaders)[number]) => fmt(e.p.runs) },
+                { title: 'Most wickets', rows: summary.wicketLeaders, value: (e: (typeof summary.runsLeaders)[number]) => fmt(e.p.wickets) },
+                { title: 'Most sixes', rows: summary.sixesLeaders, value: (e: (typeof summary.runsLeaders)[number]) => fmt(e.p.sixes) },
+                { title: 'Highest score', rows: summary.highScores, value: (e: (typeof summary.runsLeaders)[number]) => `${e.p.hs}${e.p.hsNotOut ? '*' : ''}` },
+              ].map((c) => (
+                <div key={c.title}>
+                  <p className="text-[10px] font-semibold tracking-[0.22em] text-smoke">{c.title.toUpperCase()}</p>
+                  <ol className="mt-2 space-y-1.5">
+                    {c.rows.map((e, i) => (
+                      <li key={`${e.team.id}-${e.p.id}`} className="flex items-baseline gap-2 text-sm">
+                        <span className="w-4 text-[11px] text-smoke">{i + 1}</span>
+                        <button type="button" onClick={() => navigate(league.id, SEASON_ID, e.team.id, e.p.id)} className="min-w-0 flex-1 truncate text-left text-bone hover:text-[#c9a24b]">
+                          {e.p.name}
+                          <span className="ml-1.5 text-[11px] text-smoke">{e.team.name}</span>
+                        </button>
+                        <span className="font-semibold text-[#c9a24b]">{c.value(e)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
 
       {regular.length > 0 && (
         <Card title="STANDINGS (LEAGUE STAGE, FROM RECORDED RESULTS)" className="mt-8">
@@ -337,7 +461,7 @@ function LeaguePage({ league, data }: { league: League; data: Data }) {
                   <tr key={r.id} className="border-t border-white/5 text-mist">
                     <td className="py-2 pr-3 text-smoke">{i + 1}</td>
                     <td className="py-2 pr-3">
-                      <button type="button" onClick={() => navigate(league.id, r.id)} className="text-left text-bone hover:text-[#c9a24b]">
+                      <button type="button" onClick={() => navigate(league.id, SEASON_ID, r.id)} className="text-left text-bone hover:text-[#c9a24b]">
                         {r.team}
                       </button>
                     </td>
@@ -354,27 +478,45 @@ function LeaguePage({ league, data }: { league: League; data: Data }) {
         </Card>
       )}
 
-      {league.awards.length > 0 && (
-        <Card title="LEAGUE AWARDS" className="mt-8">
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {league.awards.map((a) => (
-              <li key={a.award} className="rounded-lg bg-ink-3 px-4 py-3">
-                <p className="text-[11px] font-semibold tracking-wide text-[#c9a24b]">{a.award}</p>
-                <p className="mt-1 text-sm text-bone">{a.winner ?? MISSING}</p>
-                <p className="text-[12px] text-mist">{[a.team, a.board].filter(Boolean).join(' · ')}</p>
-                {a.credits !== undefined && <p className="text-[11px] text-smoke">{fmt(a.credits)} credits</p>}
-              </li>
-            ))}
+      <ResultsExplorer league={league} data={data} venue={venue} setVenue={setVenue} />
+
+      <section id="teams" className="mt-8 scroll-mt-24" aria-label="Teams">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">TEAMS ({league.teams.length})</h2>
+          <input type="search" value={teamQuery} onChange={(e) => setTeamQuery(e.target.value)} placeholder="Search teams" aria-label="Search teams" className={searchInput} />
+        </div>
+        {teams.length === 0 ? (
+          <p className="rounded-xl border border-white/10 bg-ink-2 px-5 py-8 text-center text-sm text-mist">No teams match your search.</p>
+        ) : (
+          <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {teams.map((t) => {
+              const badge = t.name === league.champions ? 'CHAMPIONS' : t.name === league.runnersUp ? 'RUNNERS-UP' : t.name === league.fairPlay ? 'FAIR PLAY' : null;
+              const n = playersOf(data.all, league, t).length;
+              return (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(league.id, SEASON_ID, t.id)}
+                    aria-label={`Open team ${t.name}`}
+                    className="group flex h-full w-full flex-col gap-2 rounded-2xl border border-white/10 bg-ink-2 p-4 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+                  >
+                    <span className="text-base font-semibold text-bone">{t.name}</span>
+                    <span className="text-xs text-mist">{n || t.players.length} players</span>
+                    {badge && <span className="w-fit rounded border border-[#c9a24b]/50 px-1.5 py-px text-[10px] font-semibold tracking-wider text-[#c9a24b]">{badge}</span>}
+                    <span className="mt-auto pt-2 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW TEAM →</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-        </Card>
-      )}
+        )}
+      </section>
 
       <AuctionCard league={league} data={data} />
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <VenuesCard league={league} data={data} onPick={(v) => { setVenue(v); window.setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
+        <VenuesCard league={league} data={data} onPick={(v) => { setVenue(v); window.setTimeout(() => jump('results'), 50); }} />
         <HeadToHeadCard league={league} data={data} />
       </div>
-      <ResultsExplorer league={league} data={data} venue={venue} setVenue={setVenue} />
     </div>
   );
 }
@@ -388,7 +530,7 @@ function AuctionCard({ league, data }: { league: League; data: Data }) {
       <ul className="space-y-3">
         {rows.map((r) => (
           <li key={r.team.id} className="grid items-center gap-2 sm:grid-cols-[11rem_1fr_16rem]">
-            <button type="button" onClick={() => navigate(league.id, r.team.id)} className="text-left text-sm font-semibold text-bone hover:text-[#c9a24b]">
+            <button type="button" onClick={() => navigate(league.id, SEASON_ID, r.team.id)} className="text-left text-sm font-semibold text-bone hover:text-[#c9a24b]">
               {r.team.name}
             </button>
             <span className="h-2.5 overflow-hidden rounded-full bg-ink-3" role="img" aria-label={`${r.team.name} spent ${fmt(r.spent)} credits`}>
@@ -498,7 +640,7 @@ function ResultsExplorer({ league, data, venue, setVenue }: { league: League; da
   };
 
   return (
-    <section id="results" className="mt-8" aria-label="Matches">
+    <section id="results" className="mt-8 scroll-mt-24" aria-label="Matches">
       <h2 className="mb-4 text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">RESULTS ({league.matches.length} MATCHES)</h2>
       {league.matches.length === 0 ? (
         <p className="rounded-xl border border-white/10 bg-ink-2 px-5 py-8 text-center text-sm text-mist">No matches have been recorded for this league.</p>
@@ -557,19 +699,40 @@ function ResultsExplorer({ league, data, venue, setVenue }: { league: League; da
   );
 }
 
-/* ---------- 3. a team ---------- */
+/* ---------- 4. a team ---------- */
 
 type Sort = 'squad' | 'name' | 'price' | 'awards';
+type TileSort = 'runs' | 'wickets' | 'matches' | 'name';
+
+const dec = (n: number | null | undefined, d = 1) => (n === null || n === undefined ? MISSING : n.toFixed(d));
+
+function Stat({ label, value }: { label: string; value: string | number | null | undefined }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-semibold tracking-[0.22em] text-smoke">{label.toUpperCase()}</dt>
+      <dd className="mt-1 text-lg font-semibold text-bone">{value === null || value === undefined ? MISSING : value}</dd>
+    </div>
+  );
+}
 
 function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; data: Data }) {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>('squad');
+  const [pq, setPq] = useState('');
+  const [tileSort, setTileSort] = useState<TileSort>('runs');
   const { favs, toggle: toggleFav } = useFavourites('teams');
   const favId = `${league.id}/${team.id}`;
   const isFav = favs.includes(favId);
   const record = data.m.standings(league).find((r) => r.id === team.id);
   const teamMatches = league.matches.filter((m) => m.teams.includes(team.name));
   const result = team.name === league.champions ? 'Champions' : team.name === league.runnersUp ? 'Runners-up' : team.name === league.fairPlay ? 'Fair Play award' : undefined;
+
+  const statPlayers = useMemo(() => playersOf(data.all, league, team), [data, league, team]);
+  const totals = useMemo(() => teamTotals(statPlayers), [statPlayers]);
+  const byName = tileSortFn(tileSort);
+  const shownStat = statPlayers.filter((p) => !pq.trim() || p.name.toLowerCase().includes(pq.trim().toLowerCase())).sort(byName);
+  // squad rows that have a stats page (matched by name) link straight to it
+  const pageOf = new Map(statPlayers.filter((p) => p.squad).map((p) => [p.squad!.id, p.id]));
 
   const awardsOf = (p: LeagueTeam['players'][number]) => (p.mom ?? 0) + (p.bat ?? 0) + (p.bowl ?? 0) + (p.honours?.length ?? 0);
   const q = query.trim().toLowerCase();
@@ -584,12 +747,21 @@ function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; da
 
   return (
     <div className="gutter pb-16 pt-28">
-      <Breadcrumb items={[{ label: 'Franchise Leagues', onClick: () => navigate() }, { label: league.name, onClick: () => navigate(league.id) }, { label: team.name }]} />
+      <Breadcrumb
+        items={[
+          { label: 'Franchise Leagues', onClick: () => navigate() },
+          { label: league.name, onClick: () => navigate(league.id) },
+          { label: SEASON_LABEL, onClick: () => navigate(league.id, SEASON_ID) },
+          { label: team.name },
+        ]}
+      />
       <div className="mt-3">
-        <BackButton onClick={() => navigate(league.id)}>BACK TO {league.shortName}</BackButton>
+        <BackButton onClick={() => navigate(league.id, SEASON_ID)}>BACK TO {league.shortName} {SEASON_LABEL.toUpperCase()}</BackButton>
       </div>
       <header className="mt-6">
-        <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{league.name.toUpperCase()}</p>
+        <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">
+          {league.name.toUpperCase()} · {SEASON_LABEL.toUpperCase()}
+        </p>
         <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{team.name.toUpperCase()}</h1>
         {result && <p className="mt-3 w-fit rounded border border-[#c9a24b]/50 px-2 py-0.5 text-[11px] font-semibold tracking-[0.2em] text-[#c9a24b]">{result.toUpperCase()}</p>}
         <div className="mt-3 flex items-center gap-4">
@@ -602,11 +774,21 @@ function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; da
 
       <Card title="TEAM SUMMARY" className="mt-6">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Fact label="Players" value={String(team.players.length)} />
+          <Fact label="Players" value={String(statPlayers.length || team.players.length)} />
           <Fact label="Matches played" value={teamMatches.length ? String(teamMatches.length) : undefined} />
           <Fact label="League-stage record" value={record && record.played ? `${record.won}W – ${record.lost}L` : undefined} />
           <Fact label="Season result" value={result} />
         </dl>
+        {statPlayers.length > 0 && (
+          <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-white/5 pt-4 sm:grid-cols-3 lg:grid-cols-6">
+            <Stat label="Runs" value={fmt(totals.runs)} />
+            <Stat label="Wickets" value={fmt(totals.wickets)} />
+            <Stat label="Sixes" value={fmt(totals.sixes)} />
+            <Stat label="Fours" value={fmt(totals.fours)} />
+            <Stat label="Hundreds" value={fmt(totals.hundreds)} />
+            <Stat label="Fifties" value={fmt(totals.fifties)} />
+          </dl>
+        )}
         {team.notes && team.notes.length > 0 && (
           <ul className="mt-4 space-y-1 text-[13px] text-mist">
             {team.notes.map((n) => (
@@ -616,11 +798,42 @@ function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; da
         )}
       </Card>
 
-      <section className="mt-8" aria-label="Squad">
+      {statPlayers.length > 0 && (
+        <section className="mt-8" aria-label="Players">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">PLAYERS ({statPlayers.length})</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Search players" aria-label="Search players" className={searchInput} />
+              <label className="flex items-center gap-2 text-xs text-smoke">
+                Sort
+                <select value={tileSort} onChange={(e) => setTileSort(e.target.value as TileSort)} className="rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]">
+                  <option value="runs">Most runs</option>
+                  <option value="wickets">Most wickets</option>
+                  <option value="matches">Most matches</option>
+                  <option value="name">Name A → Z</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          {shownStat.length === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-ink-2 px-5 py-8 text-center text-sm text-mist">No players match your search.</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {shownStat.map((p) => (
+                <li key={p.id}>
+                  <PlayerTile league={league} team={team} p={p} data={data} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      <section className="mt-8" aria-label="Auction squad">
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">SQUAD ({team.players.length})</h2>
+          <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">AUCTION SQUAD ({team.players.length})</h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search players" aria-label="Search players" className={searchInput} />
+            <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search squad" aria-label="Search squad" className={searchInput} />
             <label className="flex items-center gap-2 text-xs text-smoke">
               Sort
               <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-md border border-white/15 bg-ink-2 px-2 py-1.5 text-xs text-bone outline-none focus:border-[#c9a24b]">
@@ -632,9 +845,7 @@ function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; da
             </label>
           </div>
         </div>
-        <p className="mb-4 text-[11px] text-smoke">
-          Player stats are the award tallies recorded in the workbook (Man of the Match, Best Batsman, Best Bowler) and league honours. Runs and wickets are not recorded.
-        </p>
+        <p className="mb-4 text-[11px] text-smoke">The squad as recorded in the auction workbook: role, national board, price, match-award tallies (Man of the Match, Best Batsman, Best Bowler) and honours.</p>
         {team.players.length === 0 ? (
           <Notice tone="info">No players have been recorded for this team.</Notice>
         ) : players.length === 0 ? (
@@ -663,7 +874,15 @@ function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; da
               <tbody>
                 {players.map((p) => (
                   <tr key={p.id} className="border-t border-white/5 align-top text-mist">
-                    <td className="px-4 py-2.5 font-semibold text-bone">{p.name}</td>
+                    <td className="px-4 py-2.5 font-semibold text-bone">
+                      {pageOf.has(p.id) ? (
+                        <button type="button" onClick={() => navigate(league.id, SEASON_ID, team.id, pageOf.get(p.id)!)} className="text-left hover:text-[#c9a24b]">
+                          {p.name}
+                        </button>
+                      ) : (
+                        p.name
+                      )}
+                    </td>
                     <td className="px-2 py-2.5">{p.role ?? MISSING}</td>
                     <td className="px-2 py-2.5">
                       {p.board ? (
@@ -700,6 +919,237 @@ function TeamPage({ league, team, data }: { league: League; team: LeagueTeam; da
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+function tileSortFn(sort: TileSort) {
+  return (a: StatPlayer, b: StatPlayer) => {
+    if (sort === 'name') return a.name.localeCompare(b.name);
+    const key = (p: StatPlayer) => (sort === 'runs' ? p.runs : sort === 'wickets' ? p.wickets : p.matches);
+    return key(b) - key(a) || a.name.localeCompare(b.name);
+  };
+}
+
+function PlayerTile({ league, team, p, data }: { league: League; team: LeagueTeam; p: StatPlayer; data: Data }) {
+  const honours = p.squad?.honours?.length ?? 0;
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(league.id, SEASON_ID, team.id, p.id)}
+      aria-label={`Open ${p.name}`}
+      className="group flex h-full w-full flex-col gap-2 rounded-2xl border border-white/10 bg-ink-2 p-4 text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]/50"
+    >
+      <span className="flex items-start justify-between gap-2">
+        <span className="text-base font-semibold leading-tight text-bone">{p.name}</span>
+        {p.squad?.board && <BoardFlag name={p.squad.board} data={data} className="text-lg" />}
+      </span>
+      <span className="text-[11px] text-smoke">
+        {p.matches} {p.matches === 1 ? 'match' : 'matches'}
+        {p.squad?.role && ` · ${p.squad.role}`}
+      </span>
+      <span className="grid grid-cols-3 gap-2 text-center">
+        {[
+          ['RUNS', p.runs],
+          ['WKTS', p.wickets],
+          ['SIXES', p.sixes],
+        ].map(([l, v]) => (
+          <span key={l} className="rounded-lg bg-ink-3 py-1.5">
+            <span className="block text-sm font-semibold text-bone">{v}</span>
+            <span className="block text-[9px] tracking-[0.18em] text-smoke">{l}</span>
+          </span>
+        ))}
+      </span>
+      {(p.pom > 0 || honours > 0 || p.hundreds > 0) && (
+        <span className="flex flex-wrap gap-1.5">
+          {p.pom > 0 && <span className="rounded border border-[#c9a24b]/50 px-1.5 py-px text-[10px] font-semibold tracking-wider text-[#c9a24b]">MoM ×{p.pom}</span>}
+          {p.hundreds > 0 && <span className="rounded border border-[#c9a24b]/50 px-1.5 py-px text-[10px] font-semibold tracking-wider text-[#c9a24b]">{p.hundreds === 1 ? '100' : `${p.hundreds} × 100`}</span>}
+          {honours > 0 && <span className="rounded border border-[#c9a24b]/50 px-1.5 py-px text-[10px] font-semibold tracking-wider text-[#c9a24b]">{honours} {honours === 1 ? 'HONOUR' : 'HONOURS'}</span>}
+        </span>
+      )}
+      <span className="mt-auto pt-1 text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">VIEW STATS →</span>
+    </button>
+  );
+}
+
+/* ---------- 5. a player ---------- */
+
+function PlayerPage({ league, team, player: p, data }: { league: League; team: LeagueTeam; player: StatPlayer; data: Data }) {
+  const others = useMemo(() => otherStints(data.all, data.leagues, { leagueId: league.id, name: p.name }), [data, league, p.name]);
+  const sq = p.squad;
+  const teamResult = team.name === league.champions ? 'Champions' : team.name === league.runnersUp ? 'Runners-up' : team.name === league.fairPlay ? 'Fair Play award' : undefined;
+  const awards: { title: string; detail?: string }[] = [
+    ...(p.pom > 0 ? [{ title: 'Man of the Match', detail: `${p.pom} ${p.pom === 1 ? 'time' : 'times'}` }] : []),
+    ...(sq?.bat ? [{ title: 'Best Batsman (match award)', detail: `${sq.bat} ${sq.bat === 1 ? 'time' : 'times'}` }] : []),
+    ...(sq?.bowl ? [{ title: 'Best Bowler (match award)', detail: `${sq.bowl} ${sq.bowl === 1 ? 'time' : 'times'}` }] : []),
+    ...(sq?.honours ?? []).map((h) => ({ title: h.title, detail: h.credits !== undefined ? `${fmt(h.credits)} credits` : undefined })),
+    ...(p.hundreds > 0 ? [{ title: 'Centuries', detail: String(p.hundreds) }] : []),
+    ...(p.fiveW > 0 ? [{ title: 'Five-wicket hauls', detail: String(p.fiveW) }] : []),
+  ];
+  const squadNote = !sq && data.all;
+
+  return (
+    <div className="gutter pb-16 pt-28">
+      <Breadcrumb
+        items={[
+          { label: 'Franchise Leagues', onClick: () => navigate() },
+          { label: league.name, onClick: () => navigate(league.id) },
+          { label: SEASON_LABEL, onClick: () => navigate(league.id, SEASON_ID) },
+          { label: team.name, onClick: () => navigate(league.id, SEASON_ID, team.id) },
+          { label: p.name },
+        ]}
+      />
+      <div className="mt-3">
+        <BackButton onClick={() => navigate(league.id, SEASON_ID, team.id)}>BACK TO {team.name.toUpperCase()}</BackButton>
+      </div>
+
+      <header className="mt-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">
+            {league.shortName} · {SEASON_LABEL.toUpperCase()}
+          </p>
+          <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">{p.name.toUpperCase()}</h1>
+          <p className="mt-3 text-sm text-mist">
+            <button type="button" onClick={() => navigate(league.id, SEASON_ID, team.id)} className="font-semibold text-bone hover:text-[#c9a24b]">
+              {team.name}
+            </button>
+            {sq?.role && ` · ${sq.role}`}
+            {teamResult && ` · ${teamResult}`}
+          </p>
+        </div>
+        <ShareButton />
+      </header>
+
+      <Card title="PLAYER PROFILE" className="mt-6">
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Fact label="Team" value={team.name} />
+          <div>
+            <dt className="text-[10px] font-semibold tracking-[0.22em] text-smoke">NATIONAL BOARD</dt>
+            <dd className="mt-1 flex items-center gap-2 text-sm text-bone">
+              {sq?.board ? (
+                <>
+                  <BoardFlag name={sq.board} data={data} /> {sq.board}
+                </>
+              ) : (
+                MISSING
+              )}
+            </dd>
+          </div>
+          <Fact label="Auction price" value={sq?.price !== undefined ? `${fmt(sq.price)} credits` : undefined} />
+          <Fact label="Matches played" value={String(p.matches)} />
+        </dl>
+        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-white/5 pt-4 sm:grid-cols-4">
+          <Stat label="Runs" value={fmt(p.runs)} />
+          <Stat label="Wickets" value={fmt(p.wickets)} />
+          <Stat label="Sixes" value={fmt(p.sixes)} />
+          <Stat label="Man of the Match" value={fmt(p.pom)} />
+        </dl>
+      </Card>
+
+      <Card title="BATTING" className="mt-8">
+        {p.batInn === 0 ? (
+          <p className="text-sm text-smoke">Did not bat this season.</p>
+        ) : (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 lg:grid-cols-6">
+            <Stat label="Innings" value={p.batInn} />
+            <Stat label="Runs" value={fmt(p.runs)} />
+            <Stat label="Highest score" value={p.hs === null ? null : `${p.hs}${p.hsNotOut ? '*' : ''}`} />
+            <Stat label="Average" value={dec(p.avg)} />
+            <Stat label="Strike rate" value={dec(p.sr)} />
+            <Stat label="Not outs" value={p.notOuts} />
+            <Stat label="Balls faced" value={fmt(p.balls)} />
+            <Stat label="Fours" value={p.fours} />
+            <Stat label="Sixes" value={p.sixes} />
+            <Stat label="30s" value={p.thirties} />
+            <Stat label="50s" value={p.fifties} />
+            <Stat label="100s" value={p.hundreds} />
+            <Stat label="Most sixes in an innings" value={p.most6} />
+            <Stat label="Most fours in an innings" value={p.most4} />
+            <Stat label="Fastest 50 (balls)" value={p.fast50} />
+            <Stat label="Fastest 100 (balls)" value={p.fast100} />
+          </dl>
+        )}
+      </Card>
+
+      <Card title="BOWLING" className="mt-8">
+        {p.bowlInn === 0 ? (
+          <p className="text-sm text-smoke">Did not bowl this season.</p>
+        ) : (
+          <>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 lg:grid-cols-6">
+              <Stat label="Innings" value={p.bowlInn} />
+              <Stat label="Wickets" value={p.wickets} />
+              <Stat label="Best figures" value={p.best} />
+              <Stat label="Average" value={p.wickets ? dec(p.bowlAvg) : null} />
+              <Stat label="Strike rate" value={p.wickets ? dec(p.bowlSr) : null} />
+              <Stat label="Economy" value={dec(p.economy)} />
+              <Stat label="Runs conceded" value={fmt(p.runsConceded)} />
+              <Stat label="Balls bowled" value={fmt(p.ballsBowled)} />
+              <Stat label="Dot balls" value={fmt(p.dots)} />
+              <Stat label="Maidens" value={p.maidens} />
+              <Stat label="3-wicket hauls" value={p.threeW} />
+              <Stat label="5-wicket hauls" value={p.fiveW} />
+            </dl>
+            {league.id === 'hundred' && <p className="mt-3 text-[11px] text-smoke">The Hundred is played over 100 balls, so bowling is counted in balls rather than overs.</p>}
+          </>
+        )}
+      </Card>
+
+      <Card title="FIELDING" className="mt-8">
+        {p.catches + p.stumpings + p.runOuts > 0 ? (
+          <dl className="grid grid-cols-3 gap-4">
+            <Stat label="Catches" value={p.catches} />
+            <Stat label="Stumpings" value={p.stumpings} />
+            <Stat label="Run outs" value={p.runOuts} />
+          </dl>
+        ) : (
+          <p className="text-sm text-smoke">No catches, stumpings or run-outs are recorded for this player. The scorer exports hardly record fielding, so this is not a full picture.</p>
+        )}
+      </Card>
+
+      <Card title="AWARDS" className="mt-8">
+        {awards.length === 0 && !teamResult ? (
+          <p className="text-sm text-smoke">No awards recorded for this player this season.</p>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {awards.map((a, i) => (
+              <li key={`${a.title}-${i}`} className="rounded-lg bg-ink-3 px-4 py-3">
+                <p className="text-[11px] font-semibold tracking-wide text-[#c9a24b]">{a.title}</p>
+                {a.detail && <p className="mt-1 text-sm text-bone">{a.detail}</p>}
+              </li>
+            ))}
+            {teamResult && (
+              <li className="rounded-lg bg-ink-3 px-4 py-3">
+                <p className="text-[11px] font-semibold tracking-wide text-[#c9a24b]">Team result</p>
+                <p className="mt-1 text-sm text-bone">
+                  {team.name} — {teamResult}
+                </p>
+              </li>
+            )}
+          </ul>
+        )}
+        {squadNote && <p className="mt-3 text-[11px] text-smoke">Best Batsman, Best Bowler and honours come from the auction workbook. This player's name could not be matched there with certainty, so those awards are not shown.</p>}
+      </Card>
+
+      {others.length > 0 && (
+        <Card title="OTHER FRANCHISE LEAGUES" className="mt-8">
+          <ul className="space-y-2">
+            {others.map((o) => (
+              <li key={o.league.id}>
+                <button type="button" onClick={() => navigate(o.league.id, SEASON_ID, o.team.id, o.p.id)} className="flex w-full flex-wrap items-baseline justify-between gap-x-3 border-l border-[#c9a24b]/40 pl-3 text-left hover:text-[#c9a24b]">
+                  <span className="text-sm text-bone">
+                    {o.league.name} · {o.team.name}
+                  </span>
+                  <span className="text-[11px] text-smoke">
+                    {o.p.matches} {o.p.matches === 1 ? 'match' : 'matches'} · {o.p.runs} runs · {o.p.wickets} wkts
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[11px] text-smoke">Matched by exact name.</p>
+        </Card>
+      )}
     </div>
   );
 }
