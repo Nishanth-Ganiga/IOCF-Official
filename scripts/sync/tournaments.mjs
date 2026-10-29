@@ -5,18 +5,21 @@
 // and each block into sections (a heading line, then a table), so that every cell shows up exactly as laid out.
 import { norm, s } from './helpers.mjs';
 
-/** The tournaments in the order they are shown. A tab that is missing or renamed simply hides its tournament. */
+/**
+ * The tournaments in the order they are shown. `sheet` is the tab's usual name; if it is not found, the first tab whose
+ * name matches `match` is used (tabs get renamed: "IOCF ASIA CUP" → "Asia Cup 2026"). A tournament with no tab is left out.
+ */
 export const MAJOR_TOURNAMENTS = [
-  { id: 't20-world-cup', name: 'T20 World Cup', sheet: 'T20 World Cup 2026', kind: 'World tournament' },
-  { id: 'euro-cup', name: 'Euro Cup', sheet: 'IOCF EURO CUP', kind: 'Continental cup' },
-  { id: 'oceania-cup', name: 'Oceania Cup', sheet: 'IOCF OCEANIA CUP', kind: 'Continental cup' },
-  { id: 'asia-cup', name: 'Asia Cup', sheet: 'IOCF ASIA CUP', kind: 'Continental cup' },
-  { id: 'associate-nations-cup', name: 'Associate Nations Cup', sheet: 'IOCF Associate Nations Cup', kind: 'Associate nations' },
-  { id: 'odi-world-cup', name: 'ODI World Cup', sheet: 'IOCF ODI WORLD CUP', kind: 'World tournament' },
-  { id: 'world-test-championship', name: 'World Test Championship', sheet: 'WTC Matches', kind: 'Test championship' },
-  { id: 'emerging-talents-league', name: 'Emerging Talents League', sheet: 'Emerging Talent League', kind: 'Talent league' },
-  { id: 'womens-global-league', name: "Women's Global League", sheet: 'Womens Global League', kind: "Women's league" },
-  { id: 'lone-warrior', name: 'IOCF Lone Warrior', sheet: 'IOCF Lone Warrior', kind: 'Individual tournament' },
+  { id: 't20-world-cup', name: 'T20 World Cup', sheet: 'T20 World Cup 2026', match: /t20.*world.?cup/, kind: 'World tournament' },
+  { id: 'euro-cup', name: 'Euro Cup', sheet: 'IOCF EURO CUP', match: /euro.?cup/, kind: 'Continental cup' },
+  { id: 'oceania-cup', name: 'Oceania Cup', sheet: 'IOCF OCEANIA CUP', match: /oceania/, kind: 'Continental cup' },
+  { id: 'asia-cup', name: 'Asia Cup', sheet: 'IOCF ASIA CUP', match: /asia.?cup/, kind: 'Continental cup' },
+  { id: 'associate-nations-cup', name: 'Associate Nations Cup', sheet: 'IOCF Associate Nations Cup', match: /associate/, kind: 'Associate nations' },
+  { id: 'odi-world-cup', name: 'ODI World Cup', sheet: 'IOCF ODI WORLD CUP', match: /odi.*world.?cup/, kind: 'World tournament' },
+  { id: 'world-test-championship', name: 'World Test Championship', sheet: 'WTC Matches', match: /wtc|world.?test|test.?championship/, kind: 'Test championship' },
+  { id: 'emerging-talents-league', name: 'Emerging Talents League', sheet: 'Emerging Talent League', match: /emerging/, kind: 'Talent league' },
+  { id: 'womens-global-league', name: "Women's Global League", sheet: 'Womens Global League', match: /wom[ae]ns?.*league/, kind: "Women's league" },
+  { id: 'lone-warrior', name: 'IOCF Lone Warrior', sheet: 'IOCF Lone Warrior', match: /lone.?warrior/, kind: 'Individual tournament' },
 ];
 
 const YEAR = 2026;
@@ -173,14 +176,29 @@ function labelled(parts, re) {
 }
 
 /** `boardNames` lets spellings such as "Newzealand" or "Srilanka" in a summary line show as the board's own name. */
-export function buildMajorTournaments(book, boardNames = []) {
+/** The tab holding a tournament: its usual name, else the first tab whose name matches its pattern. */
+export function findTab(book, def, taken = new Set()) {
+  if (book.has(def.sheet) && !taken.has(def.sheet)) return def.sheet;
+  return book.names().find((n) => !taken.has(n) && def.match.test(n.toLowerCase())) ?? null;
+}
+
+export function buildMajorTournaments(book, boardNames = [], missing = undefined) {
   const tidy = (n) => (n.length > 4 && n === n.toUpperCase() ? n.toLowerCase().replace(/(^|\s)([a-z])/g, (_, a, c) => a + c.toUpperCase()) : n);
   const board = (name) => (name ? (boardNames.find((b) => norm(b) === norm(name)) ?? tidy(name)) : name);
   const out = [];
+  const taken = new Set();
   for (const t of MAJOR_TOURNAMENTS) {
-    if (!book.has(t.sheet)) continue;
-    const parts = parseSheet(book.sheet(t.sheet));
-    if (!parts.length) continue;
+    const tab = findTab(book, t, taken);
+    if (!tab) {
+      missing?.push(t.name);
+      continue;
+    }
+    taken.add(tab);
+    const parts = parseSheet(book.sheet(tab));
+    if (!parts.length) {
+      missing?.push(t.name);
+      continue;
+    }
     const heading = parts[0].titles.find((x) => /hosted by|season|world cup|championship/i.test(x) && !/^(squads|participating)/i.test(x));
     let host = /hosted by\s+(.+)$/i.exec(heading ?? '')?.[1];
     if (host) host = host.replace(/\s+/g, ' ').trim();
@@ -198,7 +216,7 @@ export function buildMajorTournaments(book, boardNames = []) {
       id: t.id,
       name: t.name,
       kind: t.kind,
-      sheet: t.sheet,
+      sheet: tab,
       // every tournament is a 2026 edition; further editions get their own entry here
       editions: [
         {

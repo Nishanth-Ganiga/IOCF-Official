@@ -16,6 +16,7 @@ export async function readWorkbook(source) {
 export function buildDataset(book, meta = {}) {
   const ledger = buildLedger(book);
   const { leagues, unmatched } = buildLeagues(book);
+  const missingTournaments = [];
   const dataset = {
     generatedAt: new Date().toISOString(),
     source: meta.source ?? null,
@@ -24,11 +25,11 @@ export function buildDataset(book, meta = {}) {
     umpires: ledger.umpires,
     umpireOrder: ledger.umpireOrder,
     leagues,
-    majorTournaments: buildMajorTournaments(book, ledger.boards.map((b) => b.name)),
+    majorTournaments: buildMajorTournaments(book, ledger.boards.map((b) => b.name), missingTournaments),
     info: buildInfo(ledger.fed),
   };
   validate(dataset);
-  return { dataset, report: { boards: dataset.boards.length, players: dataset.players.length, umpires: dataset.umpires.length, leagues: leagues.length, majorTournaments: dataset.majorTournaments.length, leaguePlayers: leagues.reduce((n, l) => n + l.teams.reduce((m, t) => m + t.players.length, 0), 0), matches: leagues.reduce((n, l) => n + l.matches.length, 0), unmatchedNames: ledger.unmatched + unmatched } };
+  return { dataset, report: { boards: dataset.boards.length, players: dataset.players.length, umpires: dataset.umpires.length, leagues: leagues.length, majorTournaments: dataset.majorTournaments.length, tournamentsWithoutATab: missingTournaments.join(', ') || 'none', leaguePlayers: leagues.reduce((n, l) => n + l.teams.reduce((m, t) => m + t.players.length, 0), 0), matches: leagues.reduce((n, l) => n + l.matches.length, 0), unmatchedNames: ledger.unmatched + unmatched } };
 }
 
 /** Refuse to publish a dataset that is obviously broken (e.g. someone renamed a sheet or deleted a tab). */

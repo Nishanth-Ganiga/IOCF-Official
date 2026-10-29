@@ -46,6 +46,10 @@ export class Book {
   has(name) {
     return Boolean(this.wb.getWorksheet(name));
   }
+  /** Every tab name in the workbook. */
+  names() {
+    return this.wb.worksheets.map((w) => w.name);
+  }
 }
 
 /** Collapse whitespace; null for empty/null. */

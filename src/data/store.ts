@@ -67,16 +67,17 @@ export const dataState: { origin: 'live' | 'snapshot' | 'none' } = { origin: 'no
 const looksValid = (d: unknown): d is Dataset => !!d && typeof d === 'object' && Array.isArray((d as Dataset).boards) && (d as Dataset).boards.length > 0 && Array.isArray((d as Dataset).leagues);
 
 /**
- * The live sheet may not (yet) have the Major Tournaments tabs under the names the sync expects; when it returns none,
- * use the ones bundled with the last local sync so the profile is never empty.
+ * The live sheet may lack some Major Tournaments tabs (or have them under names the sync does not recognise). Any
+ * tournament it did not return is filled in from the copy bundled with the last local sync, so the profile is complete.
  */
 async function fillMajorTournaments(): Promise<void> {
-  if (store.majorTournaments?.length) return;
+  const live = store.majorTournaments ?? [];
   try {
-    const snap = (await import('./snapshot.json')).default as unknown as Dataset;
-    if (snap.majorTournaments?.length) store.majorTournaments = snap.majorTournaments;
+    const snap = ((await import('./snapshot.json')).default as unknown as Dataset).majorTournaments ?? [];
+    if (snap.every((t) => live.some((l) => l.id === t.id))) return;
+    store.majorTournaments = [...snap.map((t) => live.find((l) => l.id === t.id) ?? t), ...live.filter((l) => !snap.some((t) => t.id === l.id))];
   } catch {
-    /* no bundled copy: the profile shows its empty state */
+    /* no bundled copy: show whatever the live sheet returned */
   }
 }
 
