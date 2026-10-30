@@ -40,7 +40,9 @@ export function commandCenterRequestListener({ store = productionStoreFromEnv(),
   const handle = createHandler({ store, env });
   return async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    const path = url.pathname.startsWith(PREFIX) ? url.pathname.slice(PREFIX.length) : url.pathname;
+    // On Vercel a rewrite sends /api/command/<anything> to /api/command-center?p=<anything>, so multi-segment routes always reach us
+    const routed = url.pathname === '/api/command-center' ? url.searchParams.get('p') : null;
+    const path = routed !== null ? `/${routed}` : url.pathname.startsWith(PREFIX) ? url.pathname.slice(PREFIX.length) : url.pathname;
     let body = null;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       try {

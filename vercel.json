@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/command/:path*",
+      "destination": "/api/command-center?p=:path*"
+    },
+    {
       "source": "/((?!api/|assets/|downloads/|.*\\..*).*)",
       "destination": "/index.html"
     }
@@ -47,7 +51,7 @@
       "maxDuration": 30,
       "includeFiles": "iocf.config.json"
     },
-    "api/command/[...path].mjs": {
+    "api/command-center.mjs": {
       "maxDuration": 15,
       "includeFiles": "src/data/commandCenter/**"
     }
