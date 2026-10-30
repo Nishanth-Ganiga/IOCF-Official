@@ -61,60 +61,7 @@ Boards, players, umpires, franchise leagues, tournaments and the Main-page text 
 
 ## Command Center (locked profile)
 
-Real, server-side sign-in. Passwords are stored only as salted scrypt hashes in a Postgres database (Supabase); a signed-in browser holds nothing but an HttpOnly session cookie, and **every** permission is checked on the server for every request.
-
-- **Accounts:** `IOCF-ADM-001` (Master Administrator) and `IOCF-BRD-001…026` (one chairman per board). A board account is tied to its board, so a chairman lands on their own dashboard and cannot open another board or any admin function.
-- **Board dashboards:** one reusable dashboard, themed from `src/data/commandCenter/boards.json` (flag, three colours, landscape scene, mascot). Modules are listed in `modules.json`; add a module there and it appears on every dashboard (only modules marked `active` can be switched on).
-- **Administrator:** a **Board Accounts** tile to set (or create) the username and password of every board's chairman right in the browser — passwords are hashed on the server and never shown again; saving signs that chairman out everywhere. Plus overview, recent activity, and per-board management — open/preview any dashboard (clearly marked as an administrator preview), activate/deactivate, edit the chairman, switch modules. Passwords are never displayed.
-- **Protection:** rate limiting per IP + username and per IP, account lock after repeated failures, 8-hour sessions, ended immediately on deactivation or reset, CSRF protection, an audit log.
-
-### Your credentials (already generated)
-
-`npm run cc -- setup` creates the Master Administrator and the 26 chairman accounts and writes two files into `~/.iocf-command-center/` — **outside the project**, both private (mode `600`), never committed, never deployed, never reachable from the website:
-
-- `IOCF_CREDENTIALS_PLAIN.csv` — **readable**: Account ID, Account Type, Board Name, Username, Password, Account Status. Open it, hand out the logins, and edit it whenever you want (below).
-- `IOCF_PRIVATE_CREDENTIAL_REGISTER.csv` — the encrypted master register (Account ID, Account Type, Board Name, Username, **Encrypted Password**, Account Status, Created Date, Last Updated Date); `register.key` is its AES-256 key.
-
-Delete the readable file when you no longer need it (`npm run cc -- export` rebuilds it from the register at any time).
-
-**Managing logins from a private Google Sheet (optional):** keep the logins in a sheet with the headings `Board` (or `Country`), `Username`, `Password` and, if you like, `Status` (a row with no board is the Master Administrator). Put the sheet's link in `~/.iocf-command-center/env` as `CC_CREDENTIALS_SHEET_URL=…` — **never in the project** — then:
-
-```bash
-npm run cc -- sync-sheet --dry-run   # shows what would change, changes nothing
-npm run cc -- sync-sheet             # creates / updates the accounts, re-encrypts the register, refreshes the credentials file
-```
-
-Only your computer reads the sheet. It hashes the passwords and stores the hashes; the website, Vercel and git never see the sheet or its link. Every row is checked first (boards must be among the 26, usernames unique, passwords 8+ characters), and a bad sheet changes nothing. The sheet holds readable passwords, so share it with as few people as possible; after syncing you can delete its Password column if you prefer.
-
-**To change a login:** the simplest way is the **Board Accounts** tile in the Command Center (administrator). Your local files do not see changes made there, so `npm run cc -- verify` will flag them and `npm run cc -- record <board>` brings your register back in line. Or edit the username, password (12+ characters) or status (`active` / `inactive`) in `IOCF_CREDENTIALS_PLAIN.csv`, save, then run `npm run cc -- import`. It checks every row first, applies the changes, signs those accounts out, and re-encrypts the register.
-
-### Putting it online (one-time)
-
-0. **Easiest — one file.** `npm run cc -- sql` writes `~/.iocf-command-center/IOCF_COMMAND_CENTER_SETUP.sql` (tables + security rules + the administrator + all 26 boards, password hashes only; private, never committed) and a readable `…ACCOUNTS_OVERVIEW.csv`. Copy it with `pbcopy < ~/.iocf-command-center/IOCF_COMMAND_CENTER_SETUP.sql`, then Supabase → SQL Editor → New query → paste → Run. Re-running it is safe, and starts the Command Center from scratch (it drops only the four `command_*` tables). Then only step 3 below is left.
-1. (or, instead of 0) **Create the tables.** Copy the schema (`pbcopy < server/command/schema.sql`), then in Supabase open **SQL Editor → New query**, paste, **Run**. (Row Level Security is on with no policies, so only the server's service-role key can reach these tables.)
-2. **Connect from your computer.** `npm run cc -- connect --project <your-project-ref>` asks for the **service_role (secret) key** (hidden), tests it, saves it to `~/.iocf-command-center/env` (mode `600`), warns about any table that looks like it holds passwords, and uploads your accounts so the passwords you already have work online. Check with `npm run cc -- verify`.
-   If you keep your own admin row in a Supabase table (a username / user id column and a password column), run `npm run cc -- import-admin` after this: it finds the table, stores that admin securely (hashed), and tells you to delete or lock the readable table. Run it again if you change the password in that table.
-3. **Give the hosting the same settings.** `npm run cc -- vercel` prints the three values (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COMMAND_CENTER_SESSION_SECRET`) on your terminal. Paste them into Vercel → Settings → Environment Variables (Production) — for Fly: `fly secrets set …` — then redeploy.
-
-Until then the accounts live in a local store, and `npm run dev` already signs in against it.
-
-| Command | What it does |
-| --- | --- |
-| `npm run cc -- setup [--show]` | Creates any missing accounts (safe to re-run); `--show` prints the new credentials once |
-| `npm run cc -- record <board or username>` | After setting a login in the browser, note it in your encrypted register and credentials file (you type the password; it is checked first) |
-| `npm run cc -- sync-sheet [--dry-run]` | Applies the logins in your private credentials sheet |
-| `npm run cc -- table [--length 8]` | Gives every account a new short password and writes the single file `IOCF_COMMAND_CENTER_LOGINS.csv` to import into Supabase |
-| `npm run cc -- export` / `import` | Writes the readable credentials file / applies your edits from it |
-| `npm run cc -- reveal <board or username>` / `--all` | Decrypts passwords from the register and prints them on your terminal |
-| `npm run cc -- reset <board or username> [--username <new>]` | New random password for one account (ends its sessions, updates both files) |
-| `npm run cc -- push` | Uploads the accounts to Supabase |
-| `npm run cc -- verify` | Checks that the register and the database agree |
-| `npm run cc -- status [--sync]` | Lists accounts; `--sync` copies online activate/deactivate changes into the register |
-| `npm run cc -- backup --out <folder>` | Encrypted backup of the register (keep `register.key` somewhere separate) |
-
-`npm run cc:test` runs the backend self-test (167 checks) against a temporary store; it never touches your real data.
-
-**Limits:** this is for the website. The Android/iOS apps load the site from the device, so a cookie-based sign-in will not carry over to them.
+A locked profile with real server-side sign-in (one administrator, 26 board chairmen). Logins live in a private Supabase table; the site never holds a password. The maintainer's tooling is in `scripts/command-center/` (`npm run cc`); no credentials are ever stored in this repository.
 
 ## Player statistics (CSV exports)
 
@@ -165,7 +112,7 @@ scripts/
   sync/                      turns the sheet into the dataset (boards, leagues, tournaments, …)
   build-*.mjs                images, chairman portraits, league and tournament statistics
 api/iocf-data.mjs            Vercel function: the sheet as JSON
-api/command/[...path].mjs    Vercel function: the Command Center API (logic in server/command/)
+api/command-center.mjs       Vercel function: the Command Center API (logic in server/command/)
 server/serve.mjs             Fly.io / Docker server with scheduled re-sync
 android/, ios/               Capacitor projects
 ```
@@ -183,13 +130,3 @@ android/, ios/               Capacitor projects
 - `prefers-reduced-motion` is respected: smooth scrolling, the custom cursor, tilt and other effects turn off.
 - Hover effects only run on devices with a precise pointer; touch devices get tap interactions.
 - Overlays and the profile picker close with Esc; the opening sequence can be skipped with Enter or Esc.
-
-
-### Simplest setup: one CSV, one Supabase table
-
-1. `npm run cc -- table` writes `~/.iocf-command-center/IOCF_COMMAND_CENTER_LOGINS.csv` (27 accounts, 8-character passwords).
-2. Supabase → Table Editor → New table → **Import data via spreadsheet** → that file → name it `iocf_logins`, keep **Row Level Security ON**.
-3. Vercel env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COMMAND_CENTER_SESSION_SECRET` (32+ random characters). Redeploy.
-4. The first login attempt makes the server hash every readable password and wipe it from the table. **Delete the CSV after the import.**
-
-You can later type a new `password` into any row (or add a row) and the server hashes it on the next login attempt (6+ characters; `status` = `inactive` switches an account off). The table mode has no audit log or module switches, and rate limits are per server instance; run `server/command/schema.sql` for the full setup, which the site then prefers automatically. A different table name can be set with `COMMAND_CENTER_LOGIN_TABLE`.
