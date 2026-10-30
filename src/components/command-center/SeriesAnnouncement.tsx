@@ -74,6 +74,9 @@ export function Hub({ theme, data, go }: { theme: BoardTheme; data: SeriesOvervi
       <p className="mb-4 text-xs tracking-[0.12em] text-mist">
         SERIES IN PROGRESS: <span className="font-semibold text-bone">{data.active}</span> OF {data.limit} ALLOWED
       </p>
+      <p className="mb-4 max-w-3xl text-sm leading-relaxed text-mist">
+        <b className="text-bone">How it works:</b> use <b>Announce a Series</b> to propose a series to another board; the opponent confirms it under <b>Accept the Series</b> before 11:59 PM IST the same day; confirmed series are listed in <b>Upcoming Series</b>. Open each tile for step-by-step instructions.
+      </p>
       <ul className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {tiles.map((t) => (
           <li key={t.id}>
@@ -144,6 +147,29 @@ function Empty({ text }: { text: string }) {
   return <p className={`${card} mt-6 text-center text-sm text-mist`}>{text}</p>;
 }
 
+/* ---------- instructions shown to chairmen ---------- */
+
+function Guide({ title, hl, steps, rules }: { title: string; hl: string; steps: ReactNode[]; rules: ReactNode[] }) {
+  return (
+    <details open className={`${card} mt-5`}>
+      <summary className="cursor-pointer text-xs font-semibold tracking-[0.2em]" style={{ color: hl }}>
+        {title.toUpperCase()}
+      </summary>
+      <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-bone/90 marker:font-semibold">
+        {steps.map((x, i) => (
+          <li key={i}>{x}</li>
+        ))}
+      </ol>
+      <p className="mt-5 text-[11px] font-semibold tracking-[0.2em] text-mist">GOOD TO KNOW</p>
+      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-mist">
+        {rules.map((x, i) => (
+          <li key={i}>{x}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 /* ---------- upcoming ---------- */
 
 export function Upcoming({ theme, data }: { theme: BoardTheme; data: SeriesOverview }) {
@@ -197,6 +223,23 @@ export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data
       <p role="status" aria-live="polite" className={`mt-3 min-h-[1.2rem] text-sm ${msg ? (msg.ok ? 'text-[#6fcf8e]' : 'text-crimson-2') : ''}`}>
         {msg?.text}
       </p>
+      <Guide
+        hl={pal.highlight}
+        title="How to accept a series"
+        steps={[
+          <>Series that other boards have announced to <b>{theme.name}</b> are listed below. The Series Announcement page shows how many are waiting.</>,
+          <>Read every detail: the type, the opponents, the number of matches, the schedule and stadiums, the <b>bet amount</b> and the <b>format</b>.</>,
+          <>If you agree, press <b>Accept the Series</b>. The series is then confirmed and appears in Upcoming Series for all boards.</>,
+          <>If you do not want it, do nothing: it is declined automatically at the deadline and disappears.</>,
+        ]}
+        rules={[
+          <>You must accept before <b>11:59 PM IST on the day the series was announced</b>. After that it can no longer be accepted.</>,
+          <>Once you accept, the hosting board can no longer edit the series. Check the details first — accepting is final.</>,
+          <>A board can be in at most <b>{data.limit} series at a time</b> (you are in {data.active}). You cannot accept a new one while you are in {data.limit}.</>,
+          <>In a trilateral or quadrilateral series it is confirmed only when every invited board has accepted.</>,
+        ]}
+      />
+
       {!data.invitations.length ? (
         <Empty text="No series are waiting for your acceptance." />
       ) : (
@@ -308,6 +351,28 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
       <p role="status" aria-live="polite" className={`mt-3 min-h-[1.2rem] text-sm ${msg ? (msg.ok ? 'text-[#6fcf8e]' : 'text-crimson-2') : ''}`}>
         {msg?.text}
       </p>
+
+      <Guide
+        hl={pal.highlight}
+        title="How to announce a series"
+        steps={[
+          <><b>Name of the series</b> — type the name everyone will know it by, for example “Spring Cup”.</>,
+          <><b>Series type</b> — choose Bilateral (you and one opponent), Trilateral (you and two opponents) or Quadrilateral (you and three opponents).</>,
+          <><b>Opponent board(s)</b> — pick them from the list of the other 25 boards. A board can only be chosen once.</>,
+          <><b>Number of matches</b> — Bilateral: 1, 3, 5 or 7. Trilateral: 4 or 7. Quadrilateral: 7 or 13.</>,
+          <><b>Stadiums</b> — in a bilateral series choose your home stadium for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium for each one from the stadiums of the two teams playing it. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled.</>,
+          <><b>Bet amount</b> — choose one of ₹1,000 · 2,000 · 3,000 · 4,000 · 5,000 · 10,000 · 20,000 · 50,000.</>,
+          <><b>Format</b> — Club, T10, T20, TEST, ODI or L4I. If you choose <b>Club</b>, also choose the club format: 4 overs 4 wickets up to 9 overs 9 wickets.</>,
+          <>Press <b>Send</b>. The series goes straight to your opponent’s “Accept the Series” tile.</>,
+        ]}
+        rules={[
+          <>Your opponent must accept before <b>11:59 PM IST on the day you announce</b>. If it is not accepted by then, the series is declined and disappears — nothing stays visible, and you can announce it again.</>,
+          <>You can <b>edit</b> a series (button under “Your announced series”) until an opponent accepts it. Once accepted it is locked and cannot be changed. Editing does not extend the deadline.</>,
+          <>A board can be in at most <b>{data.limit} series at a time</b>. You are in {data.active} now. A board that is already in {data.limit} series cannot be invited.</>,
+          <>In a trilateral or quadrilateral series every opponent must accept before the series is confirmed.</>,
+          <>Confirmed series appear in <b>Upcoming Series</b> for every board.</>,
+        ]}
+      />
 
       {admin ? (
         <Empty text="Only the board’s chairman can announce a series. You are viewing this board as the administrator." />
