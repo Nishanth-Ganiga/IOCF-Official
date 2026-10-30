@@ -8,6 +8,8 @@
 //   npm run cc -- reveal [board|--all]     show passwords from the encrypted register on the terminal
 //   npm run cc -- reset <board|username>   new random password for one account (add --username <new> to rename it too)
 //   npm run cc -- record <board|username>  note a login you set in the browser (Board Accounts) in your register
+//   npm run cc -- connect [--project <ref>] connect your Supabase project (asks for the secret key, hidden), test it, then upload the accounts
+//   npm run cc -- vercel                   print the three values to paste into Vercel's Environment Variables (this terminal only)
 //   npm run cc -- push                     upload the accounts to Supabase (once it is set up)
 //   npm run cc -- verify                   check that the register and the database agree
 //   npm run cc -- status [--sync]          list the accounts (no secrets); --sync copies online status changes into the register
@@ -16,9 +18,10 @@
 // Without SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY it works on a local store in ~/.iocf-command-center/, so you can create
 // the accounts and the credentials file before Supabase exists, then `push`.
 import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import readline from 'node:readline';
-import { applyCredentials, backup, homeDir, importPlain, parseCredentialSheet, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, recordPassword, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
+import { applyCredentials, backup, homeDir, hostingValues, describeKey, inspectSupabase, saveEnv, SUPABASE_URL_FOR, importPlain, parseCredentialSheet, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, recordPassword, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
 import { FileStore, SupabaseStore } from '../../server/command/store.mjs';
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -130,6 +133,36 @@ try {
     if (!positional[0]) throw new Error('Say which account: npm run cc -- record <board or username>');
     const r = await recordPassword({ store: store(), home, ref: positional[0], password: await askHidden('The password you set online for that account (not shown): ') });
     console.log(`Recorded the login for ${r.board} (${r.username}) in your encrypted register and credentials file.`);
+  } else if (cmd === 'connect') {
+    const ref = opt('--project');
+    let url = process.env.SUPABASE_URL || (ref ? SUPABASE_URL_FOR(ref) : '');
+    if (!url) url = (await askHidden('Supabase project URL (https://<ref>.supabase.co): ')).trim();
+    if (!/^https:\/\/[a-z0-9]+\.supabase\.co\/?$/.test(url)) throw new Error('That is not a Supabase project URL. It looks like https://<project-ref>.supabase.co');
+    console.log(`Project: ${url}`);
+    const desc = describeKey(process.env.SUPABASE_SERVICE_ROLE_KEY || (await askHidden('Paste the secret key (sb_secret_… or service_role) — it is not shown: ')), url.match(/^https:\/\/([a-z0-9]+)\./)[1]);
+    if (!desc.usable) throw new Error(desc.message);
+    console.log(`Key type: ${desc.kind === 'secret' ? 'secret key (sb_secret_…)' : 'service_role key'} — ${desc.key.length} characters.`);
+    const key = desc.key;
+    const found = await inspectSupabase({ url, key });
+    if (found.error) throw new Error(found.error);
+    console.log('✓ The key works.');
+    saveEnv(home, { SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, ...(process.env.COMMAND_CENTER_SESSION_SECRET ? {} : { COMMAND_CENTER_SESSION_SECRET: randomBytes(36).toString('base64url') }) });
+    console.log(`✓ Saved to ${path.join(home, 'env')} (private, mode 600).`);
+    for (const t of found.others.filter((o) => o.looksLikeLogins)) {
+      console.log(`\n⚠  The table "${t.name}" (columns: ${t.columns.join(', ')}) looks like it holds passwords.\n   The Command Center does not read it, and if it keeps readable passwords it is a risk: in the Supabase Table Editor, turn on\n   "Row Level Security" for it (no policies), or delete it once your accounts are uploaded.`);
+    }
+    if (found.missing.length) {
+      console.log(`\n✗ These tables do not exist yet: ${found.missing.join(', ')}.\n  Create them once:  copy the schema with   pbcopy < server/command/schema.sql\n  then in Supabase open  SQL Editor → New query → paste → Run.  Afterwards run this command again.`);
+    } else {
+      process.env.SUPABASE_URL = url;
+      process.env.SUPABASE_SERVICE_ROLE_KEY = key;
+      const r = await pushAccounts({ from: localStore(), to: store() });
+      console.log(`✓ Tables found. Accounts uploaded: ${r.created} created, ${r.updated} updated.\n\nLast step: give Vercel the same three values, then redeploy. Print them here with:  npm run cc -- vercel`);
+    }
+  } else if (cmd === 'vercel') {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.COMMAND_CENTER_SESSION_SECRET) throw new Error('Run  npm run cc -- connect  first.');
+    console.log('Paste these into Vercel → your project → Settings → Environment Variables (Production), one by one, then redeploy.\nShown on this terminal only. Clear the screen afterwards.\n');
+    console.log(hostingValues(process.env).join('\n'));
   } else if (cmd === 'export') {
     console.log(`Written: ${await writePlain({ store: store(), home })}\nOpen it, edit usernames / passwords / status if you wish, then run:  npm run cc -- import`);
   } else if (cmd === 'import') {
@@ -159,7 +192,7 @@ try {
     if (!out) throw new Error('Say where: npm run cc -- backup --out <folder>');
     console.log(`Encrypted backup written to ${backup({ home, outDir: path.resolve(out) })}\nKeep the key (${path.join(home, 'register.key')}) somewhere separate and safe: the backup cannot be read without it.`);
   } else {
-    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 17).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 19).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
   }
 } catch (err) {
   console.error('✗', err instanceof Error ? err.message : err);

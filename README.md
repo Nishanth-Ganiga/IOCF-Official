@@ -90,9 +90,9 @@ Only your computer reads the sheet. It hashes the passwords and stores the hashe
 
 ### Putting it online (one-time)
 
-1. Create a [Supabase](https://supabase.com) project and run `server/command/schema.sql` in its SQL editor. (Row Level Security is on with no policies, so only the server's service-role key can reach the tables.)
-2. Add three **secret** environment variables to the hosting (Vercel → Settings → Environment Variables; for Fly: `fly secrets set …`): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `COMMAND_CENTER_SESSION_SECRET` (any long random string, e.g. `openssl rand -base64 48`).
-3. On your computer, put the first two values in `~/.iocf-command-center/env` (mode `600`), then run `npm run cc -- push`. Your existing usernames and passwords now work on the live site. Check with `npm run cc -- verify`.
+1. **Create the tables.** Copy the schema (`pbcopy < server/command/schema.sql`), then in Supabase open **SQL Editor → New query**, paste, **Run**. (Row Level Security is on with no policies, so only the server's service-role key can reach these tables.)
+2. **Connect from your computer.** `npm run cc -- connect --project <your-project-ref>` asks for the **service_role (secret) key** (hidden), tests it, saves it to `~/.iocf-command-center/env` (mode `600`), warns about any table that looks like it holds passwords, and uploads your accounts so the passwords you already have work online. Check with `npm run cc -- verify`.
+3. **Give the hosting the same settings.** `npm run cc -- vercel` prints the three values (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COMMAND_CENTER_SESSION_SECRET`) on your terminal. Paste them into Vercel → Settings → Environment Variables (Production) — for Fly: `fly secrets set …` — then redeploy.
 
 Until then the accounts live in a local store, and `npm run dev` already signs in against it.
 
@@ -109,7 +109,7 @@ Until then the accounts live in a local store, and `npm run dev` already signs i
 | `npm run cc -- status [--sync]` | Lists accounts; `--sync` copies online activate/deactivate changes into the register |
 | `npm run cc -- backup --out <folder>` | Encrypted backup of the register (keep `register.key` somewhere separate) |
 
-`npm run cc:test` runs the backend self-test (130 checks) against a temporary store; it never touches your real data.
+`npm run cc:test` runs the backend self-test (138 checks) against a temporary store; it never touches your real data.
 
 **Limits:** this is for the website. The Android/iOS apps load the site from the device, so a cookie-based sign-in will not carry over to them.
 

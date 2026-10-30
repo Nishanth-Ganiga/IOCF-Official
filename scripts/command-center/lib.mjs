@@ -469,3 +469,99 @@ export async function recordPassword({ store, home, ref, password }) {
   if (fs.existsSync(plainPath(home))) await writePlain({ store, home });
   return { accountId: acc.account_id, board: acc.board_name ?? 'Master Administrator', username: acc.username };
 }
+
+/* ---------- connecting to Supabase ---------- */
+
+export const SUPABASE_URL_FOR = (ref) => `https://${ref}.supabase.co`;
+const NEEDED_TABLES = ['command_accounts', 'command_board_modules', 'command_audit_log', 'command_rate_limits'];
+
+/**
+ * Tests a Supabase project with its service-role key and reports what is there: whether the key works, which of the
+ * Command Center tables exist, and any other tables in the public schema (flagging ones that look like they hold passwords).
+ * Never reads any row data.
+ */
+export async function inspectSupabase({ url, key, fetchImpl = fetch }) {
+  const base = `${url.replace(/\/$/, '')}/rest/v1`;
+  const headers = { apikey: key, ...(key.startsWith('sb_') ? {} : { authorization: `Bearer ${key}` }) };
+  const out = { keyOk: false, missing: [], others: [], error: null };
+  let res;
+  try {
+    res = await fetchImpl(`${base}/`, { headers });
+  } catch {
+    out.error = 'Could not reach that Supabase address. Check the project URL.';
+    return out;
+  }
+  if (res.status === 401 || res.status === 403 || res.status === 404) {
+    // the schema document can be closed to a key that is otherwise fine: test the key against our own table instead
+    let probe;
+    try {
+      probe = await fetchImpl(`${base}/command_accounts?select=id&limit=0`, { headers });
+    } catch {
+      out.error = 'Could not reach that Supabase address. Check the project URL.';
+      return out;
+    }
+    if (probe.status === 401 || probe.status === 403) {
+      out.error = 'Supabase refused the key. Use the secret key (sb_secret_…) or the service_role key from Project Settings → API Keys, not the publishable / anon one. If you just created or rotated it, copy it again in full.';
+      return out;
+    }
+    out.keyOk = true;
+    out.missing = probe.ok ? [] : NEEDED_TABLES; // a missing table answers 404; the others can then not be listed
+    out.limited = true;
+    return out;
+  }
+  if (!res.ok) {
+    out.error = `Supabase answered with an unexpected error (${res.status}).`;
+    return out;
+  }
+  out.keyOk = true;
+  let api = {};
+  try {
+    api = await res.json();
+  } catch {
+    /* no schema document */
+  }
+  const tables = api.definitions ?? {};
+  out.missing = NEEDED_TABLES.filter((t) => !(t in tables));
+  out.others = Object.entries(tables)
+    .filter(([name]) => !NEEDED_TABLES.includes(name))
+    .map(([name, def]) => {
+      const columns = Object.keys(def.properties ?? {});
+      return { name, columns, looksLikeLogins: columns.some((c) => /pass(word)?|pwd|secret/i.test(c)) };
+    });
+  return out;
+}
+
+/** The three values the hosting needs, as NAME=value lines. */
+export function hostingValues(env) {
+  return [`SUPABASE_URL=${env.SUPABASE_URL}`, `SUPABASE_SERVICE_ROLE_KEY=${env.SUPABASE_SERVICE_ROLE_KEY}`, `COMMAND_CENTER_SESSION_SECRET=${env.COMMAND_CENTER_SESSION_SECRET}`];
+}
+
+/** Adds or replaces KEY=value lines in ~/.iocf-command-center/env (kept private, mode 600). */
+export function saveEnv(home, values) {
+  ensureDir(home);
+  const file = path.join(home, 'env');
+  const keep = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter((l) => l.trim() && !Object.keys(values).some((k) => l.startsWith(`${k}=`))) : [];
+  writePrivate(file, [...keep, ...Object.entries(values).map(([k, v]) => `${k}=${v}`)].join('\n') + '\n');
+}
+
+/**
+ * Says what kind of Supabase key this is, without contacting Supabase. New-style keys announce themselves in their prefix
+ * (sb_secret_ / sb_publishable_); older ones are JWTs whose payload names the role (service_role / anon) and the project.
+ */
+export function describeKey(rawKey, expectedRef) {
+  const key = String(rawKey ?? '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^Bearer\s+/i, '');
+  if (!key) return { key, kind: 'empty', usable: false, message: 'Nothing was pasted.' };
+  if (key.startsWith('sb_secret_')) return { key, kind: 'secret', usable: true };
+  if (key.startsWith('sb_publishable_')) return { key, kind: 'publishable', usable: false, message: 'That is the publishable key (it is meant for browsers). I need the SECRET key: in Project Settings → API Keys, the one that starts with sb_secret_ (open the "Secret keys" section and press Reveal).' };
+  if (key.split('.').length === 3) {
+    try {
+      const p = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString('utf8'));
+      if (p.ref && expectedRef && p.ref !== expectedRef) return { key, kind: 'other-project', usable: false, message: `That key belongs to a different Supabase project (${p.ref}), not ${expectedRef}.` };
+      if (p.role === 'service_role') return { key, kind: 'service_role', usable: true };
+      if (p.role === 'anon') return { key, kind: 'anon', usable: false, message: 'That is the anon key (it is meant for browsers). I need the service_role key: in Project Settings → API Keys, open the "Legacy API Keys" tab and reveal the one labelled service_role — or create a Secret key (sb_secret_…).' };
+    } catch {
+      /* not a readable token */
+    }
+  }
+  return { key, kind: 'unknown', usable: false, message: `That does not look like a Supabase key (it should start with sb_secret_, or be a long token starting eyJ). ${key.length < 40 ? 'It is also quite short, so the paste may have been cut off.' : ''}`.trim() };
+}

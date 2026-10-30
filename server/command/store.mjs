@@ -99,7 +99,8 @@ export class FileStore extends MemoryStore {
 export class SupabaseStore {
   constructor({ url, serviceKey, fetchImpl = fetch }) {
     this.base = `${url.replace(/\/$/, '')}/rest/v1`;
-    this.headers = { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, 'content-type': 'application/json' };
+    // Supabase's newer keys (sb_secret_…) are not JWTs and go in the apikey header alone; the older service_role JWT goes in both
+    this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
     this.fetch = fetchImpl;
   }
   async req(method, pathAndQuery, body, extra = {}) {
