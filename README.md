@@ -19,6 +19,7 @@ After the opening sequence, visitors choose who is watching. Each profile is its
 | **Umpire** | Umpires and their match assignments |
 | **Franchise Leagues** | League → Season → Team → Player, with results, awards, standings and full player statistics |
 | **Major Tournaments** | T20 World Cup, Euro Cup, Oceania Cup, Asia Cup, Associate Nations Cup, ODI World Cup, World Test Championship, Emerging Talents League, Women's Global League and IOCF Lone Warrior — each with a 2026 edition: every table from its sheet, plus Board → Player statistics |
+| **Command Center** | A locked profile: Admin Login (full federation control) and Board Login (individual board access). Sections are added after sign-in |
 
 Global search and favourites work across profiles.
 
@@ -83,6 +84,7 @@ Run the command again after replacing or adding a CSV. Related settings:
 | Player photos | `src/data/photos.ts` |
 | The list of profiles, their names and colours | `viewerProfiles` in `src/data/portfolio.ts` |
 | Major Tournament descriptions | `ABOUT` in `src/components/IocfTournaments.tsx` |
+| Command Center logins | `npm run account -- admin <username>` or `npm run account -- board <username> "<Board name>"`, then paste the printed line into `src/data/accounts.ts`. Only a salted hash is stored. This lock runs in the browser: it keeps casual visitors out, but is not server-side security |
 | The IOCF logo | Replace `IOCF logo.png` (transparent PNG), then `npm run images` (rebuilds the WebP logos and the share image in `public/assets/`) |
 
 ## Project layout

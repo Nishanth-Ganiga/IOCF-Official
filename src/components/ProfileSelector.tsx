@@ -39,6 +39,15 @@ const EMBLEMS: Record<Exclude<ProfileId, 'main'>, ReactNode> = {
       <path d="M12 13v4M8.5 20h7M10 17h4" />
     </>
   ),
+  // padlock
+  'command-center': (
+    <>
+      <rect x="5" y="11" width="14" height="9.5" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+      <circle cx="12" cy="15.7" r="1.2" />
+      <path d="M12 16.9v1.7" />
+    </>
+  ),
   // globe topped with a star
   tournaments: (
     <>
@@ -131,6 +140,9 @@ export default function ProfileSelector({ onPick }: { onPick: (id: ProfileId) =>
                 <ProfileAvatar id={p.id} />
                 {p.id === 'main' && (
                   <span className="absolute -right-2 -top-2 rounded-full bg-crimson px-2 py-0.5 text-[9px] font-bold tracking-[0.18em] text-white">MAIN</span>
+                )}
+                {p.id === 'command-center' && (
+                  <span className="absolute -right-2 -top-2 rounded-full bg-[#c9a24b] px-2 py-0.5 text-[9px] font-bold tracking-[0.18em] text-ink">LOCKED</span>
                 )}
               </span>
               <span className="font-sans text-sm font-medium text-mist transition group-hover:text-bone sm:text-base">{p.name}</span>
