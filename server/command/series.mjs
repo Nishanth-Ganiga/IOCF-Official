@@ -5,6 +5,7 @@
 //   • a board can be in at most 2 series at a time
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { buildFixtures, stadiumBoards } from '../../src/data/commandCenter/fixtures.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 export const SERIES_CFG = read('../../src/data/commandCenter/series.json');
@@ -42,11 +43,15 @@ export function validateSeries(input, host, boards) {
   if (opponents.some((o) => o === host)) return { error: 'You cannot play a series against your own board.' };
   if (opponents.some((o) => !boards.some((b) => b.slug === o))) return { error: 'Choose opponent boards from the list.' };
   const matches = Number(i.matches);
-  if (!SERIES_CFG.matches.includes(matches)) return { error: `Choose how many matches: ${SERIES_CFG.matches.join(', ')}.` };
-  const available = STADIUMS[host] ?? [];
-  if (!available.length) return { error: 'No stadium is registered for your board yet, so a series cannot be announced. Contact the IOCF administrator.' };
+  if (!type.matchOptions.includes(matches)) return { error: `Choose how many matches: ${type.matchOptions.join(' or ')}.` };
+  // every scheduled match needs a stadium of one of the boards allowed to host it (the final is not scheduled)
+  const fixtures = buildFixtures(type.id, [host, ...opponents], matches).filter((f) => !f.final);
   const stadiums = Array.isArray(i.stadiums) ? i.stadiums.map(String) : [];
-  if (stadiums.length !== matches || stadiums.some((s) => !available.includes(s))) return { error: matches === 1 ? 'Choose the stadium for the match.' : `Choose a stadium for each of the ${matches} matches.` };
+  if (!(STADIUMS[host] ?? []).length && type.id === 'bilateral') return { error: 'No stadium is registered for your board yet, so a series cannot be announced. Contact the IOCF administrator.' };
+  if (fixtures.some((f) => !stadiumBoards(type.id, f, host).some((b) => (STADIUMS[b] ?? []).length))) return { error: 'No stadium is registered for the boards in one of the matches. Contact the IOCF administrator.' };
+  if (stadiums.length !== fixtures.length || fixtures.some((f, k) => !stadiumBoards(type.id, f, host).some((b) => (STADIUMS[b] ?? []).includes(stadiums[k])))) {
+    return { error: fixtures.length === 1 ? 'Choose the stadium for the match.' : `Choose a stadium for each of the ${fixtures.length} scheduled matches.` };
+  }
   const bet = Number(i.bet);
   if (!SERIES_CFG.bets.includes(bet)) return { error: 'Choose the bet amount from the list.' };
   if (!SERIES_CFG.formats.includes(i.format)) return { error: 'Choose the format.' };
@@ -65,6 +70,7 @@ export function newSeries(fields, host, t) {
 /** The series as the browser sees it. */
 export function toApi(s, boards, t) {
   const nameOf = (slug) => boards.find((b) => b.slug === slug)?.name ?? slug;
+  const fixtures = buildFixtures(s.series_type, [s.host, ...s.opponents], s.matches).map((f) => ({ no: f.no, final: f.final, teams: f.teams ? f.teams.map(nameOf) : null, stadium: f.final ? null : s.stadiums[f.no - 1] }));
   return {
     id: s.id,
     name: s.name,
@@ -73,6 +79,7 @@ export function toApi(s, boards, t) {
     opponents: s.opponents.map((slug) => ({ slug, name: nameOf(slug), accepted: s.accepted.includes(slug) })),
     matches: s.matches,
     stadiums: s.stadiums,
+    fixtures,
     bet: s.bet,
     format: s.format,
     clubFormat: s.club_format ? (SERIES_CFG.clubFormats.find((c) => c.id === s.club_format)?.label ?? s.club_format) : null,

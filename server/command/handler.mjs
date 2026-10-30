@@ -205,6 +205,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             active: activeCount(all, board.slug, t),
             canAct: own,
             stadiums: STADIUMS[board.slug] ?? [],
+            allStadiums: STADIUMS,
             announced: live.filter((x) => x.host === board.slug).map((x) => toApi(x, BOARDS, t)),
             invitations: live.filter((x) => x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).map((x) => toApi(x, BOARDS, t)),
             upcoming: live.filter((x) => x.status === 'accepted').sort((p, q) => (q.accepted_at ?? 0) - (p.accepted_at ?? 0)).map((x) => toApi(x, BOARDS, t)),

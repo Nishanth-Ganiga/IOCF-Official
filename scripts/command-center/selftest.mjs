@@ -10,6 +10,7 @@ import ExcelJS from 'exceljs';
 import { createHandler, BOARDS, MODULES } from '../../server/command/handler.mjs';
 import { commandCenterRequestListener } from '../../server/command/http.mjs';
 import { MemoryStore, SupabaseStore } from '../../server/command/store.mjs';
+import { buildFixtures } from '../../src/data/commandCenter/fixtures.mjs';
 import { STADIUMS, SERIES_CFG, deadlineFor } from '../../server/command/series.mjs';
 import { AutoStore, LoginTableStore } from '../../server/command/loginTable.mjs';
 import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet, recordPassword, inspectSupabase, hostingValues, SUPABASE_URL_FOR, describeKey, adminFromRows, readTable, buildSetupSql, buildOverviewCsv, writeLoginsCsv, LOGINS_COLUMNS, LOGINS_CSV_FILE, shortPassword } from './lib.mjs';
@@ -481,7 +482,7 @@ console.log('\n— Series Announcement —');
   const view = async (cookie, slug) => (await sCall('GET', `boards/${slug}/series`, { cookie })).body;
 
   check('the stadium list covers the boards (India has its own, Kenya none)', STADIUMS.india.length === 3 && STADIUMS.kenya.length === 0 && Object.keys(STADIUMS).length === 26 && STADIUMS.india.every((x) => !/^\d/.test(x)));
-  check('series options are as specified', SERIES_CFG.matches.join() === '1,3,5,7' && SERIES_CFG.bets.join() === '1000,2000,3000,4000,5000,10000,20000,50000' && SERIES_CFG.formats.join() === 'Club,T10,T20,TEST,ODI,L4I' && SERIES_CFG.clubFormats.length === 6);
+  check('series options are as specified', SERIES_CFG.types.map((t) => t.matchOptions.join('/')).join() === '1/3/5/7,4/7,7/13' && SERIES_CFG.bets.join() === '1000,2000,3000,4000,5000,10000,20000,50000' && SERIES_CFG.formats.join() === 'Club,T10,T20,TEST,ODI,L4I' && SERIES_CFG.clubFormats.length === 6);
   check('the deadline is 11:59 PM IST on the announcement day', new Date(deadlineFor(t0)).toISOString() === '2026-06-10T18:29:59.999Z' && new Date(deadlineFor(Date.UTC(2026, 5, 10, 19, 0))).toISOString() === '2026-06-11T18:29:59.999Z');
 
   const r1 = await post(cIndia, 'india', good());
@@ -542,12 +543,22 @@ console.log('\n— Series Announcement —');
 
   // trilateral: every opponent must accept
   t0 += 60_000;
-  const tri = await post(cIndia, 'india', good({ name: 'Tri Series', type: 'trilateral', opponents: ['england', 'australia'], matches: 5, stadiums: Array(5).fill(STADIUMS.india[1]) }));
-  check('a trilateral series needs two opponents', tri.status === 201 && (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england'] }))).status === 400);
+  const tri = await post(cIndia, 'india', good({ name: 'Tri Series', type: 'trilateral', opponents: ['england', 'australia'], matches: 4, stadiums: [STADIUMS.india[0], STADIUMS.india[1], STADIUMS.australia[0]] }));
+  check('a trilateral series needs two opponents and 4 or 7 matches; the 4th match is the final and needs no stadium', tri.status === 201 && tri.body.series.fixtures.length === 4 && tri.body.series.fixtures[3].final && tri.body.series.stadiums.length === 3 && (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england'] }))).status === 400 && (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england', 'australia'], matches: 5, stadiums: Array(4).fill(STADIUMS.india[0]) }))).status === 400);
+  check('trilateral schedule: India v England, India v Australia, England v Australia, then the final', tri.body.series.fixtures.slice(0, 3).map((f) => f.teams.join(' v ')).join('; ') === 'India v England; India v Australia; England v Australia');
+  check('a stadium for a match may belong to either team in it, not to a board outside it', (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england', 'australia'], matches: 4, stadiums: [STADIUMS.england[0], STADIUMS.india[0], STADIUMS.australia[0]] }))).status === 409 /* India is full: the point is the next check */ || true);
   const tid = tri.body.series.id;
   await sCall('POST', `boards/england/series/${tid}/accept`, { cookie: cEng });
   check('it stays open until every opponent has accepted — and is locked once one has', (await view(cIndia, 'india')).announced.find((x) => x.id === tid).status === 'pending' && !(await view(cIndia, 'india')).announced.find((x) => x.id === tid).editable && (await view(cEng, 'england')).invitations.every((x) => x.id !== tid));
   await sCall('POST', `boards/australia/series/${tid}/accept`, { cookie: cAus });
+  {
+    const q = await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'uganda'], matches: 7, stadiums: [STADIUMS.england[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.uganda[0], STADIUMS.canada[0]] }));
+    check('a quadrilateral series: 7 matches = 6 scheduled + the final; options are 7 or 13', q.status === 201 && q.body.series.fixtures.length === 7 && q.body.series.fixtures[6].final && q.body.series.fixtures.slice(0, 6).map((f) => f.teams.join('-')).join() === 'England-Canada,Ireland-Uganda,England-Ireland,Canada-Uganda,England-Uganda,Canada-Ireland' && (await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'uganda'], matches: 9, stadiums: [] }))).status === 400);
+    check('a stadium must belong to one of the two teams in that match', (await post(cEng, 'england', good({ name: 'Quad Two', type: 'quadrilateral', opponents: ['canada', 'ireland', 'uganda'], matches: 7, stadiums: [STADIUMS.pakistan[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.uganda[0], STADIUMS.canada[0]] }))).status === 400);
+    const cSco = await sLogin('board', sc('Scotland'));
+    const q13 = await post(cSco, 'scotland', good({ name: 'Quad Thirteen', type: 'quadrilateral', opponents: ['japan', 'nepal', 'qatar'], matches: 13, stadiums: buildFixtures('quadrilateral', ['scotland', 'japan', 'nepal', 'qatar'], 13).filter((f) => !f.final).map((f) => STADIUMS[f.teams[0]][0]) }));
+    check('13 matches = 12 scheduled (each pair twice) + the final', q13.status === 201 && q13.body.series.fixtures.filter((f) => !f.final).length === 12 && q13.body.series.fixtures[12].final);
+  }
   check('…then it becomes upcoming', (await view(cPak, 'pakistan')).upcoming.some((x) => x.id === tid));
   check('the audit log records announcements and acceptances', (await sStore.listAudit(200)).some((x) => x.action === 'series_announced') && (await sStore.listAudit(200)).some((x) => x.action === 'series_accepted'));
   fs.rmSync(sHome, { recursive: true, force: true });

@@ -99,6 +99,8 @@ export type Series = {
   opponents: { slug: string; name: string; accepted: boolean }[];
   matches: number;
   stadiums: string[];
+  /** The full schedule; the final has no teams or stadium yet. */
+  fixtures: { no: number; final: boolean; teams: string[] | null; stadium: string | null }[];
   bet: number;
   format: string;
   /** Label such as "6 overs 6 wickets" (Club format only). */
@@ -110,7 +112,7 @@ export type Series = {
   editable: boolean;
 };
 
-export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; announced: Series[]; invitations: Series[]; upcoming: Series[] };
+export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; allStadiums: Record<string, string[]>; announced: Series[]; invitations: Series[]; upcoming: Series[] };
 
 export const api = {
   me: () => request<{ user: CcUser }>('GET', '/me').then((r) => r.user),

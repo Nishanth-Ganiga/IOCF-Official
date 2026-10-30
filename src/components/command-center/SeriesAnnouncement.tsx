@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError, type Series, type SeriesInput, type SeriesOverview } from '../../data/commandApi';
 import { BOARD_THEMES, paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
 import cfg from '../../data/commandCenter/series.json';
+import { buildFixtures, stadiumBoards } from '../../data/commandCenter/fixtures.mjs';
 
 type Go = (sub?: string) => void;
 
@@ -108,7 +109,7 @@ function Facts({ s, you }: { s: Series; you: string }) {
     ['Hosted by', s.host.name],
     [s.opponents.length > 1 ? 'Opponents' : 'Opponent', s.opponents.map((o) => (s.status === 'pending' && s.opponents.length > 1 ? `${o.name}${o.accepted ? ' ✓' : ''}` : o.name)).join(', ')],
     ['Matches', String(s.matches)],
-    [s.matches === 1 ? 'Stadium' : 'Stadiums', s.stadiums.map((x, i) => (s.matches === 1 ? x : `${i + 1}. ${x}`)).join(s.matches === 1 ? '' : ' · ')],
+    ...(s.type === 'bilateral' ? ([[s.matches === 1 ? 'Stadium' : 'Stadiums', s.stadiums.map((x, i) => (s.matches === 1 ? x : `${i + 1}. ${x}`)).join(s.matches === 1 ? '' : ' · ')]] as [string, string][]) : []),
     ['Bet amount', money(s.bet)],
     ['Format', formatLabel(s)],
     ...(s.status === 'pending' ? ([['Deadline', `11:59 PM IST, ${ist(s.deadlineAt)}`]] as [string, string][]) : []),
@@ -121,6 +122,20 @@ function Facts({ s, you }: { s: Series; you: string }) {
           <dd className="text-bone">{v}</dd>
         </div>
       ))}
+      {s.type !== 'bilateral' && (
+        <div className="contents">
+          <dt className="text-[11px] font-semibold tracking-[0.18em] text-smoke">SCHEDULE</dt>
+          <dd>
+            <ol className="space-y-1 text-bone">
+              {s.fixtures.map((f) => (
+                <li key={f.no}>
+                  <span className="text-mist">Match {f.no}:</span> {f.final ? <span className="font-semibold">Final <span className="font-normal text-mist">· teams decided after the league matches</span></span> : <>{f.teams!.join(' vs ')} <span className="text-mist">· {f.stadium}</span></>}
+                </li>
+              ))}
+            </ol>
+          </dd>
+        </div>
+      )}
     </dl>
   );
 }
@@ -235,11 +250,21 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
   const others = BOARD_THEMES.filter((b) => b.slug !== theme.slug).sort((a, b) => a.name.localeCompare(b.name));
   const set = (patch: Partial<SeriesInput>) => setForm((f) => ({ ...f, ...patch }));
 
+  const blanks = (n: number) => Array.from({ length: n }, () => '');
+  const matchOptions = TYPES.find((t) => t.id === form.type)?.matchOptions ?? [];
+  // the match list: every opponent must be chosen first, because the teams in each match depend on them
+  const teamsReady = need > 0 && form.opponents.length === need && form.opponents.every(Boolean);
+  const nameOf = (slug: string) => BOARD_THEMES.find((b) => b.slug === slug)?.name ?? slug;
+  const schedule = teamsReady && form.matches > 0 ? buildFixtures(form.type, [theme.slug, ...form.opponents], form.matches) : [];
+  const scheduled = schedule.filter((f) => !f.final);
+  const stadiumsFor = (f: (typeof schedule)[number]) => [...new Set(stadiumBoards(form.type, f, theme.slug).flatMap((b) => data.allStadiums[b] ?? []))];
+
   const pickType = (id: string) => {
-    const n = TYPES.find((t) => t.id === id)!.opponents;
-    set({ type: id, opponents: Array.from({ length: n }, (_, i) => form.opponents[i] ?? '') });
+    const t = TYPES.find((x) => x.id === id)!;
+    set({ type: id, opponents: Array.from({ length: t.opponents }, (_, i) => form.opponents[i] ?? ''), matches: t.matchOptions.includes(form.matches) ? form.matches : 0, stadiums: [] });
   };
-  const pickMatches = (n: number) => set({ matches: n, stadiums: Array.from({ length: n }, (_, i) => form.stadiums[i] ?? '') });
+  const pickOpponent = (i: number, slug: string) => set({ opponents: form.opponents.map((x, j) => (j === i ? slug : x)), stadiums: [] });
+  const pickMatches = (n: number) => set({ matches: n, stadiums: blanks(buildFixtures(form.type, [theme.slug, ...form.opponents], n).filter((f) => !f.final).length) });
   const reset = () => {
     setForm(EMPTY);
     setEditing(null);
@@ -272,7 +297,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
   };
 
   const ready =
-    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && form.matches > 0 && form.stadiums.length === form.matches && form.stadiums.every(Boolean) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
+    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i]) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
 
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
@@ -286,8 +311,6 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
 
       {admin ? (
         <Empty text="Only the board’s chairman can announce a series. You are viewing this board as the administrator." />
-      ) : !data.stadiums.length ? (
-        <Empty text="No stadium is registered for your board yet, so a series cannot be announced. Please contact the IOCF administrator." />
       ) : (
         <form
           onSubmit={(e) => {
@@ -297,6 +320,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
           className={`${card} mt-4`}
           noValidate
         >
+          {!data.stadiums.length && <p className="mb-3 text-sm text-crimson-2">No stadium is registered for your board yet. A bilateral series cannot be announced until one is added; in a trilateral or quadrilateral series you can use your opponents’ stadiums.</p>}
           {editing && <p className="mb-3 text-xs font-semibold tracking-[0.2em]" style={{ color: pal.highlight }}>EDITING “{editing.name.toUpperCase()}”</p>}
           <label className="block text-[11px] font-semibold tracking-[0.2em] text-mist">
             NAME OF THE SERIES
@@ -310,7 +334,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
               {form.opponents.map((o, i) => (
                 <label key={i} className="block text-[11px] font-semibold tracking-[0.2em] text-mist">
                   {need === 1 ? 'OPPONENT BOARD' : `OPPONENT BOARD ${i + 1}`}
-                  <select value={o} onChange={(e) => set({ opponents: form.opponents.map((x, j) => (j === i ? e.target.value : x)) })} className={field}>
+                  <select value={o} onChange={(e) => pickOpponent(i, e.target.value)} className={field}>
                     <option value="">Select a board</option>
                     {others.map((b) => (
                       <option key={b.slug} value={b.slug} disabled={form.opponents.some((x, j) => j !== i && x === b.slug)}>
@@ -323,23 +347,37 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
             </div>
           )}
 
-          <Pills hl={pal.highlight} label="HOW MANY MATCHES IN THE SERIES?" value={form.matches || undefined} options={cfg.matches} onPick={pickMatches} />
+          {form.type && <Pills hl={pal.highlight} label="HOW MANY MATCHES IN THE SERIES?" value={form.matches || undefined} options={matchOptions} onPick={pickMatches} />}
+          {form.type && form.type !== 'bilateral' && <p className="mt-2 text-xs text-smoke">The last match is the final. Its teams are only known after the league matches, so it does not need a stadium or a schedule.</p>}
 
-          {form.matches > 0 && (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {form.stadiums.map((s, i) => (
-                <label key={i} className="block text-[11px] font-semibold tracking-[0.2em] text-mist">
-                  {form.matches === 1 ? 'HOME STADIUM' : `MATCH ${i + 1} · HOME STADIUM`}
-                  <select value={s} onChange={(e) => set({ stadiums: form.stadiums.map((x, j) => (j === i ? e.target.value : x)) })} className={field}>
-                    <option value="">Select a stadium</option>
-                    {data.stadiums.map((x) => (
-                      <option key={x} value={x}>
-                        {x}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
+          {form.matches > 0 && !teamsReady && <p className="mt-5 text-sm text-mist">Choose {need === 1 ? 'the opponent board' : 'all the opponent boards'} to prepare the match schedule.</p>}
+          {form.matches > 0 && teamsReady && (
+            <div className="mt-5">
+              <p className="text-[11px] font-semibold tracking-[0.2em] text-mist">{form.type === 'bilateral' ? (form.matches === 1 ? 'HOME STADIUM' : 'HOME STADIUM FOR EACH MATCH') : 'MATCH SCHEDULE'}</p>
+              <ol className="mt-2 space-y-3">
+                {schedule.map((f) => (
+                  <li key={f.no} className="grid items-center gap-2 sm:grid-cols-[minmax(0,20rem)_1fr]">
+                    <span className="text-sm text-bone">
+                      <span className="text-mist">Match {f.no}:</span> {f.final ? <strong>Final</strong> : f.teams!.map(nameOf).join(' vs ')}
+                    </span>
+                    {f.final ? (
+                      <span className="text-xs text-smoke">Teams decided after the league matches — no stadium needed.</span>
+                    ) : (
+                      <label className="block text-[11px] font-semibold tracking-[0.2em] text-mist">
+                        <span className="sr-only">Stadium for match {f.no}</span>
+                        <select value={form.stadiums[f.no - 1] ?? ''} onChange={(e) => set({ stadiums: scheduled.map((_, i) => (i === f.no - 1 ? e.target.value : (form.stadiums[i] ?? ''))) })} className={`${field} mt-0`}>
+                          <option value="">Stadium:</option>
+                          {stadiumsFor(f).map((x) => (
+                            <option key={x} value={x}>
+                              {x}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
 
