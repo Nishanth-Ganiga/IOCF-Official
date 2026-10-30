@@ -4,6 +4,7 @@
 //   npm run cc -- setup [--show]           create the Master Administrator and the 26 chairman accounts (safe to re-run)
 //   npm run cc -- export                   (re)write the readable credentials file, IOCF_CREDENTIALS_PLAIN.csv
 //   npm run cc -- import                   apply your edits from that file (usernames, passwords, active / inactive)
+//   npm run cc -- sync-sheet [--dry-run]   read the logins from your private credentials sheet and apply them (creates / updates)
 //   npm run cc -- reveal [board|--all]     show passwords from the encrypted register on the terminal
 //   npm run cc -- reset <board|username>   new random password for one account (add --username <new> to rename it too)
 //   npm run cc -- push                     upload the accounts to Supabase (once it is set up)
@@ -15,7 +16,7 @@
 // the accounts and the credentials file before Supabase exists, then `push`.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { backup, homeDir, importPlain, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
+import { applyCredentials, backup, homeDir, importPlain, parseCredentialSheet, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
 import { FileStore, SupabaseStore } from '../../server/command/store.mjs';
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -78,6 +79,33 @@ try {
     const r = await resetCredentials({ store: store(), home, ref: positional[0], newUsername: opt('--username') });
     console.log(`New credentials for ${r.board ?? 'the Master Administrator'} (${r.accountId}). Its open sessions have ended and the register is updated.\n`);
     table([{ Username: r.username, Password: r.password }]);
+  } else if (cmd === 'sync-sheet') {
+    // The sheet's link lives only in ~/.iocf-command-center/env (CC_CREDENTIALS_SHEET_URL) — never in the project, and never printed.
+    const { default: ExcelJS } = await import('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const file = opt('--file');
+    if (file) {
+      if (/\.csv$/i.test(file)) await wb.csv.readFile(file);
+      else await wb.xlsx.readFile(file);
+    } else {
+      const url = process.env.CC_CREDENTIALS_SHEET_URL;
+      if (!url) throw new Error('No credentials sheet is set. Add  CC_CREDENTIALS_SHEET_URL=<the sheet link>  to ' + path.join(home, 'env') + '  (or use --file <downloaded sheet>).');
+      const { downloadWorkbook } = await import('../sync/sheet.mjs');
+      await wb.xlsx.load(await downloadWorkbook(url));
+    }
+    const { tab, entries } = parseCredentialSheet(wb, { tab: opt('--tab') });
+    console.log(`Read ${entries.length} login(s) from the "${tab}" tab. Applying to ${where()}${flag('--dry-run') ? ' (dry run: nothing will be changed)' : ''}.\n`);
+    const res = await applyCredentials({ store: store(), home, entries, minLength: 8, dryRun: flag('--dry-run'), chairmen: chairmen() });
+    res.warnings.forEach((w) => console.log(' !', w));
+    if (res.warnings.length) console.log();
+    if (!res.changes.length) console.log('Everything already matches the sheet. No changes.');
+    else {
+      table(res.changes.map((c) => ({ Account: c.accountId, Board: c.board, Change: c.changes })));
+      if (!flag('--dry-run')) {
+        await writePlain({ store: store(), home });
+        console.log(`\nDone. The encrypted register and your credentials file are updated${remote() ? '' : '. These accounts are in your local store; run  npm run cc -- push  to put them online'}.`);
+      }
+    }
   } else if (cmd === 'export') {
     console.log(`Written: ${await writePlain({ store: store(), home })}\nOpen it, edit usernames / passwords / status if you wish, then run:  npm run cc -- import`);
   } else if (cmd === 'import') {
@@ -107,7 +135,7 @@ try {
     if (!out) throw new Error('Say where: npm run cc -- backup --out <folder>');
     console.log(`Encrypted backup written to ${backup({ home, outDir: path.resolve(out) })}\nKeep the key (${path.join(home, 'register.key')}) somewhere separate and safe: the backup cannot be read without it.`);
   } else {
-    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 15).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 16).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
   }
 } catch (err) {
   console.error('✗', err instanceof Error ? err.message : err);

@@ -6,10 +6,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import ExcelJS from 'exceljs';
 import { createHandler, BOARDS, MODULES } from '../../server/command/handler.mjs';
 import { commandCenterRequestListener } from '../../server/command/http.mjs';
 import { MemoryStore, SupabaseStore } from '../../server/command/store.mjs';
-import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts } from './lib.mjs';
+import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet } from './lib.mjs';
 
 let passed = 0;
 const failures = [];
@@ -174,7 +175,7 @@ check('importing again finds no changes', (await importPlain({ store, home })).l
 fs.writeFileSync(plainFile, fs.readFileSync(plainFile, 'utf8').replace('MyNewPassword#2026', 'short'));
 check('a too-short password is refused and nothing is changed', await importPlain({ store, home }).then(() => false, (e) => /at least 12/.test(e.message)) && (await call('POST', 'login', { body: { role: 'board', username: 'japan.board', password: 'MyNewPassword#2026' } })).status === 200);
 fs.writeFileSync(plainFile, fs.readFileSync(plainFile, 'utf8').replace(',short,', ',MyNewPassword#2026,').replace(',india.chairman,', ',japan.board,'));
-check('a username used twice is refused', await importPlain({ store, home }).then(() => false, (e) => /already used/.test(e.message)));
+check('a username used twice is refused', await importPlain({ store, home }).then(() => false, (e) => /used twice|already belongs/.test(e.message)));
 await writePlain({ store, home });
 const remoteLike = new MemoryStore();
 const pushed = await pushAccounts({ from: store, to: remoteLike });
@@ -187,16 +188,63 @@ check('after push the same passwords work against the new store', await (async (
 check('pushing again changes nothing', (await pushAccounts({ from: store, to: remoteLike })).updated === 0);
 void before2;
 
-console.log('\n— 11. the register stays private —');
-const root = process.cwd();
 const walk = (dir, out = []) => {
   for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (['node_modules', '.git', 'ios', 'android'].includes(f.name)) continue;
+    if (['node_modules', '.git', 'ios', 'android', 'dist'].includes(f.name)) continue;
     const p = path.join(dir, f.name);
     f.isDirectory() ? walk(p, out) : out.push(p);
   }
   return out;
 };
+console.log('\n— credentials sheet (Google Sheet / Excel) —');
+const book = (rows, name = 'Sheet1') => {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(name);
+  rows.forEach((r) => ws.addRow(r));
+  return wb;
+};
+const home2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-sheet-'));
+const store2 = new MemoryStore();
+const handle2 = createHandler({ store: store2, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock });
+const sheetRows = [
+  ['Board', 'Username', 'Password', 'Status'],
+  ['', 'president', 'Admin-Pass-2026-x', 'Active'],
+  ['Newzealand', 'nz.chair', 'Kiwi-Pass-2026-x', 'Active'],
+  ['Srilanka', 'sl.chair', 'Lanka-Pass-2026-x', ''],
+  ['West Indies', 'wi.chair', 'Windies-Pass-2026-x', 'inactive'],
+];
+const parsed = parseCredentialSheet(book(sheetRows));
+check('sheet: finds the headings and reads every row', parsed.entries.length === 4 && parsed.tab === 'Sheet1');
+check('sheet: a row with no board is the administrator', parsed.entries[0].role === 'admin' && parsed.entries[1].board === 'Newzealand');
+const r1 = await applyCredentials({ store: store2, home: home2, entries: parsed.entries });
+check('sheet: creates the administrator and the boards it names (spellings like "Newzealand" and "Srilanka" resolve)', r1.changes.length === 4 && (await store2.list()).map((a) => a.board_slug ?? 'admin').sort().join() === 'admin,new-zealand,sri-lanka,west-indies');
+const ok2 = (u, pw, role = 'board') => handle2({ method: 'POST', path: ['login'], headers: H, body: { role, username: u, password: pw }, ip: `7.7.7.${++ipCounter}` });
+check('sheet: the new logins work', (await ok2('president', 'Admin-Pass-2026-x', 'admin')).status === 200 && (await ok2('nz.chair', 'Kiwi-Pass-2026-x')).status === 200);
+check('sheet: "inactive" in the Status column creates an inactive account', (await ok2('wi.chair', 'Windies-Pass-2026-x')).body.error.code === 'inactive');
+check('sheet: the register was written for them and agrees with the store', (await verifyRegister({ store: store2, home: home2 })).problems.length === 0);
+check('sheet: running it again changes nothing', (await applyCredentials({ store: store2, home: home2, entries: parsed.entries })).changes.length === 0);
+const edited2 = parseCredentialSheet(book([sheetRows[0], sheetRows[1], ['Newzealand', 'nz.chair', 'Kiwi-New-Pass-2026', 'Active'], sheetRows[3], ['West Indies', 'wi.chair', 'Windies-Pass-2026-x', 'Active']])).entries;
+const dry = await applyCredentials({ store: store2, home: home2, entries: edited2, dryRun: true });
+check('sheet: --dry-run reports the changes but applies none', dry.changes.length === 2 && (await ok2('nz.chair', 'Kiwi-Pass-2026-x')).status === 200);
+const r3 = await applyCredentials({ store: store2, home: home2, entries: edited2 });
+check('sheet: an edited password and an activated account are applied', r3.changes.length === 2 && (await ok2('nz.chair', 'Kiwi-New-Pass-2026')).status === 200 && (await ok2('nz.chair', 'Kiwi-Pass-2026-x')).status === 401 && (await ok2('wi.chair', 'Windies-Pass-2026-x')).status === 200);
+const bad = (rows) => applyCredentials({ store: store2, home: home2, entries: parseCredentialSheet(book(rows)).entries }).then(() => null, (e) => e.message);
+check('sheet: an unknown board refuses the whole sheet', /not one of the 26 boards/.test(await bad([sheetRows[0], ['Atlantis', 'a.chair', 'Long-Enough-Pass-1', 'Active']])));
+check('sheet: a username used twice refuses the whole sheet', /used twice/.test(await bad([sheetRows[0], ['India', 'same.user', 'Long-Enough-Pass-1'], ['Italy', 'same.user', 'Long-Enough-Pass-2']])));
+check('sheet: a very short password is refused', /at least 8/.test(await bad([sheetRows[0], ['India', 'in.chair', 'abc12']])));
+check('sheet: a refused sheet changes nothing', (await store2.list()).length === 4);
+check('sheet: a repeated password is only a warning, naming the rows', (await applyCredentials({ store: store2, home: home2, dryRun: true, entries: parseCredentialSheet(book([sheetRows[0], ['India', 'in.chair', 'Shared-Password-2026'], ['Italy', 'it.chair', 'Shared-Password-2026']])).entries })).warnings.some((w) => /same password/.test(w)));
+check('sheet: without headings, columns A–C are board, username, password', parseCredentialSheet(book([['India', 'in.chair', 'Long-Enough-Pass-1'], ['Italy', 'it.chair', 'Long-Enough-Pass-2']])).entries.length === 2);
+check('sheet: a tab without credentials gives a clear error', (() => { try { parseCredentialSheet(book([['Match', 'Winner'], ['A v B', 'A']])); return false; } catch (e) { return /Username/.test(e.message); } })());
+check('sheet: the second tab is used when the first has no credentials', (() => { const wb = book([['Notes'], ['hello']], 'Notes'); const ws = wb.addWorksheet('Logins'); sheetRows.forEach((r) => ws.addRow(r)); return parseCredentialSheet(wb).tab === 'Logins'; })());
+fs.rmSync(home2, { recursive: true, force: true });
+// the link itself is read from your private settings at run time, so it is not written down in this file either
+const sheetId = (() => { try { return /spreadsheets\/d\/([\w-]+)/.exec(fs.readFileSync(path.join(process.env.IOCF_CC_HOME || path.join(os.homedir(), '.iocf-command-center'), 'env'), 'utf8'))?.[1] ?? null; } catch { return null; } })();
+const repoText = sheetId === null ? false : walk(process.cwd()).some((f) => { try { return fs.readFileSync(f, 'utf8').includes(sheetId); } catch { return false; } });
+check('your credentials sheet link appears nowhere in the project' + (sheetId ? '' : ' (none set on this machine)'), !repoText);
+
+console.log('\n— 11. the register stays private —');
+const root = process.cwd();
 const files = walk(root);
 check('no register file anywhere in the project folder', !files.some((f) => /CREDENTIAL|register\.key|local-store/i.test(path.basename(f))));
 check('the register lives outside the project (home folder)', !path.resolve(home).startsWith(root));

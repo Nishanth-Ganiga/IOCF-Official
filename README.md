@@ -77,6 +77,15 @@ Real, server-side sign-in. Passwords are stored only as salted scrypt hashes in 
 
 Delete the readable file when you no longer need it (`npm run cc -- export` rebuilds it from the register at any time).
 
+**Managing logins from a private Google Sheet (optional):** keep the logins in a sheet with the headings `Board` (or `Country`), `Username`, `Password` and, if you like, `Status` (a row with no board is the Master Administrator). Put the sheet's link in `~/.iocf-command-center/env` as `CC_CREDENTIALS_SHEET_URL=…` — **never in the project** — then:
+
+```bash
+npm run cc -- sync-sheet --dry-run   # shows what would change, changes nothing
+npm run cc -- sync-sheet             # creates / updates the accounts, re-encrypts the register, refreshes the credentials file
+```
+
+Only your computer reads the sheet. It hashes the passwords and stores the hashes; the website, Vercel and git never see the sheet or its link. Every row is checked first (boards must be among the 26, usernames unique, passwords 8+ characters), and a bad sheet changes nothing. The sheet holds readable passwords, so share it with as few people as possible; after syncing you can delete its Password column if you prefer.
+
 **To change a login:** edit the username, password (12+ characters) or status (`active` / `inactive`) in `IOCF_CREDENTIALS_PLAIN.csv`, save, then run `npm run cc -- import`. It checks every row first, applies the changes, signs those accounts out, and re-encrypts the register.
 
 ### Putting it online (one-time)
@@ -90,6 +99,7 @@ Until then the accounts live in a local store, and `npm run dev` already signs i
 | Command | What it does |
 | --- | --- |
 | `npm run cc -- setup [--show]` | Creates any missing accounts (safe to re-run); `--show` prints the new credentials once |
+| `npm run cc -- sync-sheet [--dry-run]` | Applies the logins in your private credentials sheet |
 | `npm run cc -- export` / `import` | Writes the readable credentials file / applies your edits from it |
 | `npm run cc -- reveal <board or username>` / `--all` | Decrypts passwords from the register and prints them on your terminal |
 | `npm run cc -- reset <board or username> [--username <new>]` | New random password for one account (ends its sessions, updates both files) |
@@ -98,7 +108,7 @@ Until then the accounts live in a local store, and `npm run dev` already signs i
 | `npm run cc -- status [--sync]` | Lists accounts; `--sync` copies online activate/deactivate changes into the register |
 | `npm run cc -- backup --out <folder>` | Encrypted backup of the register (keep `register.key` somewhere separate) |
 
-`npm run cc:test` runs the backend self-test (89 checks) against a temporary store; it never touches your real data.
+`npm run cc:test` runs the backend self-test (107 checks) against a temporary store; it never touches your real data.
 
 **Limits:** this is for the website. The Android/iOS apps load the site from the device, so a cookie-based sign-in will not carry over to them.
 

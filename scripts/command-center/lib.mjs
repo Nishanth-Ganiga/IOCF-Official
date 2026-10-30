@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { generatePassword, hashPassword, verifyPassword } from '../../server/command/crypto.mjs';
 import { BOARDS } from '../../server/command/handler.mjs';
+import { cellValue } from '../sync/helpers.mjs';
 
 export const REGISTER_FILE = 'IOCF_PRIVATE_CREDENTIAL_REGISTER.csv';
 export const COLUMNS = ['Account ID', 'Account Type', 'Board Name', 'Username', 'Encrypted Password', 'Account Status', 'Created Date', 'Last Updated Date'];
@@ -265,56 +266,167 @@ export async function writePlain({ store, home }) {
   return plainPath(home);
 }
 
+const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const boardBy = (name) => {
+  const n = norm(name);
+  const alias = { png: 'papuanewguinea', unitedarabemirates: 'uae', unitedstates: 'usa', unitedstatesofamerica: 'usa', westindies: 'westindies' };
+  return BOARDS.find((b) => norm(b.name) === (alias[n] ?? n) || b.slug === String(name).trim().toLowerCase());
+};
+
 /**
- * Applies the edits you made in IOCF_CREDENTIALS_PLAIN.csv: a changed username, a changed password, or a status of
- * active / inactive. Everything is checked first; if any row is invalid nothing is changed. Returns what was changed
- * (never the passwords themselves).
+ * Makes the accounts match a list of wanted credentials: creates a missing account, or updates a changed username, password
+ * or status. Every entry is checked first; if any is invalid nothing is changed. Entries identify their account by
+ * `accountId`, or by `board` (a board name), or `role: 'admin'`. Returns what changed (never the passwords).
  */
-export async function importPlain({ store, home }) {
-  const key = readKey(home);
-  if (!fs.existsSync(plainPath(home))) throw new Error(`There is no ${PLAIN_FILE} in ${home}. Create it with:  npm run cc -- export`);
-  const rows = parseCsvFile(plainPath(home), PLAIN_COLUMNS);
+export async function applyCredentials({ store, home, entries, minLength = 8, dryRun = false, chairmen = {} }) {
+  const key = ensureKey(home);
   const accounts = await store.list();
   const register = readRegister(home);
+  const problems = [];
+  const warnings = [];
   const plan = [];
   const taken = new Map(accounts.map((a) => [a.username, a.account_id]));
-  for (const r of rows) {
-    const acc = accounts.find((a) => a.account_id === r['Account ID']);
-    if (!acc) throw new Error(`Row "${r['Account ID']}": no such account. Account IDs cannot be changed or added here.`);
-    const reg = register.find((x) => x['Account ID'] === acc.account_id);
-    const oldPassword = reg ? decrypt(key, reg['Encrypted Password']) : null;
-    const username = r.Username.toLowerCase();
-    const status = (r['Account Status'] || acc.status).toLowerCase();
-    if (!/^[a-z0-9._-]{3,60}$/.test(username)) throw new Error(`${acc.account_id}: a username uses 3–60 letters, digits, dots, dashes or underscores (found "${r.Username}").`);
-    if (r.Password.length < 12) throw new Error(`${acc.account_id}: a password needs at least 12 characters.`);
-    if (!['active', 'inactive'].includes(status)) throw new Error(`${acc.account_id}: status must be active or inactive (found "${r['Account Status']}").`);
-    if (acc.role === 'admin' && status !== 'active') throw new Error(`${acc.account_id}: the administrator account cannot be inactive.`);
-    if (username !== acc.username) {
-      if (taken.has(username) && taken.get(username) !== acc.account_id) throw new Error(`${acc.account_id}: the username "${username}" is already used by ${taken.get(username)}.`);
-      taken.set(username, acc.account_id);
+  const seenNames = new Map();
+  const seenPasswords = new Map();
+
+  for (const e of entries) {
+    const label = e.label ?? e.accountId ?? e.board ?? 'administrator';
+    let acc = null;
+    let create = null;
+    if (e.accountId) {
+      acc = accounts.find((a) => a.account_id === e.accountId);
+      if (!acc) problems.push(`${label}: no such account (Account IDs cannot be changed or added).`);
+    } else if (e.role === 'admin') {
+      acc = accounts.find((a) => a.role === 'admin');
+      create = { account_id: ADMIN_ACCOUNT_ID, role: 'admin', board_slug: null, board_name: null, chairman_name: null };
+    } else {
+      const board = boardBy(e.board);
+      if (!board) {
+        problems.push(`${label}: "${e.board}" is not one of the 26 boards.`);
+        continue;
+      }
+      acc = accounts.find((a) => a.board_slug === board.slug);
+      create = { account_id: boardAccountId(BOARDS.indexOf(board)), role: 'board', board_slug: board.slug, board_name: board.name, chairman_name: chairmen[board.name] ?? null };
     }
-    const changed = { username: username !== acc.username, password: r.Password !== oldPassword, status: status !== acc.status };
-    if (changed.username || changed.password || changed.status) plan.push({ acc, username, password: r.Password, status, changed });
+    if (!acc && !create) continue;
+
+    const username = String(e.username ?? '').trim().toLowerCase();
+    const password = String(e.password ?? '');
+    const status = String(e.status || 'active').toLowerCase();
+    if (!/^[a-z0-9._-]{3,60}$/.test(username)) problems.push(`${label}: a username uses 3–60 letters, digits, dots, dashes or underscores (found "${e.username}").`);
+    if (password.length < minLength) problems.push(`${label}: a password needs at least ${minLength} characters.`);
+    else if (password.length < 12) warnings.push(`${label}: the password is short (under 12 characters).`);
+    if (!['active', 'inactive'].includes(status)) problems.push(`${label}: status must be active or inactive (found "${e.status}").`);
+    if ((acc?.role ?? create?.role) === 'admin' && status !== 'active') problems.push(`${label}: the administrator account cannot be inactive.`);
+    if (seenNames.has(username)) problems.push(`${label}: the username "${username}" is used twice (also by ${seenNames.get(username)}).`);
+    seenNames.set(username, label);
+    if (taken.has(username) && taken.get(username) !== (acc?.account_id ?? create?.account_id)) problems.push(`${label}: the username "${username}" already belongs to ${taken.get(username)}.`);
+    if (seenPasswords.has(password)) warnings.push(`${label}: uses the same password as ${seenPasswords.get(password)} — every account should have its own.`);
+    seenPasswords.set(password, label);
+    plan.push({ acc, create, label, username, password, status });
   }
-  const report = [];
-  for (const { acc, username, password, status, changed } of plan) {
+  if (problems.length) throw new Error(`Nothing was changed. Please fix:\n - ${problems.join('\n - ')}`);
+
+  const changes = [];
+  for (const p of plan) {
+    const { acc, create, username, password, status } = p;
+    if (!acc) {
+      changes.push({ accountId: create.account_id, board: create.board_name ?? 'Master Administrator', changes: 'created' });
+      if (!dryRun) {
+        const made = await store.create({ ...create, username, password_hash: await hashPassword(password), status });
+        const row = rowFor(key, made, password);
+        const i = register.findIndex((x) => x['Account ID'] === made.account_id);
+        if (i >= 0) register[i] = row;
+        else register.push(row);
+        await store.addAudit({ action: 'account_created', actor: 'local-cli', actor_role: null, target: made.account_id, ip: null, detail: { from: 'credentials list' } });
+      }
+      continue;
+    }
+    const passwordChanged = !(await verifyPassword(password, acc.password_hash));
+    const changed = { username: username !== acc.username, password: passwordChanged, status: status !== acc.status };
+    if (!changed.username && !changed.password && !changed.status) continue;
+    changes.push({ accountId: acc.account_id, board: acc.board_name ?? 'Master Administrator', changes: Object.entries(changed).filter(([, v]) => v).map(([k]) => k).join(' + ') });
+    if (dryRun) continue;
     const patch = { username, status };
     if (changed.username || changed.password) {
-      patch.password_hash = await hashPassword(password);
+      patch.password_hash = changed.password ? await hashPassword(password) : acc.password_hash;
       patch.session_version = acc.session_version + 1;
       patch.failed_logins = 0;
       patch.locked_until = null;
-    } else if (changed.status && status === 'inactive') patch.session_version = acc.session_version + 1;
+    } else if (status === 'inactive') patch.session_version = acc.session_version + 1;
     const updated = await store.update(acc.id, patch);
     const row = rowFor(key, updated, password);
     const i = register.findIndex((x) => x['Account ID'] === acc.account_id);
     if (i >= 0) register[i] = { ...row, 'Created Date': register[i]['Created Date'] };
     else register.push(row);
-    await store.addAudit({ action: changed.status && !changed.username && !changed.password ? (status === 'active' ? 'account_activated' : 'account_deactivated') : 'credentials_reset', actor: 'local-cli', actor_role: null, target: acc.account_id, ip: null, detail: { from: 'credentials file' } });
-    report.push({ accountId: acc.account_id, board: acc.board_name ?? 'Master Administrator', changes: Object.entries(changed).filter(([, v]) => v).map(([k]) => k).join(' + ') });
+    await store.addAudit({ action: changed.status && !changed.username && !changed.password ? (status === 'active' ? 'account_activated' : 'account_deactivated') : 'credentials_reset', actor: 'local-cli', actor_role: null, target: acc.account_id, ip: null, detail: { from: 'credentials list' } });
   }
-  if (plan.length) writeRegister(home, register);
-  return report;
+  if (!dryRun && changes.length) writeRegister(home, register);
+  return { changes, warnings };
+}
+
+/** Applies the edits you made in IOCF_CREDENTIALS_PLAIN.csv (see applyCredentials). */
+export async function importPlain({ store, home }) {
+  readKey(home);
+  if (!fs.existsSync(plainPath(home))) throw new Error(`There is no ${PLAIN_FILE} in ${home}. Create it with:  npm run cc -- export`);
+  const rows = parseCsvFile(plainPath(home), PLAIN_COLUMNS);
+  const { changes } = await applyCredentials({
+    store,
+    home,
+    minLength: 12,
+    entries: rows.map((r) => ({ accountId: r['Account ID'], username: r.Username, password: r.Password, status: r['Account Status'] })),
+  });
+  return changes;
+}
+
+/**
+ * Reads login credentials from a spreadsheet (an ExcelJS workbook): the first tab that has a Username and a Password column.
+ * Columns are found by their headings — Board (or Country), Username, Password, and optionally Role and Status. A row with
+ * no board, or a Role of admin, is the Master Administrator. With no headings at all, columns A, B, C are Board, Username, Password.
+ */
+export function parseCredentialSheet(workbook, { tab } = {}) {
+  const sheets = workbook.worksheets.filter((w) => !tab || w.name.toLowerCase() === tab.toLowerCase());
+  if (!sheets.length) throw new Error(`There is no tab called "${tab}" in the sheet.`);
+  const text = (v) => String(cellValue(v) ?? '').trim();
+  for (const ws of sheets) {
+    const grid = [];
+    ws.eachRow({ includeEmpty: false }, (row, n) => {
+      const cells = [];
+      for (let c = 1; c <= ws.columnCount; c++) cells[c] = text(row.getCell(c).value);
+      grid.push({ n, cells });
+    });
+    const find = (cells, re) => cells.findIndex((v, i) => i > 0 && re.test(v));
+    let head = grid.slice(0, 40).find((r) => find(r.cells, /user/i) > 0 && find(r.cells, /pass/i) > 0);
+    let cols;
+    let body;
+    if (head) {
+      cols = { board: find(head.cells, /^(board|country|nation|team)/i), user: find(head.cells, /user/i), pass: find(head.cells, /pass/i), role: find(head.cells, /^(role|type|account)/i), status: find(head.cells, /status|active/i), id: find(head.cells, /account\s*id|^id$/i) };
+      body = grid.filter((r) => r.n > head.n);
+    } else if (grid.length && grid.every((r) => r.cells.slice(1, 4).filter(Boolean).length === 3)) {
+      cols = { board: 1, user: 2, pass: 3, role: -1, status: -1, id: -1 };
+      body = grid;
+      head = null;
+    } else continue;
+    const entries = [];
+    for (const r of body) {
+      const username = r.cells[cols.user];
+      const password = r.cells[cols.pass];
+      if (!username && !password) continue;
+      const board = cols.board > 0 ? r.cells[cols.board] : '';
+      const role = cols.role > 0 ? r.cells[cols.role].toLowerCase() : '';
+      const st = cols.status > 0 ? r.cells[cols.status].toLowerCase() : '';
+      const isAdmin = /admin|master|president/.test(role) || /^(admin|master|iocf|president|all)/i.test(board) || !board;
+      entries.push({
+        label: `row ${r.n}${board ? ` (${board})` : ' (administrator)'}`,
+        ...(isAdmin ? { role: 'admin' } : { board }),
+        username,
+        password,
+        status: /^(inactive|no|blocked|disabled|off|false)$/.test(st) ? 'inactive' : 'active',
+      });
+    }
+    if (entries.length) return { tab: ws.name, entries };
+  }
+  throw new Error('Could not find the credentials in the sheet. It needs a heading row with "Username" and "Password" columns (and "Board" or "Country").');
 }
 
 /**
