@@ -31,7 +31,10 @@ export function activeCount(all, slug, t, exceptId) {
 const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Checks the form a chairman sent. Returns { value } (the series fields) or { error }. */
-export function validateSeries(input, host, boards) {
+const istDay = (t) => new Date(t + IST_MS).toISOString().slice(0, 10);
+const validDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+
+export function validateSeries(input, host, boards, t = Date.now()) {
   const i = input && typeof input === 'object' ? input : {};
   const name = clean(i.name);
   if (name.length < 3 || name.length > 60) return { error: 'Enter the name of the series (3 to 60 characters).' };
@@ -52,6 +55,14 @@ export function validateSeries(input, host, boards) {
   if (stadiums.length !== fixtures.length || fixtures.some((f, k) => !stadiumBoards(type.id, f, host).some((b) => (STADIUMS[b] ?? []).includes(stadiums[k])))) {
     return { error: fixtures.length === 1 ? 'Choose the stadium for the match.' : `Choose a stadium for each of the ${fixtures.length} scheduled matches.` };
   }
+  // every scheduled match also has a date: not in the past, within a year, and never earlier than the match before it
+  const dates = Array.isArray(i.dates) ? i.dates.map(String) : [];
+  const today = istDay(t);
+  const last = istDay(t + 366 * 86400000);
+  if (dates.length !== fixtures.length || dates.some((d) => !validDay(d))) return { error: fixtures.length === 1 ? 'Choose the date of the match.' : `Choose a date for each of the ${fixtures.length} scheduled matches.` };
+  if (dates.some((d) => d < today)) return { error: 'A match date cannot be in the past.' };
+  if (dates.some((d) => d > last)) return { error: 'A match date cannot be more than a year away.' };
+  if (dates.some((d, k) => k > 0 && d < dates[k - 1])) return { error: 'Match dates must be in order: a match cannot be earlier than the one before it.' };
   const bet = Number(i.bet);
   if (!SERIES_CFG.bets.includes(bet)) return { error: 'Choose the bet amount from the list.' };
   if (!SERIES_CFG.formats.includes(i.format)) return { error: 'Choose the format.' };
@@ -60,7 +71,7 @@ export function validateSeries(input, host, boards) {
     clubFormat = SERIES_CFG.clubFormats.find((c) => c.id === i.clubFormat)?.id;
     if (!clubFormat) return { error: 'Choose the club format (overs and wickets).' };
   }
-  return { value: { name, series_type: type.id, opponents, matches, stadiums, bet, format: i.format, club_format: clubFormat } };
+  return { value: { name, series_type: type.id, opponents, matches, stadiums, dates, bet, format: i.format, club_format: clubFormat } };
 }
 
 export function newSeries(fields, host, t) {
@@ -70,7 +81,7 @@ export function newSeries(fields, host, t) {
 /** The series as the browser sees it. */
 export function toApi(s, boards, t) {
   const nameOf = (slug) => boards.find((b) => b.slug === slug)?.name ?? slug;
-  const fixtures = buildFixtures(s.series_type, [s.host, ...s.opponents], s.matches).map((f) => ({ no: f.no, final: f.final, teams: f.teams ? f.teams.map(nameOf) : null, stadium: f.final ? null : s.stadiums[f.no - 1] }));
+  const fixtures = buildFixtures(s.series_type, [s.host, ...s.opponents], s.matches).map((f) => ({ no: f.no, final: f.final, teams: f.teams ? f.teams.map(nameOf) : null, stadium: f.final ? null : s.stadiums[f.no - 1], date: f.final ? null : (s.dates?.[f.no - 1] ?? null) }));
   return {
     id: s.id,
     name: s.name,

@@ -218,7 +218,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         if (!d && method === 'POST') {
           const no = mustOwn();
           if (no) return no;
-          const v = validateSeries(req.body, board.slug, BOARDS);
+          const v = validateSeries(req.body, board.slug, BOARDS, t);
           if (v.error) return fail(400, 'invalid', v.error);
           const all = await store.seriesList();
           if (activeCount(all, board.slug, t) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
@@ -236,7 +236,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (!cur || cur.host !== board.slug) return fail(404, 'not_found', 'Series not found.');
           if (cur.status !== 'pending' || cur.accepted.length > 0) return fail(409, 'locked', 'This series has been accepted and can no longer be edited.');
           if (t > cur.deadline_at) return fail(409, 'expired', 'The deadline for this series has passed.');
-          const v = validateSeries(req.body, board.slug, BOARDS);
+          const v = validateSeries(req.body, board.slug, BOARDS, t);
           if (v.error) return fail(400, 'invalid', v.error);
           const all = await store.seriesList();
           const full = v.value.opponents.map((o) => BOARDS.find((x) => x.slug === o)).find((o) => activeCount(all, o.slug, t, cur.id) >= SERIES_CFG.maxSeriesPerBoard);

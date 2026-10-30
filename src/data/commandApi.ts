@@ -86,6 +86,8 @@ export type SeriesInput = {
   opponents: string[];
   matches: number;
   stadiums: string[];
+  /** One date (YYYY-MM-DD) per scheduled match. */
+  dates: string[];
   bet: number;
   format: string;
   clubFormat?: string;
@@ -99,8 +101,9 @@ export type Series = {
   opponents: { slug: string; name: string; accepted: boolean }[];
   matches: number;
   stadiums: string[];
+  dates: string[];
   /** The full schedule; the final has no teams or stadium yet. */
-  fixtures: { no: number; final: boolean; teams: string[] | null; stadium: string | null }[];
+  fixtures: { no: number; final: boolean; teams: string[] | null; stadium: string | null; date: string | null }[];
   bet: number;
   format: string;
   /** Label such as "6 overs 6 wickets" (Club format only). */

@@ -12,7 +12,12 @@ const ist = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { timeZone:
 const typeLabel = (id: string) => TYPES.find((t) => t.id === id)?.label ?? id;
 const formatLabel = (s: Series) => (s.clubFormat ? `Club · ${s.clubFormat}` : s.format);
 
-const EMPTY: SeriesInput = { name: '', type: '', opponents: [], matches: 0, stadiums: [], bet: 0, format: '' };
+const EMPTY: SeriesInput = { name: '', type: '', opponents: [], matches: 0, stadiums: [], dates: [], bet: 0, format: '' };
+
+/** Today's date in India (YYYY-MM-DD): match dates cannot be earlier. */
+const todayIst = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+const lastDay = () => new Date(Date.now() + 330 * 60000 + 366 * 86400000).toISOString().slice(0, 10);
+const day = (d: string | null) => (d ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }) : 'date to be confirmed');
 
 /**
  * Series Announcement: three tiles — announce a series, accept the series, upcoming series. All rules (the 2-series limit, the
@@ -112,7 +117,6 @@ export function Facts({ s, you, full }: { s: Series; you: string; full?: boolean
     ['Hosted by', s.host.name],
     [s.opponents.length > 1 ? 'Opponents' : 'Opponent', s.opponents.map((o) => (s.status !== 'accepted' && s.opponents.length > 1 ? `${o.name}${o.accepted ? ' ✓' : ''}` : o.name)).join(', ')],
     ['Matches', String(s.matches)],
-    ...(s.type === 'bilateral' ? ([[s.matches === 1 ? 'Stadium' : 'Stadiums', s.stadiums.map((x, i) => (s.matches === 1 ? x : `${i + 1}. ${x}`)).join(s.matches === 1 ? '' : ' · ')]] as [string, string][]) : []),
     ['Bet amount', money(s.bet)],
     ['Format', formatLabel(s)],
     ...(full ? ([['Announced', ist(s.createdAt)]] as [string, string][]) : []),
@@ -126,14 +130,14 @@ export function Facts({ s, you, full }: { s: Series; you: string; full?: boolean
           <dd className="text-bone">{v}</dd>
         </div>
       ))}
-      {s.type !== 'bilateral' && (
+      {(
         <div className="contents">
-          <dt className="text-[11px] font-semibold tracking-[0.18em] text-smoke">SCHEDULE</dt>
+          <dt className="text-[11px] font-semibold tracking-[0.18em] text-smoke">{s.type === 'bilateral' && s.matches === 1 ? 'MATCH' : 'SCHEDULE'}</dt>
           <dd>
             <ol className="space-y-1 text-bone">
               {s.fixtures.map((f) => (
                 <li key={f.no}>
-                  <span className="text-mist">Match {f.no}:</span> {f.final ? <span className="font-semibold">Final <span className="font-normal text-mist">· teams decided after the league matches</span></span> : <>{f.teams!.join(' vs ')} <span className="text-mist">· {f.stadium}</span></>}
+                  <span className="text-mist">Match {f.no}:</span> {f.final ? <span className="font-semibold">Final <span className="font-normal text-mist">· teams decided after the league matches</span></span> : <>{f.teams!.join(' vs ')} <span className="text-mist">· {f.stadium} · {day(f.date)}</span></>}
                 </li>
               ))}
             </ol>
@@ -229,7 +233,7 @@ export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data
         title="How to accept a series"
         steps={[
           <>Series that other boards have announced to <b>{theme.name}</b> are listed below. The Series Announcement page shows how many are waiting.</>,
-          <>Read every detail: the type, the opponents, the number of matches, the schedule and stadiums, the <b>bet amount</b> and the <b>format</b>.</>,
+          <>Read every detail: the type, the opponents, the number of matches, the schedule with each match’s stadium and date, the <b>bet amount</b> and the <b>format</b>.</>,
           <>If you agree, press <b>Accept the Series</b>. The series is then confirmed and appears in Upcoming Series for all boards.</>,
           <>If you do not want it, do nothing: it is declined automatically at the deadline and disappears.</>,
         ]}
@@ -294,7 +298,6 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
   const others = BOARD_THEMES.filter((b) => b.slug !== theme.slug).sort((a, b) => a.name.localeCompare(b.name));
   const set = (patch: Partial<SeriesInput>) => setForm((f) => ({ ...f, ...patch }));
 
-  const blanks = (n: number) => Array.from({ length: n }, () => '');
   const matchOptions = TYPES.find((t) => t.id === form.type)?.matchOptions ?? [];
   // the match list: every opponent must be chosen first, because the teams in each match depend on them
   const teamsReady = need > 0 && form.opponents.length === need && form.opponents.every(Boolean);
@@ -305,10 +308,10 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
 
   const pickType = (id: string) => {
     const t = TYPES.find((x) => x.id === id)!;
-    set({ type: id, opponents: Array.from({ length: t.opponents }, (_, i) => form.opponents[i] ?? ''), matches: t.matchOptions.includes(form.matches) ? form.matches : 0, stadiums: [] });
+    set({ type: id, opponents: Array.from({ length: t.opponents }, (_, i) => form.opponents[i] ?? ''), matches: t.matchOptions.includes(form.matches) ? form.matches : 0, stadiums: [], dates: form.dates });
   };
   const pickOpponent = (i: number, slug: string) => set({ opponents: form.opponents.map((x, j) => (j === i ? slug : x)), stadiums: [] });
-  const pickMatches = (n: number) => set({ matches: n, stadiums: blanks(buildFixtures(form.type, [theme.slug, ...form.opponents], n).filter((f) => !f.final).length) });
+  const pickMatches = (n: number) => set({ matches: n });
   const reset = () => {
     setForm(EMPTY);
     setEditing(null);
@@ -316,14 +319,14 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
   const startEdit = (s: Series) => {
     setEditing(s);
     setMsg(null);
-    setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: s.dates, bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const send = async () => {
     setBusy(true);
     setMsg(null);
-    const body: SeriesInput = { ...form, ...(form.format === 'Club' ? {} : { clubFormat: undefined }) };
+    const body: SeriesInput = { ...form, stadiums: scheduled.map((_, i) => form.stadiums[i] ?? ''), dates: scheduled.map((_, i) => form.dates[i] ?? ''), ...(form.format === 'Club' ? {} : { clubFormat: undefined }) };
     try {
       if (editing) await api.editSeries(theme.slug, editing.id, body);
       else await api.announceSeries(theme.slug, body);
@@ -341,7 +344,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
   };
 
   const ready =
-    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i]) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
+    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] >= todayIst() && (i === 0 || form.dates[i] >= form.dates[i - 1])) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
 
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
@@ -361,7 +364,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
           <><b>Series type</b> — choose Bilateral (you and one opponent), Trilateral (you and two opponents) or Quadrilateral (you and three opponents).</>,
           <><b>Opponent board(s)</b> — pick them from the list of the other 25 boards. A board can only be chosen once.</>,
           <><b>Number of matches</b> — Bilateral: 1, 3, 5 or 7. Trilateral: 4 or 7. Quadrilateral: 7 or 13.</>,
-          <><b>Stadiums</b> — in a bilateral series choose your home stadium for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium for each one from the stadiums of the two teams playing it. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled.</>,
+          <><b>Stadium and date for each match</b> — in a bilateral series choose your home stadium and the date for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium and a date for each one; the stadium comes from the stadiums of the two teams playing it. Dates cannot be in the past, cannot be more than a year away, and must not go backwards from one match to the next. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled, so it has no stadium or date.</>,
           <><b>Bet amount</b> — choose one of ₹1,000 · 2,000 · 3,000 · 4,000 · 5,000 · 10,000 · 20,000 · 50,000.</>,
           <><b>Format</b> — Club, T10, T20, TEST, ODI or L4I. If you choose <b>Club</b>, also choose the club format: 4 overs 4 wickets up to 9 overs 9 wickets.</>,
           <>Press <b>Send</b>. The series goes straight to your opponent’s “Accept the Series” tile.</>,
@@ -419,27 +422,33 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
           {form.matches > 0 && !teamsReady && <p className="mt-5 text-sm text-mist">Choose {need === 1 ? 'the opponent board' : 'all the opponent boards'} to prepare the match schedule.</p>}
           {form.matches > 0 && teamsReady && (
             <div className="mt-5">
-              <p className="text-[11px] font-semibold tracking-[0.2em] text-mist">{form.type === 'bilateral' ? (form.matches === 1 ? 'HOME STADIUM' : 'HOME STADIUM FOR EACH MATCH') : 'MATCH SCHEDULE'}</p>
+              <p className="text-[11px] font-semibold tracking-[0.2em] text-mist">{form.type === 'bilateral' ? (form.matches === 1 ? 'MATCH · HOME STADIUM AND DATE' : 'MATCHES · HOME STADIUM AND DATE FOR EACH') : 'MATCH SCHEDULE · STADIUM AND DATE FOR EACH MATCH'}</p>
               <ol className="mt-2 space-y-3">
                 {schedule.map((f) => (
-                  <li key={f.no} className="grid items-center gap-2 sm:grid-cols-[minmax(0,20rem)_1fr]">
+                  <li key={f.no} className="grid items-center gap-2 lg:grid-cols-[minmax(0,17rem)_1fr_11rem]">
                     <span className="text-sm text-bone">
                       <span className="text-mist">Match {f.no}:</span> {f.final ? <strong>Final</strong> : f.teams!.map(nameOf).join(' vs ')}
                     </span>
                     {f.final ? (
-                      <span className="text-xs text-smoke">Teams decided after the league matches — no stadium needed.</span>
+                      <span className="text-xs text-smoke lg:col-span-2">Teams decided after the league matches — no stadium or date needed.</span>
                     ) : (
-                      <label className="block text-[11px] font-semibold tracking-[0.2em] text-mist">
-                        <span className="sr-only">Stadium for match {f.no}</span>
-                        <select value={form.stadiums[f.no - 1] ?? ''} onChange={(e) => set({ stadiums: scheduled.map((_, i) => (i === f.no - 1 ? e.target.value : (form.stadiums[i] ?? ''))) })} className={`${field} mt-0`}>
-                          <option value="">Stadium:</option>
-                          {stadiumsFor(f).map((x) => (
-                            <option key={x} value={x}>
-                              {x}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <>
+                        <label className="block">
+                          <span className="sr-only">Stadium for match {f.no}</span>
+                          <select value={form.stadiums[f.no - 1] ?? ''} onChange={(e) => set({ stadiums: scheduled.map((_, i) => (i === f.no - 1 ? e.target.value : (form.stadiums[i] ?? ''))) })} className={`${field} mt-0`}>
+                            <option value="">Stadium:</option>
+                            {stadiumsFor(f).map((x) => (
+                              <option key={x} value={x}>
+                                {x}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="sr-only">Date of match {f.no}</span>
+                          <input type="date" value={form.dates[f.no - 1] ?? ''} min={f.no > 1 && form.dates[f.no - 2] && form.dates[f.no - 2] > todayIst() ? form.dates[f.no - 2] : todayIst()} max={lastDay()} onChange={(e) => set({ dates: scheduled.map((_, i) => (i === f.no - 1 ? e.target.value : (form.dates[i] ?? ''))) })} className={`${field} mt-0`} />
+                        </label>
+                      </>
                     )}
                   </li>
                 ))}

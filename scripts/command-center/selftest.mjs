@@ -477,7 +477,11 @@ console.log('\n— Series Announcement —');
   const sCall = (method, p, { body, cookie } = {}) => sh({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: `7.7.${++n % 250}.${n % 250}` });
   const sLogin = async (role, c) => { const r = await sCall('POST', 'login', { body: { role, username: c.username, password: c.password } }); return `iocf_cc=${cookieOf(r)}`; };
   let [cIndia, cAus, cEng, cNz, cPak, cAdm, cKenya] = await Promise.all([sLogin('board', sc('India')), sLogin('board', sc('Australia')), sLogin('board', sc('England')), sLogin('board', sc('New Zealand')), sLogin('board', sc('Pakistan')), sLogin('admin', sCreds.find((c) => c.username === 'iocf.admin')), sLogin('board', sc('Kenya'))]);
-  const good = (o = {}) => ({ name: 'Spring Cup', type: 'bilateral', opponents: ['australia'], matches: 1, stadiums: [STADIUMS.india[0]], bet: 5000, format: 'T20', ...o });
+  const good = (o = {}) => {
+    const r = { name: 'Spring Cup', type: 'bilateral', opponents: ['australia'], matches: 1, stadiums: [STADIUMS.india[0]], bet: 5000, format: 'T20', ...o };
+    if (!o.dates) r.dates = r.stadiums.map((_, i) => new Date(Date.UTC(2026, 5, 20 + i)).toISOString().slice(0, 10)); // one match a day from 20 June
+    return r;
+  };
   const post = (cookie, slug, body) => sCall('POST', `boards/${slug}/series`, { cookie, body });
   const view = async (cookie, slug) => (await sCall('GET', `boards/${slug}/series`, { cookie })).body;
 
@@ -500,6 +504,7 @@ console.log('\n— Series Announcement —');
   check('opponent must be another board from the list', (await bad({ opponents: ['india'] }, /own board/)) && (await bad({ opponents: ['mars'] }, /list/)) && (await bad({ opponents: [] }, /opponent/)));
   check('matches must be 1, 3, 5 or 7', await bad({ matches: 2 }, /matches/));
   check('stadium must be one of the host board\'s own stadiums, one per match', (await bad({ stadiums: [STADIUMS.australia[0]] }, /stadium/i)) && (await bad({ matches: 3, stadiums: [STADIUMS.india[0]] }, /each of the 3/)));
+  check('every scheduled match needs a real date, not in the past, within a year, and in order', (await bad({ dates: [] }, /date/)) && (await bad({ dates: ['2026-02-30'] }, /date/)) && (await bad({ dates: ['soon'] }, /date/)) && (await bad({ dates: ['2026-06-09'] }, /past/)) && (await bad({ dates: ['2027-07-01'] }, /year/)) && (await bad({ matches: 3, stadiums: STADIUMS.india, dates: ['2026-06-22', '2026-06-21', '2026-06-23'] }, /order/)) && (await post(await sLogin('board', sc('Spain')), 'spain', good({ name: 'Same Day', opponents: ['england'], matches: 3, stadiums: Array(3).fill(STADIUMS.spain[0]), dates: ['2026-06-10', '2026-06-10', '2026-06-11'] }))).status === 201);
   check('bet must be from the list', (await bad({ bet: 750 }, /bet/)) && (await bad({ bet: '5000; drop' }, /bet/)));
   check('format must be from the list', await bad({ format: 'T50' }, /format/i));
   check('Club needs one of the six club formats; other formats need none', (await bad({ format: 'Club' }, /club format/)) && (await bad({ format: 'Club', clubFormat: '3-3' }, /club format/)) && (await post(cIndia, 'india', good({ name: 'Club Cup', format: 'Club', clubFormat: '7-7', opponents: ['england'] }))).status === 201);
