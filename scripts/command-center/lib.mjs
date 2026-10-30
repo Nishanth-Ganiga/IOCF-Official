@@ -204,14 +204,14 @@ export async function verifyRegister({ store, home }) {
       problems.push(`${a.account_id} (${a.username}) is not in the register`);
       continue;
     }
-    if (row.Username !== a.username) problems.push(`${a.account_id}: username differs (register ${row.Username}, database ${a.username})`);
+    if (row.Username !== a.username) problems.push(`${a.account_id}: username differs (register ${row.Username}, database ${a.username}) — set online? run:  npm run cc -- record ${a.board_slug ?? a.username}`);
     let ok = false;
     try {
       ok = await verifyPassword(decrypt(key, row['Encrypted Password']), a.password_hash);
     } catch {
       /* unreadable */
     }
-    if (!ok) problems.push(`${a.account_id} (${a.username}): the register's password does not match the database`);
+    if (!ok) problems.push(`${a.account_id} (${a.username}): the register's password does not match the database (set online? run:  npm run cc -- record ${a.board_slug ?? a.username})`);
   }
   for (const row of register) if (!accounts.some((a) => a.account_id === row['Account ID'])) problems.push(`${row['Account ID']} is in the register but not in the database`);
   return { accounts: accounts.length, register: register.length, problems };
@@ -449,4 +449,23 @@ export async function pushAccounts({ from, to }) {
     }
   }
   return { created, updated };
+}
+
+/**
+ * Records a login that was set online (in Board Accounts) in your encrypted register and credentials file. You give the
+ * password you chose; it is checked against the database first, so a mistyped one is refused.
+ */
+export async function recordPassword({ store, home, ref, password }) {
+  const key = readKey(home);
+  const acc = await findAccount(store, ref);
+  if (!acc) throw new Error(`No account matches "${ref}".`);
+  if (!(await verifyPassword(password, acc.password_hash))) throw new Error('That password does not match the one in the database, so nothing was recorded.');
+  const register = readRegister(home);
+  const row = rowFor(key, acc, password);
+  const i = register.findIndex((r) => r['Account ID'] === acc.account_id);
+  if (i >= 0) register[i] = { ...row, 'Created Date': register[i]['Created Date'] };
+  else register.push(row);
+  writeRegister(home, register);
+  if (fs.existsSync(plainPath(home))) await writePlain({ store, home });
+  return { accountId: acc.account_id, board: acc.board_name ?? 'Master Administrator', username: acc.username };
 }

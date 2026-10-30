@@ -89,5 +89,6 @@ export const api = {
   accounts: () => request<AccountsInfo>('GET', '/admin/accounts'),
   setStatus: (accountId: string, status: 'active' | 'inactive') => request<{ ok: true }>('PATCH', `/admin/accounts/${encodeURIComponent(accountId)}`, { status }),
   setChairman: (accountId: string, chairmanName: string) => request<{ ok: true; chairmanName: string | null }>('PATCH', `/admin/accounts/${encodeURIComponent(accountId)}`, { chairmanName }),
+  setBoardLogin: (slug: string, login: { username?: string; password?: string }) => request<{ ok: true; accountId: string; username: string; created: boolean }>('PUT', `/admin/boards/${encodeURIComponent(slug)}/account`, login),
   setModule: (slug: string, moduleId: string, enabled: boolean) => request<{ ok: true; modules: string[] }>('PUT', `/admin/boards/${encodeURIComponent(slug)}/modules`, { moduleId, enabled }),
 };

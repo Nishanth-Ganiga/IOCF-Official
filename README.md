@@ -65,7 +65,7 @@ Real, server-side sign-in. Passwords are stored only as salted scrypt hashes in 
 
 - **Accounts:** `IOCF-ADM-001` (Master Administrator) and `IOCF-BRD-001…026` (one chairman per board). A board account is tied to its board, so a chairman lands on their own dashboard and cannot open another board or any admin function.
 - **Board dashboards:** one reusable dashboard, themed from `src/data/commandCenter/boards.json` (flag, three colours, landscape scene, mascot). Modules are listed in `modules.json`; add a module there and it appears on every dashboard (only modules marked `active` can be switched on).
-- **Administrator:** overview, recent activity, and per-board management — open/preview any dashboard (clearly marked as an administrator preview), activate/deactivate, edit the chairman, switch modules. Passwords are never displayed.
+- **Administrator:** a **Board Accounts** tile to set (or create) the username and password of every board's chairman right in the browser — passwords are hashed on the server and never shown again; saving signs that chairman out everywhere. Plus overview, recent activity, and per-board management — open/preview any dashboard (clearly marked as an administrator preview), activate/deactivate, edit the chairman, switch modules. Passwords are never displayed.
 - **Protection:** rate limiting per IP + username and per IP, account lock after repeated failures, 8-hour sessions, ended immediately on deactivation or reset, CSRF protection, an audit log.
 
 ### Your credentials (already generated)
@@ -86,7 +86,7 @@ npm run cc -- sync-sheet             # creates / updates the accounts, re-encryp
 
 Only your computer reads the sheet. It hashes the passwords and stores the hashes; the website, Vercel and git never see the sheet or its link. Every row is checked first (boards must be among the 26, usernames unique, passwords 8+ characters), and a bad sheet changes nothing. The sheet holds readable passwords, so share it with as few people as possible; after syncing you can delete its Password column if you prefer.
 
-**To change a login:** edit the username, password (12+ characters) or status (`active` / `inactive`) in `IOCF_CREDENTIALS_PLAIN.csv`, save, then run `npm run cc -- import`. It checks every row first, applies the changes, signs those accounts out, and re-encrypts the register.
+**To change a login:** the simplest way is the **Board Accounts** tile in the Command Center (administrator). Your local files do not see changes made there, so `npm run cc -- verify` will flag them and `npm run cc -- record <board>` brings your register back in line. Or edit the username, password (12+ characters) or status (`active` / `inactive`) in `IOCF_CREDENTIALS_PLAIN.csv`, save, then run `npm run cc -- import`. It checks every row first, applies the changes, signs those accounts out, and re-encrypts the register.
 
 ### Putting it online (one-time)
 
@@ -99,6 +99,7 @@ Until then the accounts live in a local store, and `npm run dev` already signs i
 | Command | What it does |
 | --- | --- |
 | `npm run cc -- setup [--show]` | Creates any missing accounts (safe to re-run); `--show` prints the new credentials once |
+| `npm run cc -- record <board or username>` | After setting a login in the browser, note it in your encrypted register and credentials file (you type the password; it is checked first) |
 | `npm run cc -- sync-sheet [--dry-run]` | Applies the logins in your private credentials sheet |
 | `npm run cc -- export` / `import` | Writes the readable credentials file / applies your edits from it |
 | `npm run cc -- reveal <board or username>` / `--all` | Decrypts passwords from the register and prints them on your terminal |
@@ -108,7 +109,7 @@ Until then the accounts live in a local store, and `npm run dev` already signs i
 | `npm run cc -- status [--sync]` | Lists accounts; `--sync` copies online activate/deactivate changes into the register |
 | `npm run cc -- backup --out <folder>` | Encrypted backup of the register (keep `register.key` somewhere separate) |
 
-`npm run cc:test` runs the backend self-test (107 checks) against a temporary store; it never touches your real data.
+`npm run cc:test` runs the backend self-test (130 checks) against a temporary store; it never touches your real data.
 
 **Limits:** this is for the website. The Android/iOS apps load the site from the device, so a cookie-based sign-in will not carry over to them.
 

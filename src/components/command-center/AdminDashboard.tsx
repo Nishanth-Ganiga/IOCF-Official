@@ -19,7 +19,6 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState('');
   const [flash, setFlash] = useState('');
-  const [guide, setGuide] = useState<{ title: string; command: string; note: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +79,28 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
         </p>
       )}
 
+      {/* administrator tools */}
+      <section aria-label="Administrator tools" className="mt-8">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <li>
+            <button type="button" onClick={() => nav('accounts')} className="group block h-full w-full rounded-2xl border border-[#c9a24b]/60 bg-ink-2 p-5 text-left transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]">
+              <span className="flex items-start justify-between gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#c9a24b] text-[#c9a24b]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7" aria-hidden>
+                    <circle cx="8.5" cy="9" r="3.2" />
+                    <path d="M2.5 19c0-3.2 2.7-5.5 6-5.5s6 2.3 6 5.5M15 8h6M15 12h6M15 16h4" />
+                  </svg>
+                </span>
+                <span className="rounded-full border border-[#c9a24b] px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em] text-[#c9a24b]">{overview ? `${overview.totalBoards - overview.boardsWithoutAccount} / ${overview.totalBoards} SET` : 'ADMIN'}</span>
+              </span>
+              <span className="mt-4 block font-display text-2xl tracking-wide text-bone">BOARD ACCOUNTS</span>
+              <span className="mt-1.5 block text-sm leading-relaxed text-mist">Set the username and password for each of the 26 boards.</span>
+              <span className="mt-4 block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">OPEN →</span>
+            </button>
+          </li>
+        </ul>
+      </section>
+
       {/* overview */}
       <section aria-label="Overview" className="mt-8">
         <h2 className="mb-3 text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">OVERVIEW</h2>
@@ -99,7 +120,7 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
         </dl>
         {overview && overview.boardsWithoutAccount > 0 && (
           <p className="mt-3 text-xs text-smoke">
-            {overview.boardsWithoutAccount} board{overview.boardsWithoutAccount === 1 ? ' has' : 's have'} no account yet. Create them from your computer — see “Create” on the board.
+            {overview.boardsWithoutAccount} board{overview.boardsWithoutAccount === 1 ? ' has' : 's have'} no account yet. Set them in Board Accounts.
           </p>
         )}
 
@@ -153,7 +174,7 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
           <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {rows.map((b) => (
               <li key={b.slug}>
-                <BoardCard b={b} busy={busy} nav={nav} onStatus={(s) => run(`s-${b.slug}`, () => api.setStatus(b.accountId!, s), `${b.name} account ${s === 'active' ? 'activated' : 'deactivated'}.`)} onChairman={(name) => run(`c-${b.slug}`, () => api.setChairman(b.accountId!, name), `${b.name} chairman updated.`)} onModule={(id, on) => run(`m-${b.slug}-${id}`, () => api.setModule(b.slug, id, on), `${b.name} modules updated.`)} onGuide={setGuide} />
+                <BoardCard b={b} busy={busy} nav={nav} onStatus={(s) => run(`s-${b.slug}`, () => api.setStatus(b.accountId!, s), `${b.name} account ${s === 'active' ? 'activated' : 'deactivated'}.`)} onChairman={(name) => run(`c-${b.slug}`, () => api.setChairman(b.accountId!, name), `${b.name} chairman updated.`)} onModule={(id, on) => run(`m-${b.slug}-${id}`, () => api.setModule(b.slug, id, on), `${b.name} modules updated.`)} />
               </li>
             ))}
           </ul>
@@ -161,31 +182,14 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
       </section>
 
       <p className="mt-10 text-xs leading-relaxed text-smoke">
-        Passwords are never shown here. Usernames and passwords are created and reset from your own computer with the private credential tool, which also keeps the encrypted credential register up to date.
+        Passwords are never shown here. Set or change a board&apos;s username and password in Board Accounts.
       </p>
 
-      {guide && (
-        <div role="dialog" aria-modal="true" aria-label={guide.title} className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 px-4" onClick={() => setGuide(null)}>
-          <div className="w-full max-w-lg rounded-2xl border border-[#c9a24b]/50 bg-ink-2 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-display text-2xl tracking-wide text-bone">{guide.title.toUpperCase()}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-mist">{guide.note}</p>
-            <pre className="mt-4 overflow-x-auto rounded-lg bg-ink px-4 py-3 text-[13px] text-[#c9a24b]">{guide.command}</pre>
-            <div className="mt-5 flex justify-end gap-3">
-              <button type="button" onClick={() => void navigator.clipboard?.writeText(guide.command)} className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold tracking-[0.2em] text-mist hover:border-[#c9a24b] hover:text-[#c9a24b]">
-                COPY COMMAND
-              </button>
-              <button type="button" autoFocus onClick={() => setGuide(null)} className="rounded-full bg-[#c9a24b] px-5 py-2 text-xs font-bold tracking-[0.2em] text-ink">
-                CLOSE
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-export function BoardCard({ b, busy, nav, onStatus, onChairman, onModule, onGuide }: { b: BoardAccount; busy: string; nav: Nav; onStatus: (s: 'active' | 'inactive') => void; onChairman: (name: string) => void; onModule: (id: string, on: boolean) => void; onGuide: (g: { title: string; command: string; note: string }) => void }) {
+export function BoardCard({ b, busy, nav, onStatus, onChairman, onModule }: { b: BoardAccount; busy: string; nav: Nav; onStatus: (s: 'active' | 'inactive') => void; onChairman: (name: string) => void; onModule: (id: string, on: boolean) => void }) {
   const theme = themeOf(b.slug)!;
   const [editing, setEditing] = useState(false);
   const [mods, setMods] = useState(false);
@@ -261,8 +265,8 @@ export function BoardCard({ b, busy, nav, onStatus, onChairman, onModule, onGuid
           OPEN DASHBOARD
         </button>
         {none ? (
-          <button type="button" onClick={() => onGuide({ title: `Create ${b.name} account`, note: `The ${b.name} chairman account is created from your computer, so its password goes straight into your private encrypted register and is never shown on a web page. This also creates any other missing accounts.`, command: 'npm run cc -- setup' })} className={btn}>
-            CREATE
+          <button type="button" onClick={() => nav('accounts', b.slug)} className={btn}>
+            CREATE LOGIN
           </button>
         ) : (
           <>
@@ -275,8 +279,8 @@ export function BoardCard({ b, busy, nav, onStatus, onChairman, onModule, onGuid
             <button type="button" aria-expanded={mods} onClick={() => setMods((v) => !v)} className={btn}>
               MODULES
             </button>
-            <button type="button" onClick={() => onGuide({ title: `Reset ${b.name} credentials`, note: `Run this on your own computer. It creates a new password (and, with --username, a new username), signs the chairman out everywhere, and updates your encrypted register. The new password is shown only on your terminal.`, command: `npm run cc -- reset ${b.slug}` })} className={btn}>
-              RESET LOGIN
+            <button type="button" onClick={() => nav('accounts', b.slug)} className={btn}>
+              SET LOGIN
             </button>
           </>
         )}

@@ -10,7 +10,7 @@ import ExcelJS from 'exceljs';
 import { createHandler, BOARDS, MODULES } from '../../server/command/handler.mjs';
 import { commandCenterRequestListener } from '../../server/command/http.mjs';
 import { MemoryStore, SupabaseStore } from '../../server/command/store.mjs';
-import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet } from './lib.mjs';
+import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet, recordPassword } from './lib.mjs';
 
 let passed = 0;
 const failures = [];
@@ -132,6 +132,46 @@ check('overview counts inactive boards', (await call('GET', 'admin/overview', { 
 const list = (await call('GET', 'admin/accounts', { cookie: adm.cookie })).body;
 check('account list covers 26 boards and exposes no secrets', list.boards.length === 26 && !/password|hash|scrypt/i.test(JSON.stringify(list)));
 check('chairman information can be updated', (await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { chairmanName: 'New Name' } })).body.chairmanName === 'New Name');
+
+console.log('\n— the administrator sets board logins in the browser —');
+const putLogin = (slug, body, cookie = adm.cookie) => call('PUT', `admin/boards/${slug}/account`, { cookie, body });
+const ugSession = await login('board', cred('Uganda'));
+const set1 = await putLogin('uganda', { username: 'Uganda.Boss', password: 'Brand-New-Pass-1' });
+check('admin sets a new username and password for Uganda', set1.status === 200 && set1.body.username === 'uganda.boss' && set1.body.created === false);
+check('the response contains no password or hash', !/Brand-New|password|hash|scrypt/i.test(JSON.stringify(set1.body)));
+check('the new login works (username is case-insensitive)', (await call('POST', 'login', { body: { role: 'board', username: 'UGANDA.boss', password: 'Brand-New-Pass-1' } })).status === 200);
+check('the old password and old username are dead', (await call('POST', 'login', { body: { role: 'board', username: 'uganda.boss', password: cred('Uganda').password } })).status === 401 && (await call('POST', 'login', { body: { role: 'board', username: cred('Uganda').username, password: 'Brand-New-Pass-1' } })).status === 401);
+check('the chairman was signed out everywhere by the change', (await call('GET', 'me', { cookie: ugSession.cookie })).status === 401);
+const logged = JSON.stringify(await store.listAudit(50));
+check('it is in the audit log, with no password in it', /credentials_set/.test(logged) && !/Brand-New/.test(logged) && !/Brand-New/.test(JSON.stringify(store.data)));
+check('a password alone keeps the username', (await putLogin('uganda', { password: 'Second-New-Pass-2' })).body.username === 'uganda.boss' && (await call('POST', 'login', { body: { role: 'board', username: 'uganda.boss', password: 'Second-New-Pass-2' } })).status === 200);
+check('a username alone keeps the password', (await putLogin('uganda', { username: 'uganda.chair' })).status === 200 && (await call('POST', 'login', { body: { role: 'board', username: 'uganda.chair', password: 'Second-New-Pass-2' } })).status === 200);
+check('a password under 8 characters is refused', (await putLogin('uganda', { password: 'short' })).status === 400);
+check('a bad username is refused', (await putLogin('uganda', { username: 'no spaces!' })).status === 400);
+check('a username already used by another board is refused (409)', (await putLogin('uganda', { username: cred('India').username })).status === 409);
+check('an empty change is refused', (await putLogin('uganda', {})).status === 400);
+check('an unknown board is a 404', (await putLogin('atlantis', { username: 'abc', password: 'long-enough-1' })).status === 404);
+check('a chairman cannot set logins (403), not even their own', (await putLogin('india', { password: 'Hijack-Attempt-1' }, (await login('board', cred('India'))).cookie)).status === 403);
+check('no session cannot set logins (401)', (await putLogin('india', { password: 'Hijack-Attempt-1' }, '')).status === 401);
+check('India\'s real password was not touched by those attempts', (await login('board', cred('India'))).r.status === 200);
+check('after an online change the register is out of date and verify says so', await verifyRegister({ store, home }).then((v) => v.problems.some((x) => /Uganda|uganda/.test(x) && /record/.test(x))));
+check('a wrong password cannot be recorded', await recordPassword({ store, home, ref: 'uganda', password: 'not-it-at-all' }).then(() => false, (e) => /does not match/.test(e.message)));
+await recordPassword({ store, home, ref: 'uganda', password: 'Second-New-Pass-2' });
+check('recording the real password brings the register back in line', (await verifyRegister({ store, home })).problems.length === 0 && reveal({ home, ref: 'uganda' })[0].username === 'uganda.chair' && reveal({ home, ref: 'uganda' })[0].password === 'Second-New-Pass-2');
+// a board with no login yet
+const fresh = new MemoryStore();
+const h3 = createHandler({ store: fresh, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock });
+const adminHash = await (await import('../../server/command/crypto.mjs')).hashPassword('Admin-Pass-2026-x');
+await fresh.create({ account_id: 'IOCF-ADM-001', role: 'admin', board_slug: null, board_name: null, username: 'iocf.admin', password_hash: adminHash, status: 'active' });
+const a3 = await h3({ method: 'POST', path: ['login'], headers: H, body: { role: 'admin', username: 'iocf.admin', password: 'Admin-Pass-2026-x' }, ip: '3.3.3.3' });
+const c3 = `iocf_cc=${cookieOf(a3)}`;
+const put3 = (slug, body) => h3({ method: 'PUT', path: ['admin', 'boards', slug, 'account'], headers: { ...H, cookie: c3 }, body, ip: '3.3.3.3' });
+check('creating needs a password', (await put3('japan', { username: 'japan.chairman' })).status === 400);
+const made = await put3('japan', { username: 'japan.chairman', password: 'Japan-First-Pass-1', chairmanName: 'A. Chairman' });
+check('a board with no login gets one created (ID follows the board order)', made.status === 200 && made.body.created === true && made.body.accountId === 'IOCF-BRD-023');
+check('and the chairman can sign in to the Japan board', (await h3({ method: 'POST', path: ['login'], headers: H, body: { role: 'board', username: 'japan.chairman', password: 'Japan-First-Pass-1' }, ip: '3.3.3.4' })).body.user.board === 'japan');
+const lst = (await h3({ method: 'GET', path: ['admin', 'accounts'], headers: { ...H, cookie: c3 }, body: null, ip: '3.3.3.3' })).body;
+check('the account list now shows Japan as active and the others as having no login', lst.boards.find((b) => b.slug === 'japan').status === 'active' && lst.boards.filter((b) => b.status === 'none').length === 25 && lst.boards.find((b) => b.slug === 'japan').chairmanName === 'A. Chairman');
 
 console.log('\n— 7/8. modules —');
 const nz2 = await login('board', cred('New Zealand'));

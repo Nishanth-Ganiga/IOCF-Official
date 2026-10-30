@@ -4,6 +4,7 @@ import { api, ApiError, type CcUser, type Role } from '../data/commandApi';
 import type { ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import AdminDashboard from './command-center/AdminDashboard';
+import BoardAccounts from './command-center/BoardAccounts';
 import BoardView from './command-center/BoardView';
 import { EASE } from './fx';
 import { IocfHeader, LOGO } from './IocfHome';
@@ -80,14 +81,21 @@ export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: 
       />
     );
   else if (user.role === 'admin') {
-    body = parts[0] === 'board' && parts[1] ? <BoardView slug={parts[1]} moduleId={parts[2]} user={user} nav={navigate} /> : <AdminDashboard user={user} nav={navigate} onSignOut={signOut} />;
+    body =
+      parts[0] === 'board' && parts[1] ? (
+        <BoardView slug={parts[1]} moduleId={parts[2]} user={user} nav={navigate} />
+      ) : parts[0] === 'accounts' ? (
+        <BoardAccounts focus={parts[1]} nav={navigate} />
+      ) : (
+        <AdminDashboard user={user} nav={navigate} onSignOut={signOut} />
+      );
   } else {
     // a board account always lands on its own board; a link to another board is passed to the server, which refuses it
     const other = parts[0] === 'board';
     body = <BoardView slug={other ? (parts[1] ?? '') : (user.board ?? '')} moduleId={other ? parts[2] : parts[0]} user={user} nav={navigate} />;
   }
 
-  const showBar = user && !(user.role === 'admin' && !(parts[0] === 'board' && parts[1]));
+  const showBar = user && !(user.role === 'admin' && parts[0] !== 'accounts' && !(parts[0] === 'board' && parts[1]));
   return (
     <>
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />

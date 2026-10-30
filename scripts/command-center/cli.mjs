@@ -7,6 +7,7 @@
 //   npm run cc -- sync-sheet [--dry-run]   read the logins from your private credentials sheet and apply them (creates / updates)
 //   npm run cc -- reveal [board|--all]     show passwords from the encrypted register on the terminal
 //   npm run cc -- reset <board|username>   new random password for one account (add --username <new> to rename it too)
+//   npm run cc -- record <board|username>  note a login you set in the browser (Board Accounts) in your register
 //   npm run cc -- push                     upload the accounts to Supabase (once it is set up)
 //   npm run cc -- verify                   check that the register and the database agree
 //   npm run cc -- status [--sync]          list the accounts (no secrets); --sync copies online status changes into the register
@@ -16,7 +17,8 @@
 // the accounts and the credentials file before Supabase exists, then `push`.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { applyCredentials, backup, homeDir, importPlain, parseCredentialSheet, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
+import readline from 'node:readline';
+import { applyCredentials, backup, homeDir, importPlain, parseCredentialSheet, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, recordPassword, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
 import { FileStore, SupabaseStore } from '../../server/command/store.mjs';
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -44,6 +46,24 @@ function store() {
   return localStore();
 }
 const where = () => (remote() ? 'Supabase' : `your local store (${localStorePath(home)})`);
+
+
+/** Asks for a secret on the terminal without showing what is typed. */
+function askHidden(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const write = rl._writeToOutput;
+    rl.question(question, (answer) => {
+      rl._writeToOutput = write;
+      rl.close();
+      process.stdout.write('\n');
+      resolve(answer);
+    });
+    rl._writeToOutput = (text) => {
+      if (text.startsWith(question)) process.stdout.write(question);
+    };
+  });
+}
 
 function chairmen() {
   try {
@@ -106,6 +126,10 @@ try {
         console.log(`\nDone. The encrypted register and your credentials file are updated${remote() ? '' : '. These accounts are in your local store; run  npm run cc -- push  to put them online'}.`);
       }
     }
+  } else if (cmd === 'record') {
+    if (!positional[0]) throw new Error('Say which account: npm run cc -- record <board or username>');
+    const r = await recordPassword({ store: store(), home, ref: positional[0], password: await askHidden('The password you set online for that account (not shown): ') });
+    console.log(`Recorded the login for ${r.board} (${r.username}) in your encrypted register and credentials file.`);
   } else if (cmd === 'export') {
     console.log(`Written: ${await writePlain({ store: store(), home })}\nOpen it, edit usernames / passwords / status if you wish, then run:  npm run cc -- import`);
   } else if (cmd === 'import') {
@@ -135,7 +159,7 @@ try {
     if (!out) throw new Error('Say where: npm run cc -- backup --out <folder>');
     console.log(`Encrypted backup written to ${backup({ home, outDir: path.resolve(out) })}\nKeep the key (${path.join(home, 'register.key')}) somewhere separate and safe: the backup cannot be read without it.`);
   } else {
-    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 16).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 17).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
   }
 } catch (err) {
   console.error('✗', err instanceof Error ? err.message : err);

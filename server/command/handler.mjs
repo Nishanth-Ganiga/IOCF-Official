@@ -9,6 +9,7 @@
 //   GET  /admin/accounts                admin only
 //   PATCH /admin/accounts/:accountId    admin only   { status?, chairmanName? }
 //   PUT  /admin/boards/:slug/modules    admin only   { moduleId, enabled }
+//   PUT  /admin/boards/:slug/account    admin only   { username?, password?, chairmanName? }  creates or updates the board's login
 //   GET  /admin/audit                   admin only
 //
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
@@ -42,6 +43,7 @@ const ACTIONS = {
   board_preview: 'Board dashboard previewed',
   account_created: 'Account created',
   credentials_reset: 'Credentials reset',
+  credentials_set: 'Login set by administrator',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -248,6 +250,46 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           await store.setModuleOverride(board.slug, mod.id, enabled);
           await audit('modules_changed', who, board.slug, req, { moduleId: mod.id, enabled });
           return json(200, { ok: true, modules: await enabledModules(board.slug) });
+        }
+
+        // sets (or first creates) a board's login. The password is hashed here and never returned or logged.
+        if (b === 'boards' && c && req.path[3] === 'account' && method === 'PUT') {
+          const board = BOARDS.find((x) => x.slug === c);
+          if (!board) return fail(404, 'not_found', 'Board not found.');
+          const { username, password, chairmanName } = req.body ?? {};
+          const existing = (await store.list()).find((x) => x.board_slug === board.slug);
+          const name = typeof username === 'string' ? username.trim().toLowerCase() : existing?.username;
+          if (!name || !/^[a-z0-9._-]{3,60}$/.test(name)) return fail(400, 'bad_request', 'A username uses 3–60 letters, digits, dots, dashes or underscores.');
+          if (password !== undefined && (typeof password !== 'string' || password.length < 8 || password.length > 100)) return fail(400, 'bad_request', 'A password needs 8–100 characters.');
+          if (!existing && !password) return fail(400, 'bad_request', 'Choose a password for the new login.');
+          if (chairmanName !== undefined && (typeof chairmanName !== 'string' || chairmanName.length > 120)) return fail(400, 'bad_request', 'Chairman name must be text of up to 120 characters.');
+          const clash = await store.findByUsername(name);
+          if (clash && clash.board_slug !== board.slug) return fail(409, 'username_taken', 'That username is already used by another account.');
+
+          if (!existing) {
+            const made = await store.create({
+              account_id: `IOCF-BRD-${String(BOARDS.indexOf(board) + 1).padStart(3, '0')}`,
+              role: 'board',
+              board_slug: board.slug,
+              board_name: board.name,
+              username: name,
+              password_hash: await hashPassword(password),
+              status: 'active',
+              chairman_name: typeof chairmanName === 'string' ? chairmanName.trim() || null : null,
+            });
+            await audit('account_created', who, made.account_id, req);
+            return json(200, { ok: true, accountId: made.account_id, username: made.username, status: made.status, created: true });
+          }
+          const patch = {};
+          if (name !== existing.username) patch.username = name;
+          if (password) patch.password_hash = await hashPassword(password);
+          if (chairmanName !== undefined) patch.chairman_name = chairmanName.trim() || null;
+          if (!Object.keys(patch).length) return fail(400, 'bad_request', 'Nothing to change.');
+          if (patch.username || patch.password_hash) Object.assign(patch, { session_version: existing.session_version + 1, failed_logins: 0, locked_until: null }); // signs the chairman out everywhere
+          const row = await store.update(existing.id, patch);
+          if (patch.username || patch.password_hash) await audit('credentials_set', who, existing.account_id, req, { username: Boolean(patch.username), password: Boolean(patch.password_hash) });
+          if ('chairman_name' in patch) await audit('chairman_updated', who, existing.account_id, req);
+          return json(200, { ok: true, accountId: row.account_id, username: row.username, status: row.status, created: false });
         }
 
         if (b === 'audit' && method === 'GET') {
