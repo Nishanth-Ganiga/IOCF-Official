@@ -83,7 +83,7 @@ export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: 
   else if (user.role === 'admin') {
     body =
       parts[0] === 'board' && parts[1] ? (
-        <BoardView slug={parts[1]} moduleId={parts[2]} user={user} nav={navigate} />
+        <BoardView slug={parts[1]} moduleId={parts[2]} sub={parts[3]} user={user} nav={navigate} />
       ) : parts[0] === 'accounts' ? (
         <BoardAccounts focus={parts[1]} nav={navigate} />
       ) : (
@@ -92,7 +92,7 @@ export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: 
   } else {
     // a board account always lands on its own board; a link to another board is passed to the server, which refuses it
     const other = parts[0] === 'board';
-    body = <BoardView slug={other ? (parts[1] ?? '') : (user.board ?? '')} moduleId={other ? parts[2] : parts[0]} user={user} nav={navigate} />;
+    body = <BoardView slug={other ? (parts[1] ?? '') : (user.board ?? '')} moduleId={other ? parts[2] : parts[0]} sub={other ? parts[3] : parts[1]} user={user} nav={navigate} />;
   }
 
   const showBar = user && !(user.role === 'admin' && parts[0] !== 'accounts' && !(parts[0] === 'board' && parts[1]));

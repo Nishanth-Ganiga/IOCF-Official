@@ -1,0 +1,139 @@
+{
+ "bangladesh": [
+  "Padma - Meghna Cricket Arena",
+  "Hilsha Heritage Stadium",
+  "Karnaphuli Cricket Park",
+  "Mango Fortress Stadium",
+  "Sylhet Jewel Stadium",
+  "Sundarbans Cricket Fortress",
+  "Sonar Bangla Cricket Arena",
+  "Sands cox's Bazar"
+ ],
+ "england": [
+  "Lords International Stadium",
+  "WGG International Stadium",
+  "The Rose Bowl",
+  "Trent Bridge",
+  "The Oval",
+  "Old Trafford",
+  "Yorkshire Headingley",
+  "Somerset County Ground"
+ ],
+ "new-zealand": [
+  "Eden Park",
+  "Sky International Stadium",
+  "Sovereign Crown Arena",
+  "Thunder Dome",
+  "Inferno Bay Arena",
+  "Ironhold Park",
+  "Alpine Crown Arena",
+  "Titan Bay Coliseum"
+ ],
+ "west-indies": [
+  "ABD Georgetown Cricket Arena",
+  "Malayalipuram International Stadium",
+  "Bridgetown Royal Cricket Arena",
+  "Basseterre Patriots Cricket Ground",
+  "Kingstown Volcano Cricket Stdaium",
+  "Port of Spain Knights Arena",
+  "Kingston Kings Cricket Stadium",
+  "St. John's Falcon Cricket Arena",
+  "Hayley Matthews IS"
+ ],
+ "qatar": [
+  "West End Park",
+  "Lusail International Stadium",
+  "Doha International Stadium"
+ ],
+ "netherlands": [
+  "Maya Stadium Amsterdam",
+  "Dutch Cricket Arena Hague",
+  "Zubeen Garg Heritage Stadium",
+  "Pragjyotish Ground",
+  "Nilachal Khel Pathar"
+ ],
+ "australia": [
+  "Melbourne Cricket Ground",
+  "Sydney Cricket Ground",
+  "Optus Stadium",
+  "Adelaide Oval",
+  "Sydney Show Ground",
+  "Marvel Cricket Stadium",
+  "The Gabba",
+  "Ninja Stadium Hobart"
+ ],
+ "south-africa": [
+  "Newlands Cricket Stadium",
+  "Wanderers International Stadium"
+ ],
+ "india": [
+  "Eternal Coliseum",
+  "Sree Padmanaba Cricket Park",
+  "Jannat Wadi"
+ ],
+ "italy": [
+  "Vivian Richards Cricket Ground",
+  "Ovale di Carteria"
+ ],
+ "pakistan": [
+  "Pindi International Stadium",
+  "Karachi International Stadium",
+  "Gaddafi Stadium Lahore",
+  "Multan International Stadium",
+  "Hyder Cricket Stadium",
+  "Quetta Cricket Arena",
+  "Karakoram Stadium Skardu",
+  "Khyber Stadium Peshawar"
+ ],
+ "scotland": [
+  "Grange Cricket Stadium",
+  "Seven Oaks Stadium",
+  "Scotba Cricket Stadium",
+  "K.M Cricket Arena"
+ ],
+ "sri-lanka": [
+  "Colombo International Stadium",
+  "Kandy International Stadium"
+ ],
+ "uae": [
+  "Dubai International Stadium"
+ ],
+ "canada": [
+  "CAA Centre"
+ ],
+ "zimbabwe": [
+  "Mosi-oa-Tunya ICS",
+  "Lachit Borphukan Cricket Stadium"
+ ],
+ "ireland": [
+  "The Village",
+  "Pareed Storziwal Sports Arena"
+ ],
+ "uganda": [
+  "Mandela National Stadium"
+ ],
+ "usa": [
+  "New York Cricket Stadium"
+ ],
+ "papua-new-guinea": [
+  "Royal PNG signature stadium",
+  "Young Monk"
+ ],
+ "nepal": [
+  "Thribhuvan University ICS",
+  "Gautam Buddha ICS"
+ ],
+ "portugal": [
+  "Lisbon Cricket Ground"
+ ],
+ "japan": [
+  "Sano International Cricket Stadium"
+ ],
+ "kenya": [],
+ "afghanistan": [
+  "Afghan National Sports Complex"
+ ],
+ "spain": [
+  "Estadi de Cricket"
+ ]
+}

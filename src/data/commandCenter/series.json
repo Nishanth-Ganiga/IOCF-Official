@@ -1,0 +1,19 @@
+{
+ "types": [
+  { "id": "bilateral", "label": "Bilateral", "opponents": 1 },
+  { "id": "trilateral", "label": "Trilateral", "opponents": 2 },
+  { "id": "quadrilateral", "label": "Quadrilateral", "opponents": 3 }
+ ],
+ "matches": [1, 3, 5, 7],
+ "bets": [1000, 2000, 3000, 4000, 5000, 10000, 20000, 50000],
+ "formats": ["Club", "T10", "T20", "TEST", "ODI", "L4I"],
+ "clubFormats": [
+  { "id": "4-4", "label": "4 overs 4 wickets" },
+  { "id": "5-5", "label": "5 overs 5 wickets" },
+  { "id": "6-6", "label": "6 overs 6 wickets" },
+  { "id": "7-7", "label": "7 overs 7 wickets" },
+  { "id": "8-8", "label": "8 overs 8 wickets" },
+  { "id": "9-9", "label": "9 overs 9 wickets" }
+ ],
+ "maxSeriesPerBoard": 2
+}

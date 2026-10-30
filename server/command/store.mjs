@@ -16,6 +16,26 @@ export class MemoryStore {
   }
   async persist() {}
 
+  async seriesList() {
+    return (this.data.series ??= []).map((x) => ({ ...x }));
+  }
+  async seriesGet(id) {
+    const r = (this.data.series ??= []).find((x) => x.id === id);
+    return r ? { ...r } : null;
+  }
+  async seriesInsert(row) {
+    (this.data.series ??= []).push({ ...row });
+    await this.persist();
+    return { ...row };
+  }
+  async seriesUpdate(id, patch) {
+    const r = (this.data.series ??= []).find((x) => x.id === id);
+    if (!r) return null;
+    Object.assign(r, patch);
+    await this.persist();
+    return { ...r };
+  }
+
   async findByUsername(username) {
     const u = String(username ?? '').trim().toLowerCase();
     return this.data.accounts.find((a) => a.username === u) ?? null;
@@ -95,6 +115,34 @@ export class FileStore extends MemoryStore {
   }
 }
 
+/** The series table (command_series, see series.sql) through Supabase REST. Shared by the full store and the single-table store. */
+export class SeriesRest {
+  constructor({ url, serviceKey, fetchImpl = fetch, table = 'command_series' }) {
+    this.url = `${url.replace(/\/$/, '')}/rest/v1/${table}`;
+    this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
+    this.fetch = fetchImpl;
+  }
+  async req(method, query, body, extra = {}) {
+    const res = await this.fetch(`${this.url}${query}`, { method, headers: { ...this.headers, ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (res.status === 404) throw Object.assign(new Error('The series table does not exist yet.'), { code: 'series_missing' });
+    if (!res.ok) throw new Error(`Database request failed (${res.status})`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
+  async seriesList() {
+    return (await this.req('GET', '?select=*&order=created_at.desc')) ?? [];
+  }
+  async seriesGet(id) {
+    return (await this.req('GET', `?select=*&id=eq.${encodeURIComponent(id)}&limit=1`))?.[0] ?? null;
+  }
+  async seriesInsert(row) {
+    return (await this.req('POST', '', row, { prefer: 'return=representation' }))[0];
+  }
+  async seriesUpdate(id, patch) {
+    return (await this.req('PATCH', `?id=eq.${encodeURIComponent(id)}`, patch, { prefer: 'return=representation' }))?.[0] ?? null;
+  }
+}
+
 /** Postgres via Supabase REST. Only the server holds the service-role key; the tables allow no other access (schema.sql). */
 export class SupabaseStore {
   constructor({ url, serviceKey, fetchImpl = fetch }) {
@@ -102,7 +150,12 @@ export class SupabaseStore {
     // Supabase's newer keys (sb_secret_…) are not JWTs and go in the apikey header alone; the older service_role JWT goes in both
     this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
     this.fetch = fetchImpl;
+    this.seriesRest = new SeriesRest({ url, serviceKey, fetchImpl });
   }
+  seriesList() { return this.seriesRest.seriesList(); }
+  seriesGet(id) { return this.seriesRest.seriesGet(id); }
+  seriesInsert(row) { return this.seriesRest.seriesInsert(row); }
+  seriesUpdate(id, patch) { return this.seriesRest.seriesUpdate(id, patch); }
   async req(method, pathAndQuery, body, extra = {}) {
     const res = await this.fetch(`${this.base}/${pathAndQuery}`, {
       method,

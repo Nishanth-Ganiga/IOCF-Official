@@ -11,10 +11,15 @@
 //   PUT  /admin/boards/:slug/modules    admin only   { moduleId, enabled }
 //   PUT  /admin/boards/:slug/account    admin only   { username?, password?, chairmanName? }  creates or updates the board's login
 //   GET  /admin/audit                   admin only
+//   GET  /boards/:slug/series           the board's announced series, invitations and the upcoming list
+//   POST /boards/:slug/series           announce a series (own board)
+//   PUT  /boards/:slug/series/:id       edit it until an opponent accepts
+//   POST /boards/:slug/series/:id/accept  accept an invitation (own board)
 //
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { SERIES_CFG, STADIUMS, activeCount, isLive, newSeries, toApi, validateSeries } from './series.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -44,6 +49,9 @@ const ACTIONS = {
   account_created: 'Account created',
   credentials_reset: 'Credentials reset',
   credentials_set: 'Login set by administrator',
+  series_announced: 'Series announced',
+  series_edited: 'Series edited',
+  series_accepted: 'Series accepted',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -138,7 +146,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
   // ---- routes ----
   return async function handle(req) {
     try {
-      const [a, b, c] = req.path;
+      const [a, b, c, d, e] = req.path;
       const method = req.method;
 
       if (method !== 'GET' && method !== 'HEAD') {
@@ -178,6 +186,78 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           chairmanName: account?.chairman_name ?? null,
           modules: await enabledModules(board.slug),
         });
+      }
+
+      if (a === 'boards' && b && c === 'series') {
+        const board = BOARDS.find((x) => x.slug === b);
+        if (!board) return fail(404, 'not_found', 'Board not found.');
+        const own = who.role === 'board' && who.board_slug === board.slug;
+        if (!own && who.role !== 'admin') return fail(403, 'forbidden', 'You do not have access to this board.');
+        const t = now();
+        const mustOwn = () => (own ? null : fail(403, 'forbidden', 'Only the board chairman can do this.'));
+        const limitMsg = (name, you) => `${you ? 'Your board is' : `${name} is`} already in ${SERIES_CFG.maxSeriesPerBoard} series. A board can play at most ${SERIES_CFG.maxSeriesPerBoard} series at a time.`;
+
+        if (!d && method === 'GET') {
+          const all = await store.seriesList();
+          const live = all.filter((x) => isLive(x, t));
+          return json(200, {
+            limit: SERIES_CFG.maxSeriesPerBoard,
+            active: activeCount(all, board.slug, t),
+            canAct: own,
+            stadiums: STADIUMS[board.slug] ?? [],
+            announced: live.filter((x) => x.host === board.slug).map((x) => toApi(x, BOARDS, t)),
+            invitations: live.filter((x) => x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).map((x) => toApi(x, BOARDS, t)),
+            upcoming: live.filter((x) => x.status === 'accepted').sort((p, q) => (q.accepted_at ?? 0) - (p.accepted_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
+          });
+        }
+
+        if (!d && method === 'POST') {
+          const no = mustOwn();
+          if (no) return no;
+          const v = validateSeries(req.body, board.slug, BOARDS);
+          if (v.error) return fail(400, 'invalid', v.error);
+          const all = await store.seriesList();
+          if (activeCount(all, board.slug, t) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
+          const full = v.value.opponents.map((o) => BOARDS.find((x) => x.slug === o)).find((o) => activeCount(all, o.slug, t) >= SERIES_CFG.maxSeriesPerBoard);
+          if (full) return fail(409, 'series_limit', limitMsg(full.name, false));
+          const row = await store.seriesInsert(newSeries(v.value, board.slug, t));
+          await audit('series_announced', who, row.id, req, { name: row.name });
+          return json(201, { series: toApi(row, BOARDS, t) });
+        }
+
+        if (d && !e && method === 'PUT') {
+          const no = mustOwn();
+          if (no) return no;
+          const cur = await store.seriesGet(d);
+          if (!cur || cur.host !== board.slug) return fail(404, 'not_found', 'Series not found.');
+          if (cur.status !== 'pending' || cur.accepted.length > 0) return fail(409, 'locked', 'This series has been accepted and can no longer be edited.');
+          if (t > cur.deadline_at) return fail(409, 'expired', 'The deadline for this series has passed.');
+          const v = validateSeries(req.body, board.slug, BOARDS);
+          if (v.error) return fail(400, 'invalid', v.error);
+          const all = await store.seriesList();
+          const full = v.value.opponents.map((o) => BOARDS.find((x) => x.slug === o)).find((o) => activeCount(all, o.slug, t, cur.id) >= SERIES_CFG.maxSeriesPerBoard);
+          if (full) return fail(409, 'series_limit', limitMsg(full.name, false));
+          const row = await store.seriesUpdate(cur.id, { ...v.value, updated_at: t });
+          await audit('series_edited', who, cur.id, req, { name: row.name });
+          return json(200, { series: toApi(row, BOARDS, t) });
+        }
+
+        if (d && e === 'accept' && method === 'POST') {
+          const no = mustOwn();
+          if (no) return no;
+          const cur = await store.seriesGet(d);
+          if (!cur || !cur.opponents.includes(board.slug)) return fail(404, 'not_found', 'Series not found.');
+          if (cur.accepted.includes(board.slug)) return fail(409, 'already', 'You have already accepted this series.');
+          if (!isLive(cur, t) || cur.status !== 'pending') return fail(409, 'expired', 'The deadline for this series has passed, so it was declined.');
+          const all = await store.seriesList();
+          if (activeCount(all, board.slug, t, cur.id) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
+          const accepted = [...cur.accepted, board.slug];
+          const done = cur.opponents.every((o) => accepted.includes(o));
+          const row = await store.seriesUpdate(cur.id, { accepted, status: done ? 'accepted' : 'pending', accepted_at: done ? t : null, updated_at: t });
+          await audit('series_accepted', who, cur.id, req, { name: row.name });
+          return json(200, { series: toApi(row, BOARDS, t) });
+        }
+        return fail(404, 'not_found', 'Not found.');
       }
 
       if (a === 'admin') {
@@ -303,6 +383,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       return fail(404, 'not_found', 'Not found.');
     } catch (err) {
       if (err?.code === 'not_configured') return fail(503, 'not_configured', 'The Command Center database has no logins yet. Import the logins file into Supabase first.');
+      if (err?.code === 'series_missing') return fail(503, 'series_missing', 'Series Announcement is not set up yet: the series table has not been created in Supabase.');
       if (err?.code === 'unsupported') return fail(501, 'unsupported', err.message);
       console.error('[command-center]', err instanceof Error ? err.message : err);
       return fail(500, 'server_error', 'Something went wrong. Please try again.');

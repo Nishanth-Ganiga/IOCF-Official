@@ -10,6 +10,7 @@ import ExcelJS from 'exceljs';
 import { createHandler, BOARDS, MODULES } from '../../server/command/handler.mjs';
 import { commandCenterRequestListener } from '../../server/command/http.mjs';
 import { MemoryStore, SupabaseStore } from '../../server/command/store.mjs';
+import { STADIUMS, SERIES_CFG, deadlineFor } from '../../server/command/series.mjs';
 import { AutoStore, LoginTableStore } from '../../server/command/loginTable.mjs';
 import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet, recordPassword, inspectSupabase, hostingValues, SUPABASE_URL_FOR, describeKey, adminFromRows, readTable, buildSetupSql, buildOverviewCsv, writeLoginsCsv, LOGINS_COLUMNS, LOGINS_CSV_FILE, shortPassword } from './lib.mjs';
 
@@ -325,7 +326,7 @@ check('admin table: the imported admin can sign in, and an e-mail style user id 
 const sqlAccounts = [...(await store.list())];
 sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x; --" };
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
-check('setup SQL: creates the 4 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 4 && (setupSql.match(/enable row level security/g) ?? []).length === 4);
+check('setup SQL: creates the 5 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 5 && (setupSql.match(/enable row level security/g) ?? []).length === 5);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
 check('setup SQL: has all 27 accounts and 26 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 27 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 26);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
@@ -462,6 +463,105 @@ check('if the four command_* tables exist, the site uses those instead', (await 
 check('login attempts are limited here too (in memory)', await (async () => { let last; for (let i = 0; i < 6; i++) last = await ot_tcall('POST', 'login', { body: { role: 'board', username: 'portugal.boss', password: 'bad' + i }, ip: '66.6.6.6' }); return last.status === 429; })());
 check('shortPassword never makes an all-digit or all-letter password', Array.from({ length: 2000 }, () => shortPassword()).every((p) => /[A-Za-z]/.test(p) && /\d/.test(p)));
 fs.rmSync(ot_home3, { recursive: true, force: true });
+
+console.log('\n— Series Announcement —');
+{
+  const sStore = new MemoryStore();
+  const sHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-series-'));
+  const sCreds = await provision({ store: sStore, home: sHome });
+  const sc = (b) => sCreds.find((c) => c.board === b);
+  let t0 = Date.UTC(2026, 5, 10, 8, 0, 0); // 13:30 IST
+  const sh = createHandler({ store: sStore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => t0 });
+  let n = 0;
+  const sCall = (method, p, { body, cookie } = {}) => sh({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: `7.7.${++n % 250}.${n % 250}` });
+  const sLogin = async (role, c) => { const r = await sCall('POST', 'login', { body: { role, username: c.username, password: c.password } }); return `iocf_cc=${cookieOf(r)}`; };
+  let [cIndia, cAus, cEng, cNz, cPak, cAdm, cKenya] = await Promise.all([sLogin('board', sc('India')), sLogin('board', sc('Australia')), sLogin('board', sc('England')), sLogin('board', sc('New Zealand')), sLogin('board', sc('Pakistan')), sLogin('admin', sCreds.find((c) => c.username === 'iocf.admin')), sLogin('board', sc('Kenya'))]);
+  const good = (o = {}) => ({ name: 'Spring Cup', type: 'bilateral', opponents: ['australia'], matches: 1, stadiums: [STADIUMS.india[0]], bet: 5000, format: 'T20', ...o });
+  const post = (cookie, slug, body) => sCall('POST', `boards/${slug}/series`, { cookie, body });
+  const view = async (cookie, slug) => (await sCall('GET', `boards/${slug}/series`, { cookie })).body;
+
+  check('the stadium list covers the boards (India has its own, Kenya none)', STADIUMS.india.length === 3 && STADIUMS.kenya.length === 0 && Object.keys(STADIUMS).length === 26 && STADIUMS.india.every((x) => !/^\d/.test(x)));
+  check('series options are as specified', SERIES_CFG.matches.join() === '1,3,5,7' && SERIES_CFG.bets.join() === '1000,2000,3000,4000,5000,10000,20000,50000' && SERIES_CFG.formats.join() === 'Club,T10,T20,TEST,ODI,L4I' && SERIES_CFG.clubFormats.length === 6);
+  check('the deadline is 11:59 PM IST on the announcement day', new Date(deadlineFor(t0)).toISOString() === '2026-06-10T18:29:59.999Z' && new Date(deadlineFor(Date.UTC(2026, 5, 10, 19, 0))).toISOString() === '2026-06-11T18:29:59.999Z');
+
+  const r1 = await post(cIndia, 'india', good());
+  const sid = r1.body.series?.id;
+  check('a chairman announces a bilateral series (1 match, home stadium)', r1.status === 201 && r1.body.series.status === 'pending' && r1.body.series.editable && r1.body.series.host.slug === 'india');
+  const au = await view(cAus, 'australia');
+  check('it appears in the opponent board\'s Accept tile and in nobody else\'s', au.invitations.map((x) => x.id).join() === sid && (await view(cEng, 'england')).invitations.length === 0 && (await view(cIndia, 'india')).invitations.length === 0);
+  check('the host sees it under Announced, not as an invitation', (await view(cIndia, 'india')).announced.map((x) => x.id).join() === sid);
+  check('it is not in the upcoming list until accepted', (await view(cEng, 'england')).upcoming.length === 0);
+
+  // validation
+  const bad = async (o, re) => { const r = await post(cIndia, 'india', good(o)); return r.status === 400 && re.test(r.body.error.message); };
+  check('name is required', await bad({ name: ' ' }, /name/i));
+  check('type must be one of the three', await bad({ type: 'penta' }, /type/i));
+  check('opponent must be another board from the list', (await bad({ opponents: ['india'] }, /own board/)) && (await bad({ opponents: ['mars'] }, /list/)) && (await bad({ opponents: [] }, /opponent/)));
+  check('matches must be 1, 3, 5 or 7', await bad({ matches: 2 }, /matches/));
+  check('stadium must be one of the host board\'s own stadiums, one per match', (await bad({ stadiums: [STADIUMS.australia[0]] }, /stadium/i)) && (await bad({ matches: 3, stadiums: [STADIUMS.india[0]] }, /each of the 3/)));
+  check('bet must be from the list', (await bad({ bet: 750 }, /bet/)) && (await bad({ bet: '5000; drop' }, /bet/)));
+  check('format must be from the list', await bad({ format: 'T50' }, /format/i));
+  check('Club needs one of the six club formats; other formats need none', (await bad({ format: 'Club' }, /club format/)) && (await bad({ format: 'Club', clubFormat: '3-3' }, /club format/)) && (await post(cIndia, 'india', good({ name: 'Club Cup', format: 'Club', clubFormat: '7-7', opponents: ['england'] }))).status === 201);
+  check('a board with no registered stadium cannot announce', (await post(cKenya, 'kenya', good({ stadiums: ['x'] }))).status === 400);
+
+  // permissions
+  check('a board cannot announce for another board', (await post(cAus, 'india', good())).status === 403);
+  check('the administrator can look but not announce', (await sCall('GET', 'boards/india/series', { cookie: cAdm })).status === 200 && (await post(cAdm, 'india', good())).status === 403);
+  check('a board cannot read another board\'s series page', (await sCall('GET', 'boards/india/series', { cookie: cAus })).status === 403);
+  check('series need a signed-in session', (await sCall('GET', 'boards/india/series')).status === 401);
+
+  // limit: India now hosts 2 open series
+  check('a board can be in at most 2 series', (await post(cIndia, 'india', good({ name: 'Third', opponents: ['pakistan'] }))).status === 409);
+  check('…and an opponent already in 2 cannot be invited', await (async () => { await post(cPak, 'pakistan', good({ name: 'Pak One', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); await post(cPak, 'pakistan', good({ name: 'Pak Two', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); const r0 = await post(cPak, 'pakistan', good({ name: 'Pak One', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); console.log('DBG', r0.status, JSON.stringify(r0.body).slice(0,200)); const r = await post(cEng, 'england', good({ name: 'Eng One', opponents: ['pakistan'], stadiums: [STADIUMS.england[0]] })); return r.status === 409 && /Pakistan is already in 2/.test(r.body.error.message); })());
+  check('…and a board with 2 open series cannot accept a third', (await sCall('POST', `boards/new-zealand/series/${(await view(cNz, 'new-zealand')).invitations[0].id}/accept`, { cookie: cNz })).status === 200 && (await sCall('POST', `boards/new-zealand/series/${(await view(cNz, 'new-zealand')).invitations[0].id}/accept`, { cookie: cNz })).status === 200 && (await post(cNz, 'new-zealand', good({ name: 'Nz One', opponents: ['england'], stadiums: [STADIUMS['new-zealand'][0]] }))).status === 409);
+
+  // editing before acceptance
+  const ed = await sCall('PUT', `boards/india/series/${sid}`, { cookie: cIndia, body: good({ name: 'Spring Cup Edited', matches: 3, stadiums: STADIUMS.india, bet: 10000, format: 'ODI' }) });
+  check('the host can edit before the opponent accepts', ed.status === 200 && ed.body.series.name === 'Spring Cup Edited' && ed.body.series.matches === 3 && ed.body.series.bet === 10000);
+  check('the edited series is what the opponent sees', (await view(cAus, 'australia')).invitations[0].name === 'Spring Cup Edited');
+  check('the deadline does not move when a series is edited', ed.body.series.deadlineAt === deadlineFor(t0));
+  check('only the host can edit', (await sCall('PUT', `boards/india/series/${sid}`, { cookie: cAus, body: good() })).status === 403 && (await sCall('PUT', `boards/australia/series/${sid}`, { cookie: cAus, body: good({ opponents: ['india'], stadiums: [STADIUMS.australia[0]] }) })).status === 404);
+
+  // acceptance
+  check('only the invited board can accept', (await sCall('POST', `boards/england/series/${sid}/accept`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/india/series/${sid}/accept`, { cookie: cIndia })).status === 404 && (await sCall('POST', `boards/australia/series/${sid}/accept`, { cookie: cAdm })).status === 403);
+  const acc = await sCall('POST', `boards/australia/series/${sid}/accept`, { cookie: cAus });
+  check('the opponent accepts and the series is confirmed', acc.status === 200 && acc.body.series.status === 'accepted');
+  const up = await view(cEng, 'england');
+  check('an accepted series shows in every board\'s upcoming list', up.upcoming.some((x) => x.id === sid) && up.upcoming.find((x) => x.id === sid).stadiums.length === 3 && (await view(cKenya, 'kenya')).upcoming.some((x) => x.id === sid) && (await view(cAus, 'australia')).invitations.length === 0);
+  check('after acceptance it can no longer be edited', (await sCall('PUT', `boards/india/series/${sid}`, { cookie: cIndia, body: good() })).status === 409);
+  check('accepting twice is refused', (await sCall('POST', `boards/australia/series/${sid}/accept`, { cookie: cAus })).status === 409);
+
+  // deadline
+  const lateSeries = (await view(cIndia, 'india')).announced.find((x) => x.status === 'pending');
+  t0 = deadlineFor(t0) + 1; // one millisecond after 11:59 PM IST
+  [cIndia, cAus, cEng, cNz, cPak, cAdm, cKenya] = await Promise.all([sLogin('board', sc('India')), sLogin('board', sc('Australia')), sLogin('board', sc('England')), sLogin('board', sc('New Zealand')), sLogin('board', sc('Pakistan')), sLogin('admin', sCreds.find((c) => c.username === 'iocf.admin')), sLogin('board', sc('Kenya'))]); // the 8-hour sessions have ended
+  check('after the deadline an unaccepted series disappears for everyone', (await view(cIndia, 'india')).announced.every((x) => x.id !== lateSeries.id) && (await view(cEng, 'england')).invitations.length === 0 && (await view(cPak, 'pakistan')).invitations.every((x) => x.id !== lateSeries.id));
+  check('…it cannot be accepted or edited any more', (await sCall('POST', `boards/england/series/${lateSeries.id}/accept`, { cookie: cEng })).status === 409 && (await sCall('PUT', `boards/india/series/${lateSeries.id}`, { cookie: cIndia, body: good({ opponents: ['england'] }) })).status === 409);
+  check('…and it no longer counts toward the 2-series limit', (await view(cIndia, 'india')).active === 1);
+  check('accepted series stay in the upcoming list after the deadline', (await view(cEng, 'england')).upcoming.some((x) => x.id === sid));
+
+  // trilateral: every opponent must accept
+  t0 += 60_000;
+  const tri = await post(cIndia, 'india', good({ name: 'Tri Series', type: 'trilateral', opponents: ['england', 'australia'], matches: 5, stadiums: Array(5).fill(STADIUMS.india[1]) }));
+  check('a trilateral series needs two opponents', tri.status === 201 && (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england'] }))).status === 400);
+  const tid = tri.body.series.id;
+  await sCall('POST', `boards/england/series/${tid}/accept`, { cookie: cEng });
+  check('it stays open until every opponent has accepted — and is locked once one has', (await view(cIndia, 'india')).announced.find((x) => x.id === tid).status === 'pending' && !(await view(cIndia, 'india')).announced.find((x) => x.id === tid).editable && (await view(cEng, 'england')).invitations.every((x) => x.id !== tid));
+  await sCall('POST', `boards/australia/series/${tid}/accept`, { cookie: cAus });
+  check('…then it becomes upcoming', (await view(cPak, 'pakistan')).upcoming.some((x) => x.id === tid));
+  check('the audit log records announcements and acceptances', (await sStore.listAudit(200)).some((x) => x.action === 'series_announced') && (await sStore.listAudit(200)).some((x) => x.action === 'series_accepted'));
+  fs.rmSync(sHome, { recursive: true, force: true });
+}
+
+// with only the logins table imported and no series table yet, the API says so instead of crashing
+{
+  const sbNoSeries = makeSupabaseSeries();
+  function makeSupabaseSeries() { return async (url) => ({ ok: false, status: 404, text: async () => '{}', json: async () => ({}) }); }
+  const st = new SupabaseStore({ url: 'https://x.supabase.co', serviceKey: 'sb_secret_x', fetchImpl: sbNoSeries });
+  let code = null;
+  try { await st.seriesList(); } catch (e) { code = e.code; }
+  check('a missing series table is reported as such (503 from the API)', code === 'series_missing');
+}
 
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();

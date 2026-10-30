@@ -80,6 +80,38 @@ export type BoardAccount = {
 
 export type AccountsInfo = { admin: { accountId: string; username: string; status: string; lastLoginAt: string | null } | null; boards: BoardAccount[] };
 
+export type SeriesInput = {
+  name: string;
+  type: string;
+  opponents: string[];
+  matches: number;
+  stadiums: string[];
+  bet: number;
+  format: string;
+  clubFormat?: string;
+};
+
+export type Series = {
+  id: string;
+  name: string;
+  type: string;
+  host: { slug: string; name: string };
+  opponents: { slug: string; name: string; accepted: boolean }[];
+  matches: number;
+  stadiums: string[];
+  bet: number;
+  format: string;
+  /** Label such as "6 overs 6 wickets" (Club format only). */
+  clubFormat: string | null;
+  status: 'pending' | 'accepted';
+  deadlineAt: number;
+  createdAt: number;
+  acceptedAt: number | null;
+  editable: boolean;
+};
+
+export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; announced: Series[]; invitations: Series[]; upcoming: Series[] };
+
 export const api = {
   me: () => request<{ user: CcUser }>('GET', '/me').then((r) => r.user),
   login: (role: Role, username: string, password: string) => request<{ user: CcUser }>('POST', '/login', { role, username, password }).then((r) => r.user),
@@ -91,4 +123,8 @@ export const api = {
   setChairman: (accountId: string, chairmanName: string) => request<{ ok: true; chairmanName: string | null }>('PATCH', `/admin/accounts/${encodeURIComponent(accountId)}`, { chairmanName }),
   setBoardLogin: (slug: string, login: { username?: string; password?: string }) => request<{ ok: true; accountId: string; username: string; created: boolean }>('PUT', `/admin/boards/${encodeURIComponent(slug)}/account`, login),
   setModule: (slug: string, moduleId: string, enabled: boolean) => request<{ ok: true; modules: string[] }>('PUT', `/admin/boards/${encodeURIComponent(slug)}/modules`, { moduleId, enabled }),
+  series: (slug: string) => request<SeriesOverview>('GET', `/boards/${encodeURIComponent(slug)}/series`),
+  announceSeries: (slug: string, input: SeriesInput) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series`, input),
+  editSeries: (slug: string, id: string, input: SeriesInput) => request<{ series: Series }>('PUT', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}`, input),
+  acceptSeries: (slug: string, id: string) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/accept`),
 };

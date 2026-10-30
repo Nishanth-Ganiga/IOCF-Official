@@ -12,6 +12,7 @@
     "league-stats": "node scripts/build-league-stats.mjs",
     "tournament-stats": "node scripts/build-tournament-stats.mjs",
     "cc": "node scripts/command-center/cli.mjs",
+    "stadiums": "node scripts/build-stadiums.mjs",
     "cc:test": "node scripts/command-center/selftest.mjs",
     "sync": "node scripts/sync-sheet.mjs",
     "serve": "node server/serve.mjs",

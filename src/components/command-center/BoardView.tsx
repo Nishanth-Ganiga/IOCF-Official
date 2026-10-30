@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { api, ApiError, type CcUser, type DashboardInfo } from '../../data/commandApi';
 import { MODULES, paletteOf, themeOf, type BoardTheme, type ModuleDef } from '../../data/commandCenter/boardConfig';
@@ -6,11 +6,12 @@ import { store } from '../../data/store';
 import { EASE } from '../fx';
 import Mascot, { BoardFlag, ModuleIcon } from './Mascot';
 import SceneBackground from './SceneBackground';
+import SeriesAnnouncement from './SeriesAnnouncement';
 
 type Nav = (...parts: string[]) => void;
 
 /** One board's area. The server decides whether this account may see it; a refusal is shown as "no access". */
-export default function BoardView({ slug, moduleId, user, nav }: { slug: string; moduleId?: string; user: CcUser; nav: Nav }) {
+export default function BoardView({ slug, moduleId, sub, user, nav }: { slug: string; moduleId?: string; sub?: string; user: CcUser; nav: Nav }) {
   const theme = themeOf(slug);
   const [state, setState] = useState<{ data?: DashboardInfo; error?: ApiError }>({});
   const admin = user.role === 'admin';
@@ -55,7 +56,9 @@ export default function BoardView({ slug, moduleId, user, nav }: { slug: string;
         )}
 
         {moduleId ? (
-          <ModulePage theme={theme} module={module} enabled={state.data.modules.includes(moduleId)} onBack={() => nav(...base)} />
+          <ModulePage theme={theme} module={module} enabled={state.data.modules.includes(moduleId)} onBack={() => nav(...base)}>
+            {module?.id === 'series-announcement' && <SeriesAnnouncement theme={theme} sub={sub} admin={admin} go={(next) => nav(...base, moduleId, ...(next ? [next] : []))} />}
+          </ModulePage>
         ) : (
           <Dashboard theme={theme} data={state.data} chairman={chairman} onOpen={(id) => nav(...base, id)} />
         )}
@@ -148,7 +151,7 @@ function ModuleTile({ theme, m, enabled, onOpen }: { theme: BoardTheme; m: Modul
 }
 
 /** Where a module opens. The module's own functionality arrives in a later phase; this is its page and its navigation. */
-export function ModulePage({ theme, module, enabled, onBack }: { theme: BoardTheme; module?: ModuleDef; enabled: boolean; onBack: () => void }) {
+export function ModulePage({ theme, module, enabled, onBack, children }: { theme: BoardTheme; module?: ModuleDef; enabled: boolean; onBack: () => void; children?: ReactNode }) {
   const pal = paletteOf(theme);
   const ok = module && module.status === 'active' && enabled;
   return (
@@ -174,10 +177,12 @@ export function ModulePage({ theme, module, enabled, onBack }: { theme: BoardThe
             </div>
           </header>
           <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-bone/80">{module.description}</p>
-          <div className="mt-8 rounded-2xl border border-white/10 bg-black/60 px-6 py-14 text-center backdrop-blur-sm">
-            <p className="text-sm text-bone">The {module.title} page is ready and waiting for its content.</p>
-            <p className="mt-1 text-xs text-smoke">Its features will appear here in the next phase.</p>
-          </div>
+          {children || (
+            <div className="mt-8 rounded-2xl border border-white/10 bg-black/60 px-6 py-14 text-center backdrop-blur-sm">
+              <p className="text-sm text-bone">The {module.title} page is ready and waiting for its content.</p>
+              <p className="mt-1 text-xs text-smoke">Its features will appear here in the next phase.</p>
+            </div>
+          )}
         </>
       )}
     </div>
