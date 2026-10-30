@@ -19,7 +19,7 @@ After the opening sequence, visitors choose who is watching. Each profile is its
 | **Umpire** | Umpires and their match assignments |
 | **Franchise Leagues** | League → Season → Team → Player, with results, awards, standings and full player statistics |
 | **Major Tournaments** | T20 World Cup, Euro Cup, Oceania Cup, Asia Cup, Associate Nations Cup, ODI World Cup, World Test Championship, Emerging Talents League, Women's Global League and IOCF Lone Warrior — each with a 2026 edition: every table from its sheet, plus Board → Player statistics |
-| **Command Center** | A locked profile: Admin Login (full federation control) and Board Login (individual board access). Sections are added after sign-in |
+| **Command Center** | Locked. 27 real accounts (1 Master Administrator, 26 board chairmen), signed in on the server. Admin Login opens the administrator dashboard; Board Login opens that chairman's own themed board dashboard |
 
 Global search and favourites work across profiles.
 
@@ -59,6 +59,49 @@ Boards, players, umpires, franchise leagues, tournaments and the Main-page text 
 
 **Major Tournament tabs** are found by name (`T20 World Cup 2026`, `IOCF EURO CUP`, `IOCF OCEANIA CUP`, `IOCF ASIA CUP`, `IOCF Associate Nations Cup`, `IOCF ODI WORLD CUP`, `WTC Matches`, `Emerging Talent League`, `Womens Global League`, `IOCF Lone Warrior`), or by a close match such as "Asia Cup 2026". Each tab is shown as the tables it contains, so no importer change is needed when rows or tables are added. The list is in `scripts/sync/tournaments.mjs`.
 
+## Command Center (locked profile)
+
+Real, server-side sign-in. Passwords are stored only as salted scrypt hashes in a Postgres database (Supabase); a signed-in browser holds nothing but an HttpOnly session cookie, and **every** permission is checked on the server for every request.
+
+- **Accounts:** `IOCF-ADM-001` (Master Administrator) and `IOCF-BRD-001…026` (one chairman per board). A board account is tied to its board, so a chairman lands on their own dashboard and cannot open another board or any admin function.
+- **Board dashboards:** one reusable dashboard, themed from `src/data/commandCenter/boards.json` (flag, three colours, landscape scene, mascot). Modules are listed in `modules.json`; add a module there and it appears on every dashboard (only modules marked `active` can be switched on).
+- **Administrator:** overview, recent activity, and per-board management — open/preview any dashboard (clearly marked as an administrator preview), activate/deactivate, edit the chairman, switch modules. Passwords are never displayed.
+- **Protection:** rate limiting per IP + username and per IP, account lock after repeated failures, 8-hour sessions, ended immediately on deactivation or reset, CSRF protection, an audit log.
+
+### Your credentials (already generated)
+
+`npm run cc -- setup` creates the Master Administrator and the 26 chairman accounts and writes two files into `~/.iocf-command-center/` — **outside the project**, both private (mode `600`), never committed, never deployed, never reachable from the website:
+
+- `IOCF_CREDENTIALS_PLAIN.csv` — **readable**: Account ID, Account Type, Board Name, Username, Password, Account Status. Open it, hand out the logins, and edit it whenever you want (below).
+- `IOCF_PRIVATE_CREDENTIAL_REGISTER.csv` — the encrypted master register (Account ID, Account Type, Board Name, Username, **Encrypted Password**, Account Status, Created Date, Last Updated Date); `register.key` is its AES-256 key.
+
+Delete the readable file when you no longer need it (`npm run cc -- export` rebuilds it from the register at any time).
+
+**To change a login:** edit the username, password (12+ characters) or status (`active` / `inactive`) in `IOCF_CREDENTIALS_PLAIN.csv`, save, then run `npm run cc -- import`. It checks every row first, applies the changes, signs those accounts out, and re-encrypts the register.
+
+### Putting it online (one-time)
+
+1. Create a [Supabase](https://supabase.com) project and run `server/command/schema.sql` in its SQL editor. (Row Level Security is on with no policies, so only the server's service-role key can reach the tables.)
+2. Add three **secret** environment variables to the hosting (Vercel → Settings → Environment Variables; for Fly: `fly secrets set …`): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `COMMAND_CENTER_SESSION_SECRET` (any long random string, e.g. `openssl rand -base64 48`).
+3. On your computer, put the first two values in `~/.iocf-command-center/env` (mode `600`), then run `npm run cc -- push`. Your existing usernames and passwords now work on the live site. Check with `npm run cc -- verify`.
+
+Until then the accounts live in a local store, and `npm run dev` already signs in against it.
+
+| Command | What it does |
+| --- | --- |
+| `npm run cc -- setup [--show]` | Creates any missing accounts (safe to re-run); `--show` prints the new credentials once |
+| `npm run cc -- export` / `import` | Writes the readable credentials file / applies your edits from it |
+| `npm run cc -- reveal <board or username>` / `--all` | Decrypts passwords from the register and prints them on your terminal |
+| `npm run cc -- reset <board or username> [--username <new>]` | New random password for one account (ends its sessions, updates both files) |
+| `npm run cc -- push` | Uploads the accounts to Supabase |
+| `npm run cc -- verify` | Checks that the register and the database agree |
+| `npm run cc -- status [--sync]` | Lists accounts; `--sync` copies online activate/deactivate changes into the register |
+| `npm run cc -- backup --out <folder>` | Encrypted backup of the register (keep `register.key` somewhere separate) |
+
+`npm run cc:test` runs the backend self-test (89 checks) against a temporary store; it never touches your real data.
+
+**Limits:** this is for the website. The Android/iOS apps load the site from the device, so a cookie-based sign-in will not carry over to them.
+
 ## Player statistics (CSV exports)
 
 Per-player statistics come from STUMPS scorer exports kept in `All Assests/`:
@@ -84,7 +127,6 @@ Run the command again after replacing or adding a CSV. Related settings:
 | Player photos | `src/data/photos.ts` |
 | The list of profiles, their names and colours | `viewerProfiles` in `src/data/portfolio.ts` |
 | Major Tournament descriptions | `ABOUT` in `src/components/IocfTournaments.tsx` |
-| Command Center logins | `npm run account -- admin <username>` or `npm run account -- board <username> "<Board name>"`, then paste the printed line into `src/data/accounts.ts`. Only a salted hash is stored. This lock runs in the browser: it keeps casual visitors out, but is not server-side security |
 | The IOCF logo | Replace `IOCF logo.png` (transparent PNG), then `npm run images` (rebuilds the WebP logos and the share image in `public/assets/`) |
 
 ## Project layout
@@ -98,14 +140,18 @@ src/
     leagues.ts, leagueStats.ts, franchise.ts      franchise leagues and their statistics
     tournaments.ts, tournamentStats.ts            major tournaments and their statistics
     social.ts, photos.ts, chairmanContent.ts      Instagram links, photos, chairman text
+    commandCenter/           the 26 board themes, the module list, colour helpers
+    commandApi.ts            client for the Command Center API
   components/
     IocfHome / IocfChairmen / IocfBoards / IocfPlayers /
-    IocfUmpires / IocfLeagues / IocfTournaments   one file per profile
+    IocfUmpires / IocfLeagues / IocfTournaments / IocfCommandCenter   one file per profile
+    command-center/          board dashboard, administrator dashboard, landscapes, mascots
     GlobalSearch, MyIocf, SiteFooter, ProfileSelector, OpeningSequence
 scripts/
   sync/                      turns the sheet into the dataset (boards, leagues, tournaments, …)
   build-*.mjs                images, chairman portraits, league and tournament statistics
 api/iocf-data.mjs            Vercel function: the sheet as JSON
+api/command/[...path].mjs    Vercel function: the Command Center API (logic in server/command/)
 server/serve.mjs             Fly.io / Docker server with scheduled re-sync
 android/, ios/               Capacitor projects
 ```

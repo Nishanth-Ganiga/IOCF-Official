@@ -1,0 +1,44 @@
+[
+ {
+  "id": "series-announcement",
+  "title": "Series Announcement",
+  "description": "Manage and view official series announcements for your board.",
+  "status": "active",
+  "icon": "announcement"
+ },
+ {
+  "id": "fixtures",
+  "title": "Fixtures & Scheduling",
+  "description": "Plan and track your board's matches and series dates.",
+  "status": "coming-soon",
+  "icon": "calendar"
+ },
+ {
+  "id": "squads",
+  "title": "Squad Management",
+  "description": "Build and maintain your national squads.",
+  "status": "coming-soon",
+  "icon": "squad"
+ },
+ {
+  "id": "registrations",
+  "title": "Player Registrations",
+  "description": "Register and verify players for your board.",
+  "status": "coming-soon",
+  "icon": "register"
+ },
+ {
+  "id": "credits",
+  "title": "Board Credits & Finance",
+  "description": "Review your board's credits and transactions.",
+  "status": "coming-soon",
+  "icon": "credits"
+ },
+ {
+  "id": "reports",
+  "title": "Reports & Documents",
+  "description": "Download official reports and board documents.",
+  "status": "coming-soon",
+  "icon": "report"
+ }
+]

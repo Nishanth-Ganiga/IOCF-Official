@@ -1,0 +1,392 @@
+[
+ {
+  "slug": "bangladesh",
+  "name": "Bangladesh",
+  "flag": "🇧🇩",
+  "colors": {
+   "primary": "#006a4e",
+   "secondary": "#f42a41",
+   "accent": "#e8c547"
+  },
+  "scene": "delta",
+  "mascot": {
+   "name": "Royal Bengal Tiger",
+   "emoji": "🐅"
+  }
+ },
+ {
+  "slug": "england",
+  "name": "England",
+  "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "colors": {
+   "primary": "#cf142b",
+   "secondary": "#1d2a5b",
+   "accent": "#f4f4f5"
+  },
+  "scene": "hills",
+  "mascot": {
+   "name": "Three Lions",
+   "emoji": "🦁"
+  }
+ },
+ {
+  "slug": "new-zealand",
+  "name": "New Zealand",
+  "flag": "🇳🇿",
+  "colors": {
+   "primary": "#111114",
+   "secondary": "#f4f4f5",
+   "accent": "#b8bec7"
+  },
+  "scene": "alps",
+  "mascot": {
+   "name": "Kiwi",
+   "image": "kiwi"
+  }
+ },
+ {
+  "slug": "west-indies",
+  "name": "West Indies",
+  "flag": null,
+  "colors": {
+   "primary": "#7b0f2e",
+   "secondary": "#f5c518",
+   "accent": "#4aa3df"
+  },
+  "scene": "coast",
+  "mascot": {
+   "name": "Palm & Sun",
+   "emoji": "🌴"
+  }
+ },
+ {
+  "slug": "qatar",
+  "name": "Qatar",
+  "flag": "🇶🇦",
+  "colors": {
+   "primary": "#8a1538",
+   "secondary": "#f4f4f5",
+   "accent": "#d9c28f"
+  },
+  "scene": "desert",
+  "mascot": {
+   "name": "Arabian Oryx",
+   "emoji": "🦌"
+  }
+ },
+ {
+  "slug": "netherlands",
+  "name": "Netherlands",
+  "flag": "🇳🇱",
+  "colors": {
+   "primary": "#f36c21",
+   "secondary": "#21468b",
+   "accent": "#ae1c28"
+  },
+  "scene": "polder",
+  "mascot": {
+   "name": "Dutch Lion",
+   "emoji": "🦁"
+  }
+ },
+ {
+  "slug": "australia",
+  "name": "Australia",
+  "flag": "🇦🇺",
+  "colors": {
+   "primary": "#00843d",
+   "secondary": "#ffcd00",
+   "accent": "#12306b"
+  },
+  "scene": "outback",
+  "mascot": {
+   "name": "Kangaroo",
+   "emoji": "🦘"
+  }
+ },
+ {
+  "slug": "south-africa",
+  "name": "South Africa",
+  "flag": "🇿🇦",
+  "colors": {
+   "primary": "#007a4d",
+   "secondary": "#ffb612",
+   "accent": "#de3831"
+  },
+  "scene": "tableau",
+  "mascot": {
+   "name": "Springbok",
+   "emoji": "🦌"
+  }
+ },
+ {
+  "slug": "india",
+  "name": "India",
+  "flag": "🇮🇳",
+  "colors": {
+   "primary": "#ff9933",
+   "secondary": "#138808",
+   "accent": "#1c3f94"
+  },
+  "scene": "palace",
+  "mascot": {
+   "name": "Bengal Tiger",
+   "emoji": "🐅"
+  }
+ },
+ {
+  "slug": "italy",
+  "name": "Italy",
+  "flag": "🇮🇹",
+  "colors": {
+   "primary": "#0c4da2",
+   "secondary": "#1f9d5b",
+   "accent": "#cd212a"
+  },
+  "scene": "historic",
+  "mascot": {
+   "name": "Capitoline Wolf",
+   "emoji": "🐺"
+  }
+ },
+ {
+  "slug": "pakistan",
+  "name": "Pakistan",
+  "flag": "🇵🇰",
+  "colors": {
+   "primary": "#01411c",
+   "secondary": "#f4f4f5",
+   "accent": "#2e9e5b"
+  },
+  "scene": "alps",
+  "mascot": {
+   "name": "Markhor",
+   "emoji": "🐐"
+  }
+ },
+ {
+  "slug": "scotland",
+  "name": "Scotland",
+  "flag": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+  "colors": {
+   "primary": "#0065bd",
+   "secondary": "#f4f4f5",
+   "accent": "#8e6bbf"
+  },
+  "scene": "highlands",
+  "mascot": {
+   "name": "Unicorn",
+   "emoji": "🦄"
+  }
+ },
+ {
+  "slug": "sri-lanka",
+  "name": "Sri Lanka",
+  "flag": "🇱🇰",
+  "colors": {
+   "primary": "#8d1b3d",
+   "secondary": "#ffbe29",
+   "accent": "#1b7f78"
+  },
+  "scene": "coast",
+  "mascot": {
+   "name": "Elephant",
+   "emoji": "🐘"
+  }
+ },
+ {
+  "slug": "uae",
+  "name": "UAE",
+  "flag": "🇦🇪",
+  "colors": {
+   "primary": "#00732f",
+   "secondary": "#e4002b",
+   "accent": "#d9d9d9"
+  },
+  "scene": "skyline",
+  "mascot": {
+   "name": "Falcon",
+   "emoji": "🦅"
+  }
+ },
+ {
+  "slug": "canada",
+  "name": "Canada",
+  "flag": "🇨🇦",
+  "colors": {
+   "primary": "#d52b1e",
+   "secondary": "#f4f4f5",
+   "accent": "#8e1912"
+  },
+  "scene": "forest",
+  "mascot": {
+   "name": "Beaver",
+   "emoji": "🦫"
+  }
+ },
+ {
+  "slug": "zimbabwe",
+  "name": "Zimbabwe",
+  "flag": "🇿🇼",
+  "colors": {
+   "primary": "#00692a",
+   "secondary": "#ffd200",
+   "accent": "#d40000"
+  },
+  "scene": "savanna",
+  "mascot": {
+   "name": "Zimbabwe Bird",
+   "emoji": "🐦"
+  }
+ },
+ {
+  "slug": "ireland",
+  "name": "Ireland",
+  "flag": "🇮🇪",
+  "colors": {
+   "primary": "#169b62",
+   "secondary": "#ff883e",
+   "accent": "#f4f4f5"
+  },
+  "scene": "hills",
+  "mascot": {
+   "name": "Shamrock",
+   "emoji": "☘️"
+  }
+ },
+ {
+  "slug": "uganda",
+  "name": "Uganda",
+  "flag": "🇺🇬",
+  "colors": {
+   "primary": "#1a1a1a",
+   "secondary": "#fcdc04",
+   "accent": "#d90000"
+  },
+  "scene": "savanna",
+  "mascot": {
+   "name": "Crested Crane",
+   "emoji": "🦢"
+  }
+ },
+ {
+  "slug": "usa",
+  "name": "USA",
+  "flag": "🇺🇸",
+  "colors": {
+   "primary": "#0a3161",
+   "secondary": "#b31942",
+   "accent": "#f4f4f5"
+  },
+  "scene": "skyline",
+  "mascot": {
+   "name": "Bald Eagle",
+   "emoji": "🦅"
+  }
+ },
+ {
+  "slug": "papua-new-guinea",
+  "name": "Papua New Guinea",
+  "flag": "🇵🇬",
+  "colors": {
+   "primary": "#16161a",
+   "secondary": "#ce1126",
+   "accent": "#fcd116"
+  },
+  "scene": "forest",
+  "mascot": {
+   "name": "Bird of Paradise",
+   "emoji": "🦜"
+  }
+ },
+ {
+  "slug": "nepal",
+  "name": "Nepal",
+  "flag": "🇳🇵",
+  "colors": {
+   "primary": "#dc143c",
+   "secondary": "#003893",
+   "accent": "#f4f4f5"
+  },
+  "scene": "alps",
+  "mascot": {
+   "name": "Himalayan Monal",
+   "emoji": "🏔️"
+  }
+ },
+ {
+  "slug": "portugal",
+  "name": "Portugal",
+  "flag": "🇵🇹",
+  "colors": {
+   "primary": "#006600",
+   "secondary": "#d4202a",
+   "accent": "#ffcc29"
+  },
+  "scene": "coast",
+  "mascot": {
+   "name": "Barcelos Rooster",
+   "emoji": "🐓"
+  }
+ },
+ {
+  "slug": "japan",
+  "name": "Japan",
+  "flag": "🇯🇵",
+  "colors": {
+   "primary": "#bc002d",
+   "secondary": "#f4f4f5",
+   "accent": "#1b2a49"
+  },
+  "scene": "fuji",
+  "mascot": {
+   "name": "Red-crowned Crane",
+   "emoji": "🦢"
+  }
+ },
+ {
+  "slug": "kenya",
+  "name": "Kenya",
+  "flag": "🇰🇪",
+  "colors": {
+   "primary": "#101010",
+   "secondary": "#bb0000",
+   "accent": "#1e8a3c"
+  },
+  "scene": "savanna",
+  "mascot": {
+   "name": "Lion",
+   "emoji": "🦁"
+  }
+ },
+ {
+  "slug": "afghanistan",
+  "name": "Afghanistan",
+  "flag": "🇦🇫",
+  "colors": {
+   "primary": "#111111",
+   "secondary": "#d32011",
+   "accent": "#18a24a"
+  },
+  "scene": "alps",
+  "mascot": {
+   "name": "Snow Leopard",
+   "emoji": "🐆"
+  }
+ },
+ {
+  "slug": "spain",
+  "name": "Spain",
+  "flag": "🇪🇸",
+  "colors": {
+   "primary": "#aa151b",
+   "secondary": "#f1bf00",
+   "accent": "#f4f4f5"
+  },
+  "scene": "historic",
+  "mascot": {
+   "name": "Bull",
+   "emoji": "🐂"
+  }
+ }
+]

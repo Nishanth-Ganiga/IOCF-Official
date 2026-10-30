@@ -6,11 +6,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { loadConfig, syncOnce } from '../scripts/sync/sheet.mjs';
+import { commandCenterRequestListener } from './command/http.mjs';
 
 const root = process.cwd();
 const cfg = loadConfig(root);
 const dist = path.join(root, 'dist');
 const cacheFile = path.join(root, '.cache', 'iocf-data.json');
+const commandCenter = commandCenterRequestListener();
 const status = { lastSyncAt: null, lastOk: null, lastError: null, source: null, report: null, syncing: false };
 
 async function sync() {
@@ -44,9 +46,10 @@ function send(res, code, body, headers = {}) {
 
 http
   .createServer((req, res) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
     const url = new URL(req.url ?? '/', 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
+    if (pathname.startsWith('/api/command/')) return void commandCenter(req, res);
+    if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
 
     if (pathname === '/iocf-data.json') {
       // the freshly synced copy, falling back to whatever the build shipped

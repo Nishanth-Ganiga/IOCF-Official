@@ -7,3 +7,12 @@ ios/App/Pods
 android/.gradle
 android/local.properties
 android/app/build
+
+# Command Center: local data and anything credential-related must never be committed
+.cc-data/
+IOCF_PRIVATE_CREDENTIAL_REGISTER*
+*.register.key
+register.key
+.env.command-center
+IOCF_CREDENTIALS_PLAIN*
+local-store.json

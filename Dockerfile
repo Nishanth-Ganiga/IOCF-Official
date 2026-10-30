@@ -41,6 +41,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
 COPY --from=build /app/scripts ./scripts
+COPY --from=build /app/src/data/commandCenter ./src/data/commandCenter
 COPY --from=build /app/iocf.config.json /app/package.json ./
 
 ENV PORT=8080

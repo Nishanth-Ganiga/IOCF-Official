@@ -1,0 +1,115 @@
+#!/usr/bin/env node
+// IOCF Command Center — credential tool. Run on the President's own computer.
+//
+//   npm run cc -- setup [--show]           create the Master Administrator and the 26 chairman accounts (safe to re-run)
+//   npm run cc -- export                   (re)write the readable credentials file, IOCF_CREDENTIALS_PLAIN.csv
+//   npm run cc -- import                   apply your edits from that file (usernames, passwords, active / inactive)
+//   npm run cc -- reveal [board|--all]     show passwords from the encrypted register on the terminal
+//   npm run cc -- reset <board|username>   new random password for one account (add --username <new> to rename it too)
+//   npm run cc -- push                     upload the accounts to Supabase (once it is set up)
+//   npm run cc -- verify                   check that the register and the database agree
+//   npm run cc -- status [--sync]          list the accounts (no secrets); --sync copies online status changes into the register
+//   npm run cc -- backup --out <folder>    write an encrypted backup of the register
+//
+// Without SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY it works on a local store in ~/.iocf-command-center/, so you can create
+// the accounts and the credentials file before Supabase exists, then `push`.
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { backup, homeDir, importPlain, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
+import { FileStore, SupabaseStore } from '../../server/command/store.mjs';
+
+const [cmd, ...rest] = process.argv.slice(2);
+const flag = (n) => rest.includes(n);
+const opt = (n) => (rest.includes(n) ? rest[rest.indexOf(n) + 1] : undefined);
+const positional = rest.filter((a, i) => !a.startsWith('--') && !(i > 0 && rest[i - 1].startsWith('--') && ['--out', '--username'].includes(rest[i - 1])));
+
+const home = homeDir();
+loadEnvFile(home);
+
+function table(rows) {
+  if (!rows.length) return console.log('(none)');
+  const cols = Object.keys(rows[0]);
+  const w = cols.map((c) => Math.max(c.length, ...rows.map((r) => String(r[c] ?? '').length)));
+  console.log(cols.map((c, i) => c.padEnd(w[i])).join('  '));
+  for (const r of rows) console.log(cols.map((c, i) => String(r[c] ?? '').padEnd(w[i])).join('  '));
+}
+
+const remote = () => Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+const localStore = () => new FileStore(localStorePath(home));
+
+/** Supabase when it is configured, otherwise the local store in your private folder. */
+function store() {
+  if (remote()) return new SupabaseStore({ url: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY });
+  return localStore();
+}
+const where = () => (remote() ? 'Supabase' : `your local store (${localStorePath(home)})`);
+
+function chairmen() {
+  try {
+    const d = JSON.parse(readFileSync('public/iocf-data.json', 'utf8'));
+    return Object.fromEntries(d.boards.map((b) => [b.name, b.chairman ?? null]));
+  } catch {
+    return {};
+  }
+}
+
+try {
+  if (cmd === 'setup') {
+    const st = store();
+    const created = await provision({ store: st, home, chairmen: chairmen() });
+    console.log(`Using ${where()}.`);
+    console.log(created.length ? `Created ${created.length} account(s).` : 'Every account already exists. Nothing created.');
+    const file = await writePlain({ store: st, home });
+    console.log(`\nYour credentials file (readable, private, never committed):\n  ${file}\nThe encrypted register (the master copy):\n  ${path.join(home, 'IOCF_PRIVATE_CREDENTIAL_REGISTER.csv')}`);
+    if (!remote()) console.log('\nSupabase is not configured yet, so the accounts are in your local store only. When Supabase is ready, run:  npm run cc -- push');
+    if (created.length && flag('--show')) {
+      console.log('\nCredentials — shown once, on this terminal only. Do not paste them anywhere public.\n');
+      table(created.map((c) => ({ Account: c.accountId, Board: c.board ?? '—', Username: c.username, Password: c.password })));
+    }
+  } else if (cmd === 'reveal') {
+    const ref = flag('--all') ? undefined : positional[0];
+    if (!ref && !flag('--all')) throw new Error('Say which account: npm run cc -- reveal <board or username>   (or --all)');
+    const rows = reveal({ home, ref });
+    if (!rows.length) throw new Error('No matching account in the register.');
+    console.log('Shown on this terminal only. Clear the screen afterwards.\n');
+    table(rows.map((r) => ({ Account: r.accountId, Board: r.board || '—', Username: r.username, Password: r.password, Status: r.status })));
+  } else if (cmd === 'reset') {
+    if (!positional[0]) throw new Error('Say which account: npm run cc -- reset <board or username> [--username <new>]');
+    const r = await resetCredentials({ store: store(), home, ref: positional[0], newUsername: opt('--username') });
+    console.log(`New credentials for ${r.board ?? 'the Master Administrator'} (${r.accountId}). Its open sessions have ended and the register is updated.\n`);
+    table([{ Username: r.username, Password: r.password }]);
+  } else if (cmd === 'export') {
+    console.log(`Written: ${await writePlain({ store: store(), home })}\nOpen it, edit usernames / passwords / status if you wish, then run:  npm run cc -- import`);
+  } else if (cmd === 'import') {
+    const changes = await importPlain({ store: store(), home });
+    if (!changes.length) console.log(`No changes found in ${PLAIN_FILE}.`);
+    else {
+      console.log(`Applied ${changes.length} change(s) to ${where()}; the encrypted register is updated and those accounts are signed out.\n`);
+      table(changes.map((c) => ({ Account: c.accountId, Board: c.board, Changed: c.changes })));
+      await writePlain({ store: store(), home });
+    }
+  } else if (cmd === 'push') {
+    if (!remote()) throw new Error('Supabase is not configured. Put SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in ' + path.join(home, 'env') + ' first.');
+    const r = await pushAccounts({ from: localStore(), to: store() });
+    console.log(`Supabase now has your accounts: ${r.created} created, ${r.updated} updated. The passwords in your credentials file work on the live site.\nCheck with:  npm run cc -- verify`);
+  } else if (cmd === 'verify') {
+    const v = await verifyRegister({ store: store(), home });
+    console.log(`${v.accounts} accounts in the database, ${v.register} in the register.`);
+    if (v.problems.length) (v.problems.forEach((p) => console.log(' ✗', p)), process.exit(2));
+    else console.log('✓ The register and the database agree.');
+  } else if (cmd === 'status') {
+    const s = store();
+    if (flag('--sync')) console.log(`Register statuses updated: ${await syncStatuses({ store: s, home })}`);
+    table((await s.list()).map((a) => ({ Account: a.account_id, Board: a.board_name ?? '—', Username: a.username, Status: a.status, 'Last sign-in': a.last_login_at?.slice(0, 16).replace('T', ' ') ?? '—' })));
+    console.log(`\nRegister rows: ${readRegister(home).length}`);
+  } else if (cmd === 'backup') {
+    const out = opt('--out');
+    if (!out) throw new Error('Say where: npm run cc -- backup --out <folder>');
+    console.log(`Encrypted backup written to ${backup({ home, outDir: path.resolve(out) })}\nKeep the key (${path.join(home, 'register.key')}) somewhere separate and safe: the backup cannot be read without it.`);
+  } else {
+    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 15).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+  }
+} catch (err) {
+  console.error('✗', err instanceof Error ? err.message : err);
+  process.exit(1);
+}

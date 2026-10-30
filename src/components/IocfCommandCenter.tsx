@@ -1,72 +1,130 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { motion } from 'framer-motion';
-import { currentSession, signIn, signOut, type Role, type Session } from '../data/access';
+import { api, ApiError, type CcUser, type Role } from '../data/commandApi';
 import type { ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
+import AdminDashboard from './command-center/AdminDashboard';
+import BoardView from './command-center/BoardView';
 import { EASE } from './fx';
 import { IocfHeader, LOGO } from './IocfHome';
 import SiteFooter from './SiteFooter';
 
-const MAX_TRIES = 5;
-const LOCK_SECONDS = 30;
-const LOCK_KEY = 'iocf-command-center-lock';
+const ROUTE = '#/command-center';
 
 const ROLES: { id: Role; title: string; blurb: string }[] = [
   { id: 'admin', title: 'Admin Login', blurb: 'Full federation control' },
   { id: 'board', title: 'Board Login', blurb: 'Individual board access' },
 ];
 
-/** The Command Center: a locked profile. A login screen first; what opens behind it is added section by section. */
+function readRoute() {
+  const h = window.location.hash;
+  if (!h.startsWith(ROUTE)) return [] as string[];
+  return h.slice(ROUTE.length).split('/').filter(Boolean).map(decodeURIComponent);
+}
+function useRoute() {
+  const [parts, setParts] = useState<string[]>(readRoute);
+  useEffect(() => {
+    const on = () => setParts(readRoute());
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  return parts;
+}
+const navigate = (...parts: string[]) => {
+  window.location.hash = [ROUTE, ...parts].join('/');
+};
+
+/**
+ * The Command Center: a locked profile. The server holds the session (an HttpOnly cookie) and decides what each account may
+ * see; this component only shows the result. Login → the administrator's dashboard, or the signed-in board's own dashboard.
+ */
 export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: ProfileId; onSwitch: (id: ProfileId) => void }) {
   const { scrollTo } = useSmoothScroll();
-  const [session, setSession] = useState<Session | null>(currentSession);
+  const parts = useRoute();
+  // undefined = still asking the server whether a session exists
+  const [user, setUser] = useState<CcUser | null | undefined>(undefined);
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    api.me().then(setUser, (e: unknown) => {
+      setUser(null);
+      if (e instanceof ApiError && e.status !== 401) setNotice(e.message);
+    });
+  }, []);
+  useEffect(() => {
+    scrollTo(0, { offset: 0 });
+  }, [parts.join('/'), user?.accountId, scrollTo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const signOut = async () => {
+    try {
+      await api.logout();
+    } catch {
+      /* the cookie is cleared by the server; if it could not be reached the session still ends when it expires */
+    }
+    setUser(null);
+    navigate();
+  };
   const go = () => scrollTo(0, { offset: 0 });
   const links = [{ id: 'top', label: 'Command Center' }];
 
+  let body;
+  if (user === undefined) body = <p className="gutter pt-40 text-center text-sm text-smoke" aria-busy="true">Loading…</p>;
+  else if (!user)
+    body = (
+      <Login
+        notice={notice}
+        onDone={(u) => {
+          setUser(u);
+          navigate();
+        }}
+      />
+    );
+  else if (user.role === 'admin') {
+    body = parts[0] === 'board' && parts[1] ? <BoardView slug={parts[1]} moduleId={parts[2]} user={user} nav={navigate} /> : <AdminDashboard user={user} nav={navigate} onSignOut={signOut} />;
+  } else {
+    // a board account always lands on its own board; a link to another board is passed to the server, which refuses it
+    const other = parts[0] === 'board';
+    body = <BoardView slug={other ? (parts[1] ?? '') : (user.board ?? '')} moduleId={other ? parts[2] : parts[0]} user={user} nav={navigate} />;
+  }
+
+  const showBar = user && !(user.role === 'admin' && !(parts[0] === 'board' && parts[1]));
   return (
     <>
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />
+      {showBar && (
+        <div className="fixed right-3 top-[4.6rem] z-[60] flex items-center gap-3 rounded-full border border-white/15 bg-black/70 py-1 pl-4 pr-1 text-[11px] text-mist backdrop-blur">
+          <span>
+            <span className="text-smoke">Signed in · </span>
+            {user.username}
+          </span>
+          <button type="button" onClick={() => void signOut()} className="rounded-full border border-white/20 px-3 py-1 font-semibold tracking-[0.16em] hover:border-[#c9a24b] hover:text-[#c9a24b]">
+            SIGN OUT
+          </button>
+        </div>
+      )}
       <main className="min-h-[100svh]">
-        {session ? (
-          <Dashboard
-            session={session}
-            onSignOut={() => {
-              signOut();
-              setSession(null);
-            }}
-          />
-        ) : (
-          <Login onDone={setSession} />
-        )}
+        {body}
         <SiteFooter />
       </main>
     </>
   );
 }
 
-/* ---------- login ---------- */
+/* ---------- login (the design is unchanged; the check now happens on the server) ---------- */
 
-function readLock(): { fails: number; until: number } {
-  try {
-    return JSON.parse(sessionStorage.getItem(LOCK_KEY) ?? '') as { fails: number; until: number };
-  } catch {
-    return { fails: 0, until: 0 };
-  }
-}
-
-function Login({ onDone }: { onDone: (s: Session) => void }) {
+function Login({ onDone, notice }: { onDone: (u: CcUser) => void; notice: string }) {
   const [role, setRole] = useState<Role>('admin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [until, setUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
-  const lock = useRef(readLock());
   const user = useRef<HTMLInputElement>(null);
 
-  // counts down a temporary lock-out after too many wrong attempts
-  const waiting = Math.max(0, Math.ceil((lock.current.until - now) / 1000));
+  // counts down while the server is refusing attempts
+  const waiting = Math.max(0, Math.ceil((until - now) / 1000));
   useEffect(() => {
     if (waiting <= 0) return;
     const id = window.setInterval(() => setNow(Date.now()), 500);
@@ -82,35 +140,19 @@ function Login({ onDone }: { onDone: (s: Session) => void }) {
     }
     setBusy(true);
     setError('');
-    let session: Session | null = null;
     try {
-      session = await signIn(role, username, password);
-    } catch {
-      setError('Sign-in is not available in this browser. Please use a current browser over a secure (https) connection.');
-      setBusy(false);
+      onDone(await api.login(role, username, password));
       return;
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 429 && err.retryAfter) {
+          setNow(Date.now());
+          setUntil(Date.now() + err.retryAfter * 1000);
+        } else setError(err.message);
+      } else setError('Something went wrong. Please try again.');
     }
     setBusy(false);
-    if (session) {
-      lock.current = { fails: 0, until: 0 };
-      try {
-        sessionStorage.removeItem(LOCK_KEY);
-      } catch {
-        /* nothing to clear */
-      }
-      onDone(session);
-      return;
-    }
-    const fails = lock.current.fails + 1;
-    lock.current = fails >= MAX_TRIES ? { fails: 0, until: Date.now() + LOCK_SECONDS * 1000 } : { fails, until: 0 };
-    try {
-      sessionStorage.setItem(LOCK_KEY, JSON.stringify(lock.current));
-    } catch {
-      /* the counter just resets on reload */
-    }
-    setNow(Date.now());
     setPassword('');
-    setError(fails >= MAX_TRIES ? `Too many attempts. Try again in ${LOCK_SECONDS} seconds.` : 'Incorrect username or password.');
     user.current?.focus();
   };
 
@@ -176,8 +218,8 @@ function Login({ onDone }: { onDone: (s: Session) => void }) {
               </span>
             </label>
 
-            <p role="alert" aria-live="polite" className={`mt-3 min-h-[1.25rem] text-[13px] ${error || waiting > 0 ? 'text-crimson-2' : ''}`}>
-              {waiting > 0 ? `Too many attempts. Try again in ${waiting} s.` : error}
+            <p role="alert" aria-live="polite" className={`mt-3 min-h-[1.25rem] text-[13px] ${error || waiting > 0 || notice ? 'text-crimson-2' : ''}`}>
+              {waiting > 0 ? `Too many attempts. Try again in ${waiting} s.` : error || notice}
             </p>
 
             <button
@@ -191,32 +233,5 @@ function Login({ onDone }: { onDone: (s: Session) => void }) {
         </div>
       </motion.div>
     </section>
-  );
-}
-
-/* ---------- after sign-in ---------- */
-
-function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
-  const admin = session.role === 'admin';
-  return (
-    <div className="gutter pb-16 pt-28">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">{admin ? 'ADMIN · FULL FEDERATION CONTROL' : `BOARD ACCESS · ${(session.board ?? 'BOARD').toUpperCase()}`}</p>
-          <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">COMMAND CENTER</h1>
-          <p className="mt-3 text-sm text-mist">
-            Signed in as <span className="font-semibold text-bone">{session.username}</span>
-          </p>
-        </div>
-        <button type="button" onClick={onSignOut} className="rounded-full border border-white/20 px-5 py-2 text-xs font-semibold tracking-[0.2em] text-mist transition hover:border-[#c9a24b] hover:text-[#c9a24b]">
-          SIGN OUT
-        </button>
-      </header>
-
-      <div className="mt-8 rounded-xl border border-white/10 bg-ink-2 px-5 py-12 text-center">
-        <p className="text-sm text-bone">You are signed in. Nothing has been added to the Command Center yet.</p>
-        <p className="mt-1 text-xs text-smoke">New sections will appear here.</p>
-      </div>
-    </div>
   );
 }

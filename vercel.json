@@ -46,6 +46,10 @@
     "api/iocf-data.mjs": {
       "maxDuration": 30,
       "includeFiles": "iocf.config.json"
+    },
+    "api/command/[...path].mjs": {
+      "maxDuration": 15,
+      "includeFiles": "src/data/commandCenter/**"
     }
   }
 }
