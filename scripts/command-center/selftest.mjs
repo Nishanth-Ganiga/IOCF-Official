@@ -10,8 +10,11 @@ import ExcelJS from 'exceljs';
 import { createHandler, BOARDS, MODULES } from '../../server/command/handler.mjs';
 import { commandCenterRequestListener } from '../../server/command/http.mjs';
 import { MemoryStore, SupabaseStore } from '../../server/command/store.mjs';
-import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet, recordPassword, inspectSupabase, hostingValues, SUPABASE_URL_FOR, describeKey } from './lib.mjs';
+import { AutoStore, LoginTableStore } from '../../server/command/loginTable.mjs';
+import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet, recordPassword, inspectSupabase, hostingValues, SUPABASE_URL_FOR, describeKey, adminFromRows, readTable, buildSetupSql, buildOverviewCsv, writeLoginsCsv, LOGINS_COLUMNS, LOGINS_CSV_FILE, shortPassword } from './lib.mjs';
 
+const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cc-admin-'));
+const await_free = (x) => x;
 let passed = 0;
 const failures = [];
 const check = (name, ok, extra = '') => {
@@ -146,7 +149,7 @@ const logged = JSON.stringify(await store.listAudit(50));
 check('it is in the audit log, with no password in it', /credentials_set/.test(logged) && !/Brand-New/.test(logged) && !/Brand-New/.test(JSON.stringify(store.data)));
 check('a password alone keeps the username', (await putLogin('uganda', { password: 'Second-New-Pass-2' })).body.username === 'uganda.boss' && (await call('POST', 'login', { body: { role: 'board', username: 'uganda.boss', password: 'Second-New-Pass-2' } })).status === 200);
 check('a username alone keeps the password', (await putLogin('uganda', { username: 'uganda.chair' })).status === 200 && (await call('POST', 'login', { body: { role: 'board', username: 'uganda.chair', password: 'Second-New-Pass-2' } })).status === 200);
-check('a password under 8 characters is refused', (await putLogin('uganda', { password: 'short' })).status === 400);
+check('a password under 6 characters is refused', (await putLogin('uganda', { password: 'short' })).status === 400);
 check('a bad username is refused', (await putLogin('uganda', { username: 'no spaces!' })).status === 400);
 check('a username already used by another board is refused (409)', (await putLogin('uganda', { username: cred('India').username })).status === 409);
 check('an empty change is refused', (await putLogin('uganda', {})).status === 400);
@@ -298,6 +301,37 @@ const closedRoot = (probeStatus) => async (u) => (u.endsWith('/rest/v1/') ? { ok
 check('if the schema document is closed, a good key is still accepted by testing our own table', await inspectSupabase({ url: 'https://x.supabase.co', key: 'k', fetchImpl: closedRoot(200) }).then((r) => r.keyOk && r.missing.length === 0));
 check('…and a good key with no tables yet says the tables are missing', await inspectSupabase({ url: 'https://x.supabase.co', key: 'k', fetchImpl: closedRoot(404) }).then((r) => r.keyOk && r.missing.length === 4));
 check('…and a bad key is still refused', await inspectSupabase({ url: 'https://x.supabase.co', key: 'k', fetchImpl: closedRoot(401) }).then((r) => !r.keyOk && /refused/.test(r.error)));
+const thrown = (f) => { try { f(); return null; } catch (e) { return e.message; } };
+check('admin table: username / password columns', adminFromRows([{ id: 1, username: 'IOCF.Admin', password: 'Long-Admin-Pass-1' }]).username === 'iocf.admin');
+check('admin table: user_id / password columns', adminFromRows([{ user_id: 'president', password: 'Long-Admin-Pass-1', created_at: 'x' }]).username === 'president');
+check('admin table: email / pwd columns', adminFromRows([{ email: 'boss@iocf.org', pwd: 'Long-Admin-Pass-1' }]).username === 'boss@iocf.org');
+check('admin table: with several rows, the one marked admin is used', adminFromRows([{ username: 'a', role: 'board', password: 'x'.repeat(10) }, { username: 'boss', role: 'admin', password: 'Long-Admin-Pass-1' }]).username === 'boss');
+check('admin table: an empty table is explained', /no rows/.test(thrown(() => adminFromRows([]))));
+check('admin table: two admin rows are refused rather than guessed', /exactly one/.test(thrown(() => adminFromRows([{ username: 'a', password: 'longenough1' }, { username: 'b', password: 'longenough2' }]))));
+check('admin table: no password column is explained, naming the columns', /password column.*id, name/.test(thrown(() => adminFromRows([{ id: 1, name: 'x' }]))));
+check('admin table: an already-encrypted password is explained', /cannot be turned back/.test(thrown(() => adminFromRows([{ username: 'a', password: '$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234' }]))));
+check('admin table: reading is limited to one table by name, a few rows', await (async () => { const urls = []; await readTable({ url: 'https://x.supabase.co', key: 'sb_secret_k', table: 'admin_users', fetchImpl: async (u, i) => { urls.push([u, i.headers]); return { ok: true, status: 200, json: async () => [] }; } }); return urls[0][0].endsWith('/rest/v1/admin_users?select=*&limit=5') && !urls[0][1].authorization; })());
+check('admin table: a table name cannot smuggle a query', await readTable({ url: 'https://x.supabase.co', key: 'k', table: 'a?select=*&x=', fetchImpl: ok([]) }).then(() => false, (e) => /only letters/.test(e.message)));
+check('admin table: the imported admin can sign in, and an e-mail style user id works', await (async () => {
+  const st = new MemoryStore();
+  const hh = mkdtemp();
+  const entry = adminFromRows([{ user_id: 'Boss@IOCF.org', password: 'Table-Admin-Pass-1' }]);
+  await applyCredentials({ store: st, home: hh, entries: [{ role: 'admin', username: entry.username, password: entry.password }] });
+  const hd = createHandler({ store: st, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock });
+  const r = await hd({ method: 'POST', path: ['login'], headers: H, body: { role: 'admin', username: 'boss@iocf.org', password: 'Table-Admin-Pass-1' }, ip: '8.8.8.8' });
+  fs.rmSync(hh, { recursive: true, force: true });
+  return r.status === 200 && r.body.user.role === 'admin' && !JSON.stringify(st.data).includes('Table-Admin-Pass-1');
+})());
+const sqlAccounts = [...(await store.list())];
+sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x; --" };
+const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
+check('setup SQL: creates the 4 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 4 && (setupSql.match(/enable row level security/g) ?? []).length === 4);
+check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
+check('setup SQL: has all 27 accounts and 26 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 27 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 26);
+check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
+check('setup SQL: holds hashes only, never a password', created.every((c) => !setupSql.includes(c.password)) && (setupSql.match(/'scrypt\$16384\$8\$1\$/g) ?? []).length === 27);
+check('setup SQL: can be run again (upserts, and re-running ends open sessions)', /on conflict \(account_id\) do update/.test(setupSql) && /session_version \+ 1/.test(setupSql));
+check('accounts overview CSV lists 27 accounts with no password or hash', (() => { const o = buildOverviewCsv(await_free(sqlAccounts)); return o.trim().split('\n').length === 28 && !/scrypt|password/i.test(o); })());
 const jwt = (payload) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`;
 check('key type: a secret key (sb_secret_…) is accepted', describeKey('sb_secret_abc123', 'p').kind === 'secret' && describeKey('sb_secret_abc123', 'p').usable);
 check('key type: the publishable key is recognised and explained', describeKey('sb_publishable_abc', 'p').kind === 'publishable' && /SECRET key/.test(describeKey('sb_publishable_abc', 'p').message));
@@ -308,6 +342,126 @@ check('key type: quotes, spaces and "Bearer" around a pasted key are removed', d
 check('key type: a cut-off or random paste is explained', describeKey('abc', 'p').kind === 'unknown' && /short/.test(describeKey('abc', 'p').message));
 check('new-style keys go in the apikey header only; legacy tokens in both', await (async () => { const seen = []; const f = async (u, i) => { seen.push(i.headers); return { ok: true, text: async () => '[]' }; }; await new SupabaseStore({ url: 'https://x.supabase.co', serviceKey: 'sb_secret_abc', fetchImpl: f }).list(); await new SupabaseStore({ url: 'https://x.supabase.co', serviceKey: 'eyJ.legacy.token', fetchImpl: f }).list(); return !seen[0].authorization && seen[0].apikey === 'sb_secret_abc' && seen[1].authorization === 'Bearer eyJ.legacy.token'; })());
 check('the hosting values are the three the site needs', hostingValues({ SUPABASE_URL: 'u', SUPABASE_SERVICE_ROLE_KEY: 'k', COMMAND_CENTER_SESSION_SECRET: 's' }).map((l) => l.split('=')[0]).join() === 'SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,COMMAND_CENTER_SESSION_SECRET');
+
+console.log('\n— ONE file: a logins table imported into Supabase, short passwords —');
+// a small stand-in for Supabase's table API (just the filters the server uses)
+const ot_makeSupabase = (tables) => {
+  const log = [];
+  const fetchImpl = async (url, init = {}) => {
+    const u = new URL(url);
+    const table = u.pathname.split('/').pop();
+    log.push(`${init.method ?? 'GET'} ${table}`);
+    if (!tables[table]) return { ok: false, status: 404, text: async () => '{}', json: async () => ({}) };
+    const rows = tables[table];
+    const match = (r) => [...u.searchParams.entries()].every(([k, v]) => {
+      if (['select', 'order', 'limit'].includes(k)) return true;
+      const cell = r[k];
+      if (v.startsWith('eq.')) return String(cell) === decodeURIComponent(v.slice(3));
+      if (v.startsWith('ilike.')) return String(cell ?? '').toLowerCase() === decodeURIComponent(v.slice(6)).toLowerCase();
+      if (v === 'not.is.null') return cell !== null && cell !== undefined;
+      if (v === 'neq.') return cell !== '';
+      return true;
+    });
+    const method = init.method ?? 'GET';
+    let out;
+    if (method === 'GET') out = u.searchParams.get('limit') === '0' ? [] : rows.filter(match).map((r) => ({ ...r }));
+    else if (method === 'PATCH') { out = rows.filter(match); out.forEach((r) => Object.assign(r, JSON.parse(init.body))); out = out.map((r) => ({ ...r })); }
+    else if (method === 'POST') { const row = JSON.parse(init.body); rows.push(row); out = [{ ...row }]; }
+    const wantBody = method === 'GET' || /return=representation/.test(init.headers?.prefer ?? '');
+    return { ok: true, status: 200, text: async () => (wantBody ? JSON.stringify(out) : ''), json: async () => out };
+  };
+  return { fetchImpl, log };
+};
+const ot_csvToRows = (text) => {
+  const [head, ...lines] = text.trim().split('\n').map((l) => { const cells = []; let cur = '', q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { cells.push(cur); cur = ''; } else cur += ch; } cells.push(cur); return cells; });
+  // what Supabase's CSV import does: ot_empty cells become null, number-looking columns become integers
+  return lines.map((cells) => Object.fromEntries(head.map((h, i) => [h, cells[i] === '' ? null : ['session_version', 'failed_logins'].includes(h) ? Number(cells[i]) : cells[i]])));
+};
+const ot_home3 = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-table-'));
+const ot_local3 = new MemoryStore();
+await provision({ store: ot_local3, home: ot_home3, chairmen: { 'New Zealand': 'Test Chairman' } });
+const ot_csvFile = await writeLoginsCsv({ store: ot_local3, home: ot_home3 });
+const ot_csvText = fs.readFileSync(ot_csvFile, 'utf8');
+const ot_csvRows = ot_csvToRows(ot_csvText);
+check('the logins CSV has the table columns and 27 rows', ot_csvText.split('\n')[0] === LOGINS_COLUMNS.join(',') && ot_csvRows.length === 27 && path.basename(ot_csvFile) === LOGINS_CSV_FILE);
+check('every password is short (8 characters) with a letter and a digit, and all are different', ot_csvRows.every((r) => r.password.length === 8 && /[A-Za-z]/.test(r.password) && /\d/.test(r.password)) && new Set(ot_csvRows.map((r) => r.password)).size === 27);
+check('the CSV file is private and outside the project', (fs.statSync(ot_csvFile).mode & 0o077) === 0 && !path.resolve(ot_csvFile).startsWith(process.cwd()));
+check('your local records were updated to the same short passwords', (await verifyRegister({ store: ot_local3, home: ot_home3 })).problems.length === 0 && reveal({ home: ot_home3, ref: 'india' })[0].password === ot_csvRows.find((r) => r.board === 'India').password);
+
+const tables = { iocf_logins: ot_csvRows.map((r) => ({ ...r })) };
+const ot_sb = ot_makeSupabase(tables);
+const ot_auto = new AutoStore({ url: 'https://x.supabase.co', serviceKey: 'sb_secret_test', fetchImpl: ot_sb.fetchImpl });
+const ot_hT = createHandler({ store: ot_auto, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234', SUPABASE_URL: 'https://x.supabase.co' }, now: () => clock });
+const ot_tcall = (method, p, { body, cookie, ip } = {}) => ot_hT({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: ip ?? `9.9.${++ipCounter % 250}.${ipCounter % 250}` });
+const ot_tlogin = async (role, username, password) => { const r = await ot_tcall('POST', 'login', { body: { role, username, password } }); return { r, cookie: r.status === 200 ? `iocf_cc=${cookieOf(r)}` : null }; };
+const ot_adminRow = ot_csvRows.find((r) => r.account_type === 'Master Administrator');
+
+check('the site finds the single logins table when the four command_* tables are absent', (await ot_auto.impl()) instanceof LoginTableStore);
+check('the first admin login works with the short password from the CSV', (await ot_tlogin('admin', ot_adminRow.username, ot_adminRow.password)).r.status === 200);
+check('the readable passwords are gone from the table, replaced by hashes', tables.iocf_logins.filter((r) => r.password === null && r.password_hash?.startsWith('scrypt$')).length === 27 && !ot_csvRows.some((r) => JSON.stringify(tables.iocf_logins).includes(`"${r.password}"`)));
+let ot_all26 = true;
+for (const b of BOARDS) {
+  const row = ot_csvRows.find((r) => r.board === b.name);
+  const t = await ot_tlogin('board', row.username, row.password);
+  const me = t.cookie ? await ot_tcall('GET', 'me', { cookie: t.cookie }) : null;
+  if (t.r.status !== 200 || me.body.user.board !== b.slug) ot_all26 = false;
+}
+check('all 26 board chairmen sign in with their short passwords and land on their own board', ot_all26);
+check('a wrong password is refused', (await ot_tlogin('admin', ot_adminRow.username, 'wrongpass1')).r.status === 401);
+check('board credentials on Admin Login are not authorized (403)', (await ot_tlogin('admin', ot_csvRows.find((r) => r.board === 'India').username, ot_csvRows.find((r) => r.board === 'India').password)).r.status === 403);
+
+// editing the table
+const ot_indiaT = tables.iocf_logins.find((r) => r.board === 'India');
+const ot_indiaOld = ot_csvRows.find((r) => r.board === 'India').password;
+const ot_indiaSession = await ot_tlogin('board', ot_indiaT.username, ot_indiaOld);
+ot_indiaT.password = 'Newpass7';
+check('a new password typed into the table is picked up at the next login attempt', (await ot_tlogin('board', ot_indiaT.username, 'Newpass7')).r.status === 200 && ot_indiaT.password === null);
+check('…the old password and the old session stop working', (await ot_tlogin('board', ot_indiaT.username, ot_indiaOld)).r.status === 401 && (await ot_tcall('GET', 'me', { cookie: ot_indiaSession.cookie })).status === 401);
+const ot_spainT = tables.iocf_logins.find((r) => r.board === 'Spain');
+ot_spainT.status = 'inactive';
+check('setting status to inactive in the table switches the account off', (await ot_tlogin('board', ot_spainT.username, ot_csvRows.find((r) => r.board === 'Spain').password)).r.body.error.code === 'inactive');
+ot_spainT.status = 'active';
+check('…and back to active switches it on', (await ot_tlogin('board', ot_spainT.username, ot_csvRows.find((r) => r.board === 'Spain').password)).r.status === 200);
+
+// bad rows are left alone and do not stop the good ones
+const ot_japanT = tables.iocf_logins.find((r) => r.board === 'Japan');
+const ot_kenyaT = tables.iocf_logins.find((r) => r.board === 'Kenya');
+const ot_nepalT = tables.iocf_logins.find((r) => r.board === 'Nepal');
+ot_japanT.password = 'abc';
+ot_kenyaT.password = 'GoodPass9';
+ot_nepalT.username = ot_indiaT.username; ot_nepalT.password = 'GoodPass8';
+await ot_tcall('POST', 'login', { body: { role: 'board', username: 'x', password: 'y' } });
+check('a password under 6 characters is not accepted and stays in the cell', ot_japanT.password === 'abc');
+check('a username already used by another account is not accepted', ot_nepalT.password === 'GoodPass8' && (await ot_tlogin('board', ot_indiaT.username, 'GoodPass8')).r.status === 401);
+check('good rows in the same pass are still applied', ot_kenyaT.password === null && (await ot_tlogin('board', ot_kenyaT.username, 'GoodPass9')).r.status === 200);
+ot_nepalT.username = 'nepal.chairman';
+
+// a brand-new board row ot_typed straight into the table
+tables.iocf_logins.push({ account_id: null, account_type: 'Board Chairman', board: 'Newzealand', username: 'extra.nz', password: 'Typed123', status: null, chairman: null, password_hash: null, session_version: null, failed_logins: null, locked_until: null, last_login_at: null });
+await ot_tcall('POST', 'login', { body: { role: 'board', username: 'x', password: 'y' } });
+const ot_typed = tables.iocf_logins.find((r) => r.username === 'extra.nz');
+check('a row typed by hand (no account id, "Newzealand") is completed and secured', ot_typed.password === null && ot_typed.account_id === 'IOCF-BRD-003' && ot_typed.password_hash.startsWith('scrypt$'));
+
+// admin tile on the table store
+const ot_adm4 = await ot_tlogin('admin', ot_adminRow.username, ot_adminRow.password);
+const ot_ov = (await ot_tcall('GET', 'admin/overview', { cookie: ot_adm4.cookie })).body;
+check('the admin overview works on the single table', ot_ov.totalBoards === 26 && ot_ov.totalAccounts >= 27 && Array.isArray(ot_ov.recentActivity));
+const ot_setT = await ot_tcall('PUT', 'admin/boards/portugal/account', { cookie: ot_adm4.cookie, body: { username: 'portugal.boss', password: 'Admin-Set-1' } });
+check('Board Accounts (admin tile) can set a login in the table', ot_setT.status === 200 && (await ot_tlogin('board', 'portugal.boss', 'Admin-Set-1')).r.status === 200);
+check('module switches say they need the full setup instead of failing silently', (await ot_tcall('PUT', 'admin/boards/portugal/modules', { cookie: ot_adm4.cookie, body: { moduleId: 'series-announcement', enabled: false } })).status === 501);
+check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement');
+
+// nothing configured
+const ot_empty = ot_makeSupabase({});
+const ot_hNone = createHandler({ store: new AutoStore({ url: 'https://x.supabase.co', serviceKey: 'sb_secret_test', fetchImpl: ot_empty.fetchImpl }), env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234', SUPABASE_URL: 'u' }, now: () => clock });
+const ot_noneRes = await ot_hNone({ method: 'POST', path: ['login'], headers: H, body: { role: 'admin', username: 'a', password: 'bbbbbbbb' }, ip: '4.4.4.4' });
+check('with neither table present the site says the logins are missing (503), not a crash', ot_noneRes.status === 503 && /no logins yet/.test(ot_noneRes.body.error.message));
+// the full setup, when present, wins
+const full = ot_makeSupabase({ command_accounts: [], iocf_logins: [] });
+check('if the four command_* tables exist, the site uses those instead', (await new AutoStore({ url: 'https://x.supabase.co', serviceKey: 'k', fetchImpl: full.fetchImpl }).impl()) instanceof SupabaseStore);
+check('login attempts are limited here too (in memory)', await (async () => { let last; for (let i = 0; i < 6; i++) last = await ot_tcall('POST', 'login', { body: { role: 'board', username: 'portugal.boss', password: 'bad' + i }, ip: '66.6.6.6' }); return last.status === 429; })());
+check('shortPassword never makes an all-digit or all-letter password', Array.from({ length: 2000 }, () => shortPassword()).every((p) => /[A-Za-z]/.test(p) && /\d/.test(p)));
+fs.rmSync(ot_home3, { recursive: true, force: true });
 
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();

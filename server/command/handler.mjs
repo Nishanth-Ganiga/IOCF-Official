@@ -99,6 +99,9 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       return fail(429, 'rate_limited', 'Too many attempts. Please wait before trying again.', { retryAfter: retry });
     }
 
+    // logins typed into the Supabase table are picked up (hashed, readable copy wiped) before the check
+    await store.absorb?.().catch(() => undefined);
+
     const account = await store.findByUsername(name);
     if (account?.locked_until && new Date(account.locked_until).getTime() > t) {
       await audit('login_locked', name, account.account_id, req);
@@ -260,7 +263,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const existing = (await store.list()).find((x) => x.board_slug === board.slug);
           const name = typeof username === 'string' ? username.trim().toLowerCase() : existing?.username;
           if (!name || !/^[a-z0-9._-]{3,60}$/.test(name)) return fail(400, 'bad_request', 'A username uses 3–60 letters, digits, dots, dashes or underscores.');
-          if (password !== undefined && (typeof password !== 'string' || password.length < 8 || password.length > 100)) return fail(400, 'bad_request', 'A password needs 8–100 characters.');
+          if (password !== undefined && (typeof password !== 'string' || password.length < 6 || password.length > 100)) return fail(400, 'bad_request', 'A password needs 6–100 characters.');
           if (!existing && !password) return fail(400, 'bad_request', 'Choose a password for the new login.');
           if (chairmanName !== undefined && (typeof chairmanName !== 'string' || chairmanName.length > 120)) return fail(400, 'bad_request', 'Chairman name must be text of up to 120 characters.');
           const clash = await store.findByUsername(name);
@@ -299,6 +302,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
 
       return fail(404, 'not_found', 'Not found.');
     } catch (err) {
+      if (err?.code === 'not_configured') return fail(503, 'not_configured', 'The Command Center database has no logins yet. Import the logins file into Supabase first.');
+      if (err?.code === 'unsupported') return fail(501, 'unsupported', err.message);
       console.error('[command-center]', err instanceof Error ? err.message : err);
       return fail(500, 'server_error', 'Something went wrong. Please try again.');
     }

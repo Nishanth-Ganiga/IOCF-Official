@@ -313,7 +313,7 @@ export async function applyCredentials({ store, home, entries, minLength = 8, dr
     const username = String(e.username ?? '').trim().toLowerCase();
     const password = String(e.password ?? '');
     const status = String(e.status || 'active').toLowerCase();
-    if (!/^[a-z0-9._-]{3,60}$/.test(username)) problems.push(`${label}: a username uses 3–60 letters, digits, dots, dashes or underscores (found "${e.username}").`);
+    if (!/^[a-z0-9._@+-]{3,60}$/.test(username)) problems.push(`${label}: a username uses 3–60 letters, digits, dots, dashes, underscores or @ (found "${e.username}").`);
     if (password.length < minLength) problems.push(`${label}: a password needs at least ${minLength} characters.`);
     else if (password.length < 12) warnings.push(`${label}: the password is short (under 12 characters).`);
     if (!['active', 'inactive'].includes(status)) problems.push(`${label}: status must be active or inactive (found "${e.status}").`);
@@ -564,4 +564,159 @@ export function describeKey(rawKey, expectedRef) {
     }
   }
   return { key, kind: 'unknown', usable: false, message: `That does not look like a Supabase key (it should start with sb_secret_, or be a long token starting eyJ). ${key.length < 40 ? 'It is also quite short, so the paste may have been cut off.' : ''}`.trim() };
+}
+
+/* ---------- the admin you already put in a Supabase table ---------- */
+
+/**
+ * Finds the administrator's username and password in the rows of a table you created yourself. Columns are recognised by
+ * name: a username-like one (username, user_id, login, email…) and a password-like one (password, pwd…). If the table has a
+ * role column and several rows, the admin row is the one marked admin. Throws a plain explanation if it cannot be sure.
+ */
+export function adminFromRows(rows) {
+  if (!rows?.length) throw new Error('That table has no rows. Add the admin row (username and password) first.');
+  const cols = Object.keys(rows[0]);
+  const pass = cols.find((c) => /^(password|passwd|pwd|pass|password_plain|plain_password)$/i.test(c)) ?? cols.find((c) => /pass|pwd/i.test(c));
+  const user =
+    cols.find((c) => /^(username|user_name|login|login_id)$/i.test(c)) ??
+    cols.find((c) => /^(user_?id|admin_?id|email|userid|admin_?user)$/i.test(c)) ??
+    cols.find((c) => /user|login|email/i.test(c));
+  if (!pass) throw new Error(`I cannot find a password column in that table (columns: ${cols.join(', ')}).`);
+  if (!user) throw new Error(`I cannot find a username / user id column in that table (columns: ${cols.join(', ')}).`);
+  const role = cols.find((c) => /^(role|type|is_admin|admin)$/i.test(c));
+  let candidates = rows;
+  if (candidates.length > 1 && role) candidates = rows.filter((r) => /admin|true|1/i.test(String(r[role])));
+  if (candidates.length !== 1) throw new Error(`I expected exactly one admin row but found ${candidates.length}. Keep a single admin row in the table (or add a role column that says admin).`);
+  const row = candidates[0];
+  const username = String(row[user] ?? '').trim().toLowerCase();
+  const password = String(row[pass] ?? '');
+  if (!username) throw new Error(`The "${user}" value in the admin row is empty.`);
+  if (!password) throw new Error(`The "${pass}" value in the admin row is empty.`);
+  if (/^\$2[aby]\$\d\d\$/.test(password) || /^\$argon2/.test(password)) throw new Error(`The "${pass}" column holds an encrypted password (a hash), which cannot be turned back into the password. Put the plain password in the row once so it can be imported.`);
+  return { username, password, columns: { user, pass } };
+}
+
+/** Reads the rows of one table (this is the only place a table's contents are read, and only for the admin import). */
+export async function readTable({ url, key, table, fetchImpl = fetch }) {
+  if (!/^[a-zA-Z0-9_]+$/.test(table)) throw new Error('A table name uses only letters, digits and underscores.');
+  const headers = { apikey: key, ...(key.startsWith('sb_') ? {} : { authorization: `Bearer ${key}` }) };
+  const res = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1/${table}?select=*&limit=5`, { headers });
+  if (res.status === 404) throw new Error(`There is no table called "${table}" in the public schema.`);
+  if (!res.ok) throw new Error(`Supabase would not return that table (${res.status}).`);
+  return res.json();
+}
+
+/* ---------- a ready-to-import Supabase setup file ---------- */
+
+export const SETUP_SQL_FILE = 'IOCF_COMMAND_CENTER_SETUP.sql';
+export const OVERVIEW_FILE = 'IOCF_COMMAND_CENTER_ACCOUNTS_OVERVIEW.csv';
+export const TABLE_CSV_FILE = 'IOCF_COMMAND_CENTER_command_accounts.csv';
+export const TABLE_COLUMNS = ['account_id', 'role', 'board_slug', 'board_name', 'username', 'password_hash', 'status', 'chairman_name'];
+const sq = (v) => (v === null || v === undefined ? 'null' : `'${String(v).replace(/'/g, "''")}'`);
+
+/**
+ * One SQL script for Supabase's SQL Editor that builds the Command Center from scratch: the four tables (with Row Level
+ * Security on and no policies, so only the server can reach them) and the admin + 26 board accounts, with their password
+ * HASHES — never the passwords. `drop` first removes any earlier command_* tables (and only those).
+ */
+export function buildSetupSql({ accounts, schemaSql, drop = true }) {
+  const sorted = [...accounts].sort((a, b) => a.account_id.localeCompare(b.account_id));
+  const cols = ['account_id', 'role', 'board_slug', 'board_name', 'username', 'password_hash', 'status', 'chairman_name'];
+  const rows = sorted.map((a) => `  (${cols.map((c) => sq(a[c])).join(', ')})`).join(',\n');
+  const modules = BOARDS.map((b) => `  (${sq(b.slug)}, 'series-announcement', true)`).join(',\n');
+  return [
+    '-- IOCF Command Center — Supabase setup (generated on your computer; keep it private).',
+    '-- HOW TO USE: Supabase → SQL Editor → New query → paste this whole file → Run. It can be run again safely.',
+    '-- It holds password HASHES (not passwords) for the administrator and the 26 board chairmen.',
+    '',
+    ...(drop ? ['-- Part 0: start from scratch (removes only the four command_* tables, never any other table)', 'drop table if exists public.command_rate_limits, public.command_audit_log, public.command_board_modules, public.command_accounts cascade;', ''] : []),
+    '-- Part 1: the tables, with Row Level Security (see server/command/schema.sql)',
+    schemaSql.trim(),
+    '',
+    `-- Part 2: the accounts (1 administrator + ${sorted.length - sorted.filter((a) => a.role === 'admin').length} boards)`,
+    'insert into public.command_accounts (account_id, role, board_slug, board_name, username, password_hash, status, chairman_name) values',
+    rows,
+    'on conflict (account_id) do update set username = excluded.username, password_hash = excluded.password_hash, status = excluded.status, chairman_name = excluded.chairman_name, session_version = public.command_accounts.session_version + 1;',
+    '',
+    '-- Part 3: every board starts with the Series Announcement module switched on',
+    'insert into public.command_board_modules (board_slug, module_id, enabled) values',
+    modules,
+    'on conflict (board_slug, module_id) do nothing;',
+    '',
+    '-- Check: this should show 27 accounts and 26 module rows.',
+    "select (select count(*) from public.command_accounts) as accounts, (select count(*) from public.command_board_modules) as module_rows;",
+    '',
+  ].join('\n');
+}
+
+/** A human-readable list of the accounts (no passwords, no hashes). */
+export function buildOverviewCsv(accounts) {
+  const head = ['Account ID', 'Account Type', 'Board', 'Username', 'Chairman', 'Status'];
+  const rows = [...accounts].sort((a, b) => a.account_id.localeCompare(b.account_id)).map((a) => [a.account_id, a.role === 'admin' ? 'Master Administrator' : 'Board Chairman', a.board_name ?? '', a.username, a.chairman_name ?? '', a.status]);
+  return [head, ...rows].map((r) => r.map(quote).join(',')).join('\n') + '\n';
+}
+
+/** The accounts in exactly the shape of the command_accounts table (password HASHES included), for Supabase's CSV import. */
+export function buildTableCsv(accounts) {
+  const rows = [...accounts].sort((a, b) => a.account_id.localeCompare(b.account_id)).map((a) => TABLE_COLUMNS.map((c) => quote(a[c] ?? '')).join(','));
+  return [TABLE_COLUMNS.join(','), ...rows].join('\n') + '\n';
+}
+
+export function writeSetupFiles({ accounts, home, drop = true }) {
+  ensureDir(home);
+  const schemaSql = fs.readFileSync(new URL('../../server/command/schema.sql', import.meta.url), 'utf8');
+  const sql = path.join(home, SETUP_SQL_FILE);
+  const csv = path.join(home, OVERVIEW_FILE);
+  writePrivate(sql, buildSetupSql({ accounts, schemaSql, drop }));
+  writePrivate(csv, buildOverviewCsv(accounts));
+  const table = path.join(home, TABLE_CSV_FILE);
+  writePrivate(table, buildTableCsv(accounts));
+  return { sql, csv, table };
+}
+
+/* ---------- the ONE file to upload to Supabase ---------- */
+
+export const LOGINS_CSV_FILE = 'IOCF_COMMAND_CENTER_LOGINS.csv';
+export const LOGINS_COLUMNS = ['account_id', 'account_type', 'board', 'username', 'password', 'status', 'chairman', 'password_hash', 'session_version', 'failed_logins', 'locked_until', 'last_login_at'];
+
+/** A short password: `length` characters, no look-alikes, always with at least one letter and one digit. */
+export function shortPassword(length = 8) {
+  for (;;) {
+    const p = generatePassword(length);
+    if (/[A-Za-z]/.test(p) && /\d/.test(p)) return p;
+  }
+}
+
+/** The logins table as CSV, in the shape the site reads (it hashes the passwords the first time it sees them). */
+export function buildLoginsCsv(accounts, passwords) {
+  const rows = [...accounts].sort((a, b) => a.account_id.localeCompare(b.account_id)).map((a) => [
+    a.account_id,
+    a.role === 'admin' ? 'Master Administrator' : 'Board Chairman',
+    a.board_name ?? '',
+    a.username,
+    passwords.get(a.account_id),
+    a.status,
+    a.chairman_name ?? '',
+    '',
+    1,
+    0,
+    '',
+    '',
+  ]);
+  return [LOGINS_COLUMNS, ...rows].map((r) => r.map(quote).join(',')).join('\n') + '\n';
+}
+
+/**
+ * Gives every account a new SHORT password, updates your local records (store, encrypted register, credentials file) to
+ * match, and writes the single CSV to upload to Supabase. Returns the file path.
+ */
+export async function writeLoginsCsv({ store, home, length = 8 }) {
+  const accounts = await store.list();
+  if (!accounts.length) throw new Error('There are no accounts yet. Run  npm run cc -- setup  first.');
+  const passwords = new Map(accounts.map((a) => [a.account_id, shortPassword(length)]));
+  await applyCredentials({ store, home, minLength: 6, entries: accounts.map((a) => ({ accountId: a.account_id, username: a.username, password: passwords.get(a.account_id), status: a.status })) });
+  await writePlain({ store, home });
+  const file = path.join(home, LOGINS_CSV_FILE);
+  writePrivate(file, buildLoginsCsv(await store.list(), passwords));
+  return file;
 }

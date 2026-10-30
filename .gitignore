@@ -16,3 +16,4 @@ register.key
 .env.command-center
 IOCF_CREDENTIALS_PLAIN*
 local-store.json
+IOCF_COMMAND_CENTER_*

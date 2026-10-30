@@ -9,6 +9,9 @@
 //   npm run cc -- reset <board|username>   new random password for one account (add --username <new> to rename it too)
 //   npm run cc -- record <board|username>  note a login you set in the browser (Board Accounts) in your register
 //   npm run cc -- connect [--project <ref>] connect your Supabase project (asks for the secret key, hidden), test it, then upload the accounts
+//   npm run cc -- table [--length 8]       give every account a SHORT password and write the ONE csv to upload to Supabase
+//   npm run cc -- sql [--no-drop]          write a ready-to-import Supabase file (tables + the admin + 26 boards, password hashes only)
+//   npm run cc -- import-admin [--table <name>]  use the admin you put in your own Supabase table (finds it, stores it securely)
 //   npm run cc -- vercel                   print the three values to paste into Vercel's Environment Variables (this terminal only)
 //   npm run cc -- push                     upload the accounts to Supabase (once it is set up)
 //   npm run cc -- verify                   check that the register and the database agree
@@ -21,7 +24,7 @@ import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import readline from 'node:readline';
-import { applyCredentials, backup, homeDir, hostingValues, describeKey, inspectSupabase, saveEnv, SUPABASE_URL_FOR, importPlain, parseCredentialSheet, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, recordPassword, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
+import { LOGINS_CSV_FILE, writeLoginsCsv, adminFromRows, writeSetupFiles, applyCredentials, backup, homeDir, hostingValues, describeKey, inspectSupabase, saveEnv, SUPABASE_URL_FOR, importPlain, parseCredentialSheet, loadEnvFile, localStorePath, PLAIN_FILE, provision, pushAccounts, readRegister, readTable, recordPassword, resetCredentials, reveal, syncStatuses, verifyRegister, writePlain } from './lib.mjs';
 import { FileStore, SupabaseStore } from '../../server/command/store.mjs';
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -156,9 +159,44 @@ try {
     } else {
       process.env.SUPABASE_URL = url;
       process.env.SUPABASE_SERVICE_ROLE_KEY = key;
-      const r = await pushAccounts({ from: localStore(), to: store() });
-      console.log(`✓ Tables found. Accounts uploaded: ${r.created} created, ${r.updated} updated.\n\nLast step: give Vercel the same three values, then redeploy. Print them here with:  npm run cc -- vercel`);
+      if (flag('--no-push')) console.log('✓ Tables found. (Your local accounts were not uploaded: --no-push.)');
+      else {
+        const r = await pushAccounts({ from: localStore(), to: store() });
+        console.log(`✓ Tables found. Accounts uploaded: ${r.created} created, ${r.updated} updated.`);
+      }
+      const logins = found.others.filter((o) => o.looksLikeLogins);
+      if (logins.length) console.log(`\nYou have your own table with a password column: ${logins.map((o) => `"${o.name}"`).join(', ')}.\nTo sign in as the admin you put there, run:  npm run cc -- import-admin${logins.length === 1 ? '' : ' --table <name>'}`);
+      console.log('\nLast step: give Vercel the same three values, then redeploy. Print them here with:  npm run cc -- vercel');
     }
+  } else if (cmd === 'table') {
+    const file = await writeLoginsCsv({ store: localStore(), home, length: Number(opt('--length') ?? 8) });
+    console.log(`Every account now has a new short password. Your local records (encrypted register and ${PLAIN_FILE}) match them.\n\nThe ONE file to upload to Supabase:\n  ${file}\n\nIn Supabase: Table Editor → New table → "Import data via spreadsheet" → choose that file → name the table  iocf_logins  → keep Row Level Security ON → Save.\nIt holds readable passwords until the site first sees them (then it keeps only a hash and wipes the readable copy), so delete the file once it is uploaded.`);
+  } else if (cmd === 'sql') {
+    const accounts = await localStore().list();
+    if (!accounts.length) throw new Error('There are no accounts yet. Run  npm run cc -- setup  first.');
+    const f = writeSetupFiles({ accounts, home, drop: !flag('--no-drop') });
+    console.log(`Written (private, mode 600, outside the project):\n  ${f.sql}\n  ${f.csv}   (a readable list of the accounts: no passwords)\n  ${f.table}   (the accounts in the exact shape of the table, with password hashes, for Supabase's CSV import)\n\nTo import: Supabase → SQL Editor → New query, paste the .sql file, Run.\nCopy it to the clipboard with:\n  pbcopy < "${f.sql}"`);
+  } else if (cmd === 'import-admin') {
+    if (!remote()) throw new Error('Connect Supabase first:  npm run cc -- connect --project <your-project-ref>');
+    const url = process.env.SUPABASE_URL;
+    const key = describeKey(process.env.SUPABASE_SERVICE_ROLE_KEY).key;
+    let table = opt('--table');
+    if (!table) {
+      const found = await inspectSupabase({ url, key });
+      if (found.error) throw new Error(found.error);
+      const candidates = found.others.filter((o) => o.looksLikeLogins);
+      if (found.limited) throw new Error('Supabase does not list your tables to me. Tell me the table name:  npm run cc -- import-admin --table <name>');
+      if (candidates.length !== 1) throw new Error(candidates.length ? `I found several tables with a password column (${candidates.map((c) => c.name).join(', ')}). Pick one:  npm run cc -- import-admin --table <name>` : 'I could not find a table with a password column in the public schema. Name it:  npm run cc -- import-admin --table <name>');
+      table = candidates[0].name;
+    }
+    console.log(`Reading the admin from the table "${table}" …`);
+    const admin = adminFromRows(await readTable({ url, key, table }));
+    console.log(`Found it: username column "${admin.columns.user}" = ${admin.username}, password column "${admin.columns.pass}" (the password is not shown).`);
+    const res = await applyCredentials({ store: store(), home, minLength: 8, entries: [{ role: 'admin', username: admin.username, password: admin.password, label: 'the admin in your table' }] });
+    res.warnings.forEach((w) => console.log(' !', w));
+    if (res.changes.length) await writePlain({ store: store(), home });
+    console.log(res.changes.length ? `✓ The admin login is now stored securely (${res.changes[0].changes}). You can sign in as "${admin.username}" with the password from your table.` : '✓ The admin login already matches your table. Nothing to change.');
+    console.log(`\n⚠  The readable password still sits in "${table}". The site does not use that table. In Supabase, delete it (or turn on Row Level Security for it) so it cannot be read.\n   If you change the password in that table later, run this command again.`);
   } else if (cmd === 'vercel') {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.COMMAND_CENTER_SESSION_SECRET) throw new Error('Run  npm run cc -- connect  first.');
     console.log('Paste these into Vercel → your project → Settings → Environment Variables (Production), one by one, then redeploy.\nShown on this terminal only. Clear the screen afterwards.\n');
@@ -192,7 +230,7 @@ try {
     if (!out) throw new Error('Say where: npm run cc -- backup --out <folder>');
     console.log(`Encrypted backup written to ${backup({ home, outDir: path.resolve(out) })}\nKeep the key (${path.join(home, 'register.key')}) somewhere separate and safe: the backup cannot be read without it.`);
   } else {
-    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 19).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 22).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
   }
 } catch (err) {
   console.error('✗', err instanceof Error ? err.message : err);

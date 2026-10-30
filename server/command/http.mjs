@@ -1,6 +1,6 @@
 // Connects the Command Center handler to Node's HTTP server (Fly, local dev) and to Vercel's serverless functions.
 import { createHandler } from './handler.mjs';
-import { storeFromEnv } from './store.mjs';
+import { productionStoreFromEnv } from './loginTable.mjs';
 
 const PREFIX = '/api/command';
 const MAX_BODY = 16 * 1024;
@@ -36,7 +36,7 @@ const clientIp = (req) =>
   req.headers['fly-client-ip'] || req.headers['x-vercel-forwarded-for'] || req.headers['x-real-ip'] || (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
 
 /** (req, res) => Promise — answers requests under /api/command; the caller decides which requests reach it. */
-export function commandCenterRequestListener({ store = storeFromEnv(), env = process.env } = {}) {
+export function commandCenterRequestListener({ store = productionStoreFromEnv(), env = process.env } = {}) {
   const handle = createHandler({ store, env });
   return async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
