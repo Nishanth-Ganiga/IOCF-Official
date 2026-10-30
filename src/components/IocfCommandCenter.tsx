@@ -4,6 +4,7 @@ import { api, ApiError, type CcUser, type Role } from '../data/commandApi';
 import type { ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import AdminDashboard from './command-center/AdminDashboard';
+import AdminSeries from './command-center/AdminSeries';
 import BoardAccounts from './command-center/BoardAccounts';
 import BoardView from './command-center/BoardView';
 import { EASE } from './fx';
@@ -84,6 +85,8 @@ export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: 
     body =
       parts[0] === 'board' && parts[1] ? (
         <BoardView slug={parts[1]} moduleId={parts[2]} sub={parts[3]} user={user} nav={navigate} />
+      ) : parts[0] === 'series' ? (
+        <AdminSeries nav={navigate} />
       ) : parts[0] === 'accounts' ? (
         <BoardAccounts focus={parts[1]} nav={navigate} />
       ) : (
@@ -95,7 +98,7 @@ export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: 
     body = <BoardView slug={other ? (parts[1] ?? '') : (user.board ?? '')} moduleId={other ? parts[2] : parts[0]} sub={other ? parts[3] : parts[1]} user={user} nav={navigate} />;
   }
 
-  const showBar = user && !(user.role === 'admin' && parts[0] !== 'accounts' && !(parts[0] === 'board' && parts[1]));
+  const showBar = user && !(user.role === 'admin' && parts[0] !== 'accounts' && parts[0] !== 'series' && !(parts[0] === 'board' && parts[1]));
   return (
     <>
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />

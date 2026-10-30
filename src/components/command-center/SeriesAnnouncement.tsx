@@ -106,16 +106,17 @@ function Heading({ children }: { children: ReactNode }) {
   return <h2 className="font-display text-3xl tracking-wide text-bone">{children}</h2>;
 }
 
-function Facts({ s, you }: { s: Series; you: string }) {
+export function Facts({ s, you, full }: { s: Series; you: string; full?: boolean }) {
   const rows: [string, string][] = [
     ['Type', typeLabel(s.type)],
     ['Hosted by', s.host.name],
-    [s.opponents.length > 1 ? 'Opponents' : 'Opponent', s.opponents.map((o) => (s.status === 'pending' && s.opponents.length > 1 ? `${o.name}${o.accepted ? ' ✓' : ''}` : o.name)).join(', ')],
+    [s.opponents.length > 1 ? 'Opponents' : 'Opponent', s.opponents.map((o) => (s.status !== 'accepted' && s.opponents.length > 1 ? `${o.name}${o.accepted ? ' ✓' : ''}` : o.name)).join(', ')],
     ['Matches', String(s.matches)],
     ...(s.type === 'bilateral' ? ([[s.matches === 1 ? 'Stadium' : 'Stadiums', s.stadiums.map((x, i) => (s.matches === 1 ? x : `${i + 1}. ${x}`)).join(s.matches === 1 ? '' : ' · ')]] as [string, string][]) : []),
     ['Bet amount', money(s.bet)],
     ['Format', formatLabel(s)],
-    ...(s.status === 'pending' ? ([['Deadline', `11:59 PM IST, ${ist(s.deadlineAt)}`]] as [string, string][]) : []),
+    ...(full ? ([['Announced', ist(s.createdAt)]] as [string, string][]) : []),
+    ...(s.status === 'pending' || full ? ([['Deadline', `11:59 PM IST, ${ist(s.deadlineAt)}`]] as [string, string][]) : []),
   ];
   return (
     <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]" aria-label={`Details of ${s.name} (${you})`}>

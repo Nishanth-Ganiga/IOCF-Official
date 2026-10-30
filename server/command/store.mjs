@@ -35,6 +35,15 @@ export class MemoryStore {
     await this.persist();
     return { ...r };
   }
+  /** Returns true if a series was removed. */
+  async seriesDelete(id) {
+    const list = (this.data.series ??= []);
+    const i = list.findIndex((x) => x.id === id);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    await this.persist();
+    return true;
+  }
 
   async findByUsername(username) {
     const u = String(username ?? '').trim().toLowerCase();
@@ -141,6 +150,9 @@ export class SeriesRest {
   async seriesUpdate(id, patch) {
     return (await this.req('PATCH', `?id=eq.${encodeURIComponent(id)}`, patch, { prefer: 'return=representation' }))?.[0] ?? null;
   }
+  async seriesDelete(id) {
+    return ((await this.req('DELETE', `?id=eq.${encodeURIComponent(id)}`, undefined, { prefer: 'return=representation' })) ?? []).length > 0;
+  }
 }
 
 /** Postgres via Supabase REST. Only the server holds the service-role key; the tables allow no other access (schema.sql). */
@@ -156,6 +168,7 @@ export class SupabaseStore {
   seriesGet(id) { return this.seriesRest.seriesGet(id); }
   seriesInsert(row) { return this.seriesRest.seriesInsert(row); }
   seriesUpdate(id, patch) { return this.seriesRest.seriesUpdate(id, patch); }
+  seriesDelete(id) { return this.seriesRest.seriesDelete(id); }
   async req(method, pathAndQuery, body, extra = {}) {
     const res = await this.fetch(`${this.base}/${pathAndQuery}`, {
       method,

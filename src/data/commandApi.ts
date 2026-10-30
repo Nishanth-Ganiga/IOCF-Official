@@ -105,7 +105,7 @@ export type Series = {
   format: string;
   /** Label such as "6 overs 6 wickets" (Club format only). */
   clubFormat: string | null;
-  status: 'pending' | 'accepted';
+  status: 'pending' | 'accepted' | 'declined';
   deadlineAt: number;
   createdAt: number;
   acceptedAt: number | null;
@@ -129,4 +129,6 @@ export const api = {
   announceSeries: (slug: string, input: SeriesInput) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series`, input),
   editSeries: (slug: string, id: string, input: SeriesInput) => request<{ series: Series }>('PUT', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}`, input),
   acceptSeries: (slug: string, id: string) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/accept`),
+  adminSeries: () => request<{ series: Series[] }>('GET', '/admin/series').then((r) => r.series),
+  deleteSeries: (id: string) => request<{ ok: true }>('DELETE', `/admin/series/${encodeURIComponent(id)}`),
 };

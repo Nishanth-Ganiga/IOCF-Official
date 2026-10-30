@@ -102,6 +102,7 @@ export class LoginTableStore {
   seriesGet(id) { return this.seriesRest.seriesGet(id); }
   seriesInsert(row) { return this.seriesRest.seriesInsert(row); }
   seriesUpdate(id, patch) { return this.seriesRest.seriesUpdate(id, patch); }
+  seriesDelete(id) { return this.seriesRest.seriesDelete(id); }
   async moduleOverrides() {
     return [];
   }
@@ -210,7 +211,7 @@ export class AutoStore {
     throw Object.assign(new Error('No Command Center tables found.'), { code: 'not_configured' });
   }
 }
-for (const m of ['list', 'findById', 'findByUsername', 'create', 'update', 'moduleOverrides', 'setModuleOverride', 'addAudit', 'listAudit', 'getRate', 'bumpRate', 'clearRate', 'seriesList', 'seriesGet', 'seriesInsert', 'seriesUpdate']) {
+for (const m of ['list', 'findById', 'findByUsername', 'create', 'update', 'moduleOverrides', 'setModuleOverride', 'addAudit', 'listAudit', 'getRate', 'bumpRate', 'clearRate', 'seriesList', 'seriesGet', 'seriesInsert', 'seriesUpdate', 'seriesDelete']) {
   AutoStore.prototype[m] = async function (...a) {
     return (await this.impl())[m](...a);
   };

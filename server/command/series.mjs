@@ -90,3 +90,6 @@ export function toApi(s, boards, t) {
     editable: s.status === 'pending' && s.accepted.length === 0 && t <= s.deadline_at,
   };
 }
+
+/** For the administrator: every series, including the ones declined at their deadline. */
+export const adminView = (s, boards, t) => ({ ...toApi(s, boards, t), status: isExpired(s, t) ? 'declined' : s.status, editable: false });

@@ -10,6 +10,8 @@
 //   PATCH /admin/accounts/:accountId    admin only   { status?, chairmanName? }
 //   PUT  /admin/boards/:slug/modules    admin only   { moduleId, enabled }
 //   PUT  /admin/boards/:slug/account    admin only   { username?, password?, chairmanName? }  creates or updates the board's login
+//   GET  /admin/series                 admin only   every series, any status
+//   DELETE /admin/series/:id           admin only   removes a series for good
 //   GET  /admin/audit                   admin only
 //   GET  /boards/:slug/series           the board's announced series, invitations and the upcoming list
 //   POST /boards/:slug/series           announce a series (own board)
@@ -19,7 +21,7 @@
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { SERIES_CFG, STADIUMS, activeCount, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { SERIES_CFG, STADIUMS, activeCount, adminView, isLive, newSeries, toApi, validateSeries } from './series.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -52,6 +54,7 @@ const ACTIONS = {
   series_announced: 'Series announced',
   series_edited: 'Series edited',
   series_accepted: 'Series accepted',
+  series_deleted: 'Series deleted by administrator',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -277,6 +280,19 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             availableModules: MODULES.filter((m) => m.status === 'active').length,
             recentActivity: recent.map((r) => ({ at: r.at, action: r.action, label: actionLabel(r.action), actor: r.actor, target: r.target })),
           });
+        }
+
+        if (b === 'series' && !c && method === 'GET') {
+          const t = now();
+          return json(200, { series: (await store.seriesList()).sort((p, q) => q.created_at - p.created_at).map((x) => adminView(x, BOARDS, t)) });
+        }
+
+        if (b === 'series' && c && method === 'DELETE') {
+          const cur = await store.seriesGet(c);
+          if (!cur) return fail(404, 'not_found', 'Series not found.');
+          await store.seriesDelete(cur.id);
+          await audit('series_deleted', who, cur.id, req, { name: cur.name, host: cur.host });
+          return json(200, { ok: true });
         }
 
         if (b === 'accounts' && !c && method === 'GET') {

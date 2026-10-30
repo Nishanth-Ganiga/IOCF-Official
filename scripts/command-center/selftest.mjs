@@ -561,6 +561,15 @@ console.log('\n— Series Announcement —');
   }
   check('…then it becomes upcoming', (await view(cPak, 'pakistan')).upcoming.some((x) => x.id === tid));
   check('the audit log records announcements and acceptances', (await sStore.listAudit(200)).some((x) => x.action === 'series_announced') && (await sStore.listAudit(200)).some((x) => x.action === 'series_accepted'));
+  // administrator: list everything, delete anything
+  cAdm = await sLogin('admin', sCreds.find((c) => c.username === 'iocf.admin'));
+  const all = (await sCall('GET', 'admin/series', { cookie: cAdm })).body.series;
+  check('the administrator sees every series with its status, including declined ones', all.length >= 5 && all.some((x) => x.status === 'accepted') && all.some((x) => x.status === 'declined') && all.some((x) => x.id === lateSeries.id && x.fixtures));
+  check('boards cannot list or delete series through the admin routes', (await sCall('GET', 'admin/series', { cookie: cIndia })).status === 403 && (await sCall('DELETE', `admin/series/${tid}`, { cookie: cIndia })).status === 403 && (await sCall('GET', 'admin/series')).status === 401);
+  const gone = await sCall('DELETE', `admin/series/${tid}`, { cookie: cAdm });
+  check('the administrator deletes a series: it vanishes for every board', gone.status === 200 && !(await view(cPak, 'pakistan')).upcoming.some((x) => x.id === tid) && !(await view(cIndia, 'india')).announced.some((x) => x.id === tid) && !(await sCall('GET', 'admin/series', { cookie: cAdm })).body.series.some((x) => x.id === tid));
+  check('deleting frees the 2-series limit and is recorded in the audit log', (await view(cIndia, 'india')).active === 1 && (await sStore.listAudit(300)).some((x) => x.action === 'series_deleted' && x.target === tid));
+  check('deleting an unknown series is a 404', (await sCall('DELETE', 'admin/series/nope', { cookie: cAdm })).status === 404);
   fs.rmSync(sHome, { recursive: true, force: true });
 }
 
