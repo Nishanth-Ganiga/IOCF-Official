@@ -131,7 +131,7 @@ check('a wrong password on an inactive account does NOT reveal it is inactive', 
 check('the administrator account cannot be deactivated', (await call('PATCH', `admin/accounts/${admin.accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } })).status === 400);
 check('admin reactivates India', (await call('PATCH', `admin/accounts/${cred('India').accountId}`, { cookie: adm.cookie, body: { status: 'active' } })).status === 200 && (await login('board', cred('India'))).r.status === 200);
 const ov = (await call('GET', 'admin/overview', { cookie: adm.cookie })).body;
-check('overview counts are right', ov.totalBoards === 26 && ov.totalAccounts === 27 && ov.activeBoardAccounts === 26 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 1);
+check('overview counts are right', ov.totalBoards === 26 && ov.totalAccounts === 27 && ov.activeBoardAccounts === 26 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 2);
 await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } });
 check('overview counts inactive boards', (await call('GET', 'admin/overview', { cookie: adm.cookie })).body.inactiveBoardAccounts === 1);
 const list = (await call('GET', 'admin/accounts', { cookie: adm.cookie })).body;
@@ -181,10 +181,10 @@ check('the account list now shows Japan as active and the others as having no lo
 console.log('\n— 7/8. modules —');
 const nz2 = await login('board', cred('New Zealand'));
 const dash = await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie });
-check('Series Announcement is the only active module', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement' && dash.body.modules.join() === 'series-announcement');
-check('coming-soon modules cannot be switched on', (await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'fixtures', enabled: true } })).status === 400);
+check('Series Announcement and Fixtures & Scheduling are the active modules', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement,fixtures' && dash.body.modules.join() === 'series-announcement,fixtures');
+check('coming-soon modules cannot be switched on', (await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'squads', enabled: true } })).status === 400);
 await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'series-announcement', enabled: false } });
-check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.length === 0 && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 1);
+check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.join() === 'fixtures' && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 2);
 
 console.log('\n— 10. password reset —');
 const before = cred('Pakistan');
@@ -451,7 +451,7 @@ check('the admin overview works on the single table', ot_ov.totalBoards === 26 &
 const ot_setT = await ot_tcall('PUT', 'admin/boards/portugal/account', { cookie: ot_adm4.cookie, body: { username: 'portugal.boss', password: 'Admin-Set-1' } });
 check('Board Accounts (admin tile) can set a login in the table', ot_setT.status === 200 && (await ot_tlogin('board', 'portugal.boss', 'Admin-Set-1')).r.status === 200);
 check('module switches say they need the full setup instead of failing silently', (await ot_tcall('PUT', 'admin/boards/portugal/modules', { cookie: ot_adm4.cookie, body: { moduleId: 'series-announcement', enabled: false } })).status === 501);
-check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement');
+check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement,fixtures');
 
 // nothing configured
 const ot_empty = ot_makeSupabase({});
@@ -566,6 +566,11 @@ console.log('\n— Series Announcement —');
   }
   check('…then it becomes upcoming', (await view(cPak, 'pakistan')).upcoming.some((x) => x.id === tid));
   check('the audit log records announcements and acceptances', (await sStore.listAudit(200)).some((x) => x.action === 'series_announced') && (await sStore.listAudit(200)).some((x) => x.action === 'series_accepted'));
+  // fixtures & scheduling: the calendar of confirmed series
+  const fx = (await sCall('GET', 'boards/india/fixtures', { cookie: cIndia })).body;
+  check('the calendar lists the matches of confirmed series with team, stadium and date, and no unaccepted series', fx.today === '2026-06-11' && fx.matches.some((m) => m.seriesId === sid && m.teamNames.join() === 'India,Australia' && m.stadium && /^\d{4}-\d{2}-\d{2}$/.test(m.date)) && !fx.matches.some((m) => m.seriesId === lateSeries.id));
+  check('a confirmed series appears once per match; finals are listed without a date', fx.matches.filter((m) => m.seriesId === sid).length === 3 && (await sCall('GET', 'boards/india/fixtures', { cookie: cIndia })).body.matches.filter((m) => m.final).every((m) => m.date === null && m.stadium === null));
+  check('every board and the administrator can read the calendar; no one else', (await sCall('GET', 'boards/england/fixtures', { cookie: cEng })).status === 200 && (await sCall('GET', 'boards/india/fixtures', { cookie: cAdm })).status === 200 && (await sCall('GET', 'boards/india/fixtures', { cookie: cAus })).status === 403 && (await sCall('GET', 'boards/india/fixtures')).status === 401);
   // administrator: list everything, delete anything
   cAdm = await sLogin('admin', sCreds.find((c) => c.username === 'iocf.admin'));
   const all = (await sCall('GET', 'admin/series', { cookie: cAdm })).body.series;

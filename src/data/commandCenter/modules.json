@@ -9,8 +9,8 @@
  {
   "id": "fixtures",
   "title": "Fixtures & Scheduling",
-  "description": "Plan and track your board's matches and series dates.",
-  "status": "coming-soon",
+  "description": "Your board's match calendar: every confirmed series, with dates, teams and stadiums.",
+  "status": "active",
   "icon": "calendar"
  },
  {

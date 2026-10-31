@@ -13,6 +13,7 @@
 //   GET  /admin/series                 admin only   every series, any status
 //   DELETE /admin/series/:id           admin only   removes a series for good
 //   GET  /admin/audit                   admin only
+//   GET  /boards/:slug/fixtures         every match of every confirmed series (the calendar)
 //   GET  /boards/:slug/series           the board's announced series, invitations and the upcoming list
 //   POST /boards/:slug/series           announce a series (own board)
 //   PUT  /boards/:slug/series/:id       edit it until an opponent accepts
@@ -21,7 +22,7 @@
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { SERIES_CFG, STADIUMS, activeCount, adminView, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { SERIES_CFG, STADIUMS, activeCount, adminView, calendarEntries, todayIst, isLive, newSeries, toApi, validateSeries } from './series.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -189,6 +190,15 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           chairmanName: account?.chairman_name ?? null,
           modules: await enabledModules(board.slug),
         });
+      }
+
+      if (a === 'boards' && b && c === 'fixtures' && !d && method === 'GET') {
+        const board = BOARDS.find((x) => x.slug === b);
+        if (!board) return fail(404, 'not_found', 'Board not found.');
+        if (who.role !== 'admin' && who.board_slug !== board.slug) return fail(403, 'forbidden', 'You do not have access to this board.');
+        const t = now();
+        const matches = (await store.seriesList()).filter((x) => x.status === 'accepted').flatMap((x) => calendarEntries(x, BOARDS));
+        return json(200, { today: todayIst(t), matches });
       }
 
       if (a === 'boards' && b && c === 'series') {

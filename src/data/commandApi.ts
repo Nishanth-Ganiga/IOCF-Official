@@ -117,6 +117,24 @@ export type Series = {
 
 export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; allStadiums: Record<string, string[]>; announced: Series[]; invitations: Series[]; upcoming: Series[] };
 
+export type CalendarMatch = {
+  seriesId: string;
+  series: string;
+  type: string;
+  no: number;
+  of: number;
+  final: boolean;
+  teams: string[] | null;
+  teamNames: string[] | null;
+  /** Every board in the series (the host first). */
+  boards: string[];
+  stadium: string | null;
+  /** YYYY-MM-DD; null for a final, whose date is announced later. */
+  date: string | null;
+  format: string;
+  bet: number;
+};
+
 export const api = {
   me: () => request<{ user: CcUser }>('GET', '/me').then((r) => r.user),
   login: (role: Role, username: string, password: string) => request<{ user: CcUser }>('POST', '/login', { role, username, password }).then((r) => r.user),
@@ -134,4 +152,5 @@ export const api = {
   acceptSeries: (slug: string, id: string) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/accept`),
   adminSeries: () => request<{ series: Series[] }>('GET', '/admin/series').then((r) => r.series),
   deleteSeries: (id: string) => request<{ ok: true }>('DELETE', `/admin/series/${encodeURIComponent(id)}`),
+  fixtures: (slug: string) => request<{ today: string; matches: CalendarMatch[] }>('GET', `/boards/${encodeURIComponent(slug)}/fixtures`),
 };

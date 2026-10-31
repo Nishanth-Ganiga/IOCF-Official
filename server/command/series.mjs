@@ -104,3 +104,25 @@ export function toApi(s, boards, t) {
 
 /** For the administrator: every series, including the ones declined at their deadline. */
 export const adminView = (s, boards, t) => ({ ...toApi(s, boards, t), status: isExpired(s, t) ? 'declined' : s.status, editable: false });
+
+/** Every match of a confirmed series as a calendar entry (the final has no date yet). `teams` are board slugs. */
+export function calendarEntries(s, boards) {
+  const nameOf = (slug) => boards.find((b) => b.slug === slug)?.name ?? slug;
+  const label = s.club_format ? `Club · ${SERIES_CFG.clubFormats.find((c) => c.id === s.club_format)?.label ?? s.club_format}` : s.format;
+  return buildFixtures(s.series_type, [s.host, ...s.opponents], s.matches).map((f) => ({
+    seriesId: s.id,
+    series: s.name,
+    type: s.series_type,
+    no: f.no,
+    of: s.matches,
+    final: f.final,
+    teams: f.teams,
+    teamNames: f.teams ? f.teams.map(nameOf) : null,
+    boards: [s.host, ...s.opponents],
+    stadium: f.final ? null : (s.stadiums[f.no - 1] ?? null),
+    date: f.final ? null : (s.dates?.[f.no - 1] ?? null),
+    format: label,
+    bet: s.bet,
+  }));
+}
+export const todayIst = (t) => istDay(t);
