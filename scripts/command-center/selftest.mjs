@@ -708,6 +708,47 @@ console.log('\n— Series Announcement —');
 }
 }
 
+
+console.log('\n— Series Matches tab (earlier series) —');
+{
+  const { Book } = await import('../sync/helpers.mjs');
+  const { buildSeriesRecords, normalFormat, resolveBoard } = await import('../sync/series.mjs');
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Series Matches');
+  const header = ['Series Name', 'Hosting Board', 'Opponents', 'Dates', 'Winners', 'Runners', 'Series Result', 'Bet Amount', 'Format'];
+  ws.addRow(['Completed Series']);
+  ws.addRow(header);
+  ws.addRow(['January']);
+  ws.addRow(['Pointing Cup ', 'Australia', 'Pakistan', '6th - 10th Jan', 'Pakistan', 'Australia', new Date(Date.UTC(2026, 0, 2)), 5000]); // "1-2" typed into a spreadsheet becomes 2 Jan
+  ws.addRow(['Colombo Cup', 'Srilanka', 'Pakistan', '10th - 12th Jan', 'Srilanka', 'Pakistan', new Date(Date.UTC(2026, 1, 1)), 6000, '7o 7w']);
+  ws.addRow(['Tri Cup', 'West Indies', 'Australia, Scotland', '14th - 17th Jan', 'Australia', 'West Indies', 'WI vs Aus | WI won\nAus vs Scot | Aus Won', 5000, 'L4i']);
+  ws.addRow(['One Off', 'Newzealand', 'Bangaldesh', '28th April', 'Netherland', 'Bangladesh', '1 Match only', 2000, 'odi']);
+  ws.addRow(['Argentine Cup', 'Portugal', 'Argentina', '2nd - 6th Oct', 'Portugal', 'Argentina', '3-0', 3000, 'Test']);
+  ws.addRow([]);
+  ws.addRow(['Upcoming Series']);
+  ws.addRow(header);
+  ws.addRow(['Gulf Cup', 'Zimbabwe', 'Japan, Canada, USA, Nepal & Portugal', '23rd - 30th Oct', '-', '-', '-', 10000, 'T20']);
+  ws.addRow(['Upcoming IOCF World Test Championship Matches']);
+  ws.addRow(['Test Name', 'Hosting Board', 'Opponents', 'Dates', 'Winners ', 'Bet Amount', 'Format']);
+  ws.addRow(['Should not appear', 'England', 'India', '1st Nov', '-', 5000, 'Test']);
+  const rec = buildSeriesRecords(new Book(wb));
+  const [c1, c2, c3, c4, c5] = rec.completed;
+  check('Series Matches: the completed series and the upcoming block are read, other blocks ignored', rec.completed.length === 5 && rec.upcoming.length === 1 && rec.upcoming[0].name === 'Gulf Cup');
+  check('Series Matches: the month banner, dates, winner, runners-up and bet are kept', c1.month === 'January' && c1.name === 'Pointing Cup' && c1.dates === '6th - 10th Jan' && c1.winner.name === 'Pakistan' && c1.runnerUp.name === 'Australia' && c1.bet === 5000);
+  check('Series Matches: a score the spreadsheet turned into a date is read back (2 Jan → 1-2, 1 Feb → 2-1)', c1.result === '1-2' && c2.result === '2-1');
+  check('Series Matches: board spellings are corrected (Srilanka, Newzealand, Bangaldesh, Netherland) and slugs match the boards', c2.host.slug === 'sri-lanka' && c4.host.slug === 'new-zealand' && c4.opponents[0].name === 'Bangladesh' && c4.winner.name === 'Netherlands' && c4.winner.slug === 'netherlands');
+  check('Series Matches: a team that is not one of the 26 boards is kept without a slug', c5.opponents[0].name === 'Argentina' && c5.opponents[0].slug === null);
+  check('Series Matches: opponents of a multi-board series are split', c3.opponents.map((o) => o.name).join() === 'Australia,Scotland' && rec.upcoming[0].opponents.map((o) => o.name).join() === 'Japan,Canada,USA,Nepal,Portugal');
+  check('Series Matches: a match-by-match breakdown is kept as lines; notes such as "1 Match only" stay as text', c3.resultLines.length === 2 && c3.result === null && c4.result === '1 Match only');
+  check('Series Matches: formats are tidied and "-" means not yet', normalFormat('7o 7w') === '7 overs 7 wickets' && normalFormat('5overs 5wickets') === '5 overs 5 wickets' && c3.format === 'L4I' && c4.format === 'ODI' && c5.format === 'TEST' && rec.upcoming[0].winner === null && rec.upcoming[0].result === null);
+  check('Series Matches: the workbook without the tab gives no records', buildSeriesRecords(new Book(new ExcelJS.Workbook())) === null && resolveBoard('') === null);
+  if (fs.existsSync('IOCF ALL BOARDS .xlsx')) {
+    const { readWorkbook } = await import('../sync/index.mjs');
+    const real = buildSeriesRecords(await readWorkbook('IOCF ALL BOARDS .xlsx'));
+    check('Series Matches: the real workbook gives its completed series (200+) with winners (only Argentina is not one of the 26 boards)', real.completed.length > 200 && real.completed.every((r) => r.winner) && real.completed.filter((r) => !r.host.slug).every((r) => r.host.name === 'Argentina') && real.upcoming.length >= 1);
+  }
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

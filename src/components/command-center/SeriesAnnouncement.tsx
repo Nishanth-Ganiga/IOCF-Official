@@ -3,6 +3,7 @@ import { api, ApiError, type Series, type SeriesInput, type SeriesOverview } fro
 import { BOARD_THEMES, paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
 import cfg from '../../data/commandCenter/series.json';
 import { buildFixtures, stadiumBoards } from '../../data/commandCenter/fixtures.mjs';
+import SeriesHistory, { ItemCard, SourceNote, recordItems } from './SeriesHistory';
 
 type Go = (sub?: string) => void;
 
@@ -51,7 +52,7 @@ export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: B
     );
   if (!data) return <p className="mt-8 text-sm text-smoke" aria-busy="true">Loading…</p>;
 
-  const page = sub === 'announce' || sub === 'accept' || sub === 'upcoming' ? sub : null;
+  const page = sub === 'announce' || sub === 'accept' || sub === 'upcoming' || sub === 'history' ? sub : null;
   return (
     <div className="mt-8">
       {page && (
@@ -63,6 +64,7 @@ export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: B
       {page === 'announce' && <Announce theme={theme} data={data} admin={admin} reload={load} />}
       {page === 'accept' && <Accept theme={theme} data={data} admin={admin} reload={load} />}
       {page === 'upcoming' && <Upcoming theme={theme} data={data} />}
+      {page === 'history' && <SeriesHistory theme={theme} data={data} />}
     </div>
   );
 }
@@ -72,7 +74,8 @@ export function Hub({ theme, data, go }: { theme: BoardTheme; data: SeriesOvervi
   const tiles = [
     { id: 'announce', title: 'Announce a Series', text: 'Set up a new series and send it to your opponent.', badge: `${data.announced.filter((x) => x.status !== 'declined').length} announced` },
     { id: 'accept', title: 'Accept the Series', text: 'Series other boards have announced to you.', badge: data.invitations.length ? `${data.invitations.length} waiting` : 'none waiting', hot: data.invitations.length > 0 },
-    { id: 'upcoming', title: 'Upcoming Series', text: 'Every confirmed series across the federation.', badge: `${data.upcoming.length} confirmed` },
+    { id: 'upcoming', title: 'Upcoming Series', text: 'Every confirmed series across the federation.', badge: `${data.upcoming.length + recordItems('upcoming', data).length} upcoming` },
+    { id: 'history', title: 'Series History', text: 'Every completed series: winners, results and bets.', badge: `${data.completed.length + recordItems('completed', data).length} completed` },
   ];
   return (
     <>
@@ -82,7 +85,8 @@ export function Hub({ theme, data, go }: { theme: BoardTheme; data: SeriesOvervi
       <p className="mb-4 max-w-3xl text-sm leading-relaxed text-mist">
         <b className="text-bone">How it works:</b> use <b>Announce a Series</b> to propose a series to another board; the opponent confirms it under <b>Accept the Series</b> before 11:59 PM IST the same day; confirmed series are listed in <b>Upcoming Series</b>. Open each tile for step-by-step instructions.
       </p>
-      <ul className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <SourceNote hl={pal.highlight} />
+      <ul className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {tiles.map((t) => (
           <li key={t.id}>
             <button type="button" onClick={() => go(t.id)} className="group block h-full w-full rounded-2xl border bg-black/55 p-5 text-left backdrop-blur-sm transition hover:-translate-y-0.5" style={{ borderColor: `${pal.highlight}66` }}>
@@ -180,12 +184,14 @@ function Guide({ title, hl, steps, rules }: { title: string; hl: string; steps: 
 
 export function Upcoming({ theme, data }: { theme: BoardTheme; data: SeriesOverview }) {
   const pal = paletteOf(theme);
+  const records = recordItems('upcoming', data);
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
       <Heading>UPCOMING SERIES</Heading>
       <p className="mt-1 text-sm text-mist">Series that have been announced and accepted, across all boards.</p>
+      <SourceNote hl={pal.highlight} />
       {!data.upcoming.length ? (
-        <Empty text="No upcoming series yet." />
+        <Empty text={records.length ? 'No series have been announced on the site yet.' : 'No upcoming series yet.'} />
       ) : (
         <ul className="mt-6 grid gap-4 lg:grid-cols-2">
           {data.upcoming.map((s) => (
@@ -199,18 +205,14 @@ export function Upcoming({ theme, data }: { theme: BoardTheme; data: SeriesOverv
           ))}
         </ul>
       )}
-      {data.completed.length > 0 && (
+      {records.length > 0 && (
         <>
           <h3 className="mt-10 text-[11px] font-semibold tracking-[0.24em]" style={{ color: pal.highlight }}>
-            COMPLETED SERIES
+            FROM THE IOCF RECORDS · ANNOUNCED MANUALLY
           </h3>
           <ul className="mt-3 grid gap-4 lg:grid-cols-2">
-            {data.completed.map((s) => (
-              <li key={s.id} className={card}>
-                <p className="font-display text-2xl tracking-wide text-bone">{s.name.toUpperCase()}</p>
-                <p className="text-xs font-semibold tracking-[0.18em] text-[#6fcf8e]">{s.result?.winner ? `WON BY ${s.result.winner.name.toUpperCase()}` : 'SERIES DRAWN'}</p>
-                <Facts s={s} you="completed" />
-              </li>
+            {records.map((it) => (
+              <ItemCard key={it.key} it={it} hl={pal.highlight} slug={theme.slug} />
             ))}
           </ul>
         </>

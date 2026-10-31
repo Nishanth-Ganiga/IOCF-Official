@@ -4,6 +4,7 @@ import type { League } from './leagues';
 import type { Entry, Player } from './players';
 import type { Tournament } from './iocfInfo';
 import type { MajorTournament } from './tournaments';
+import type { SeriesRecords } from './seriesRecords';
 import type { Umpire } from './umpires';
 
 /**
@@ -39,6 +40,8 @@ export type Dataset = {
   leagues: League[];
   /** The Major Tournaments profile (T20 World Cup, Euro Cup, …). Absent in data synced before it existed. */
   majorTournaments?: MajorTournament[];
+  /** Series played before the Command Center, from the sheet's "Series Matches" tab. Absent in data synced before it existed. */
+  seriesRecords?: SeriesRecords;
   info: Info;
   /** Past board rankings, oldest first; used for rank movement. */
   rankHistory?: { at: string | null; ranks: Record<string, Record<string, number>> }[];

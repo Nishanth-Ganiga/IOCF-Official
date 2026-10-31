@@ -57,6 +57,8 @@ Boards, players, umpires, franchise leagues, tournaments and the Main-page text 
 
 **Keep the sheet layout.** The importer finds things by their labels: the board tabs, `Chairman:`, `Players`, the `Umpire | Details` table, `All TEAMS` / `All Match Updates` / `AWARDS` in the league tabs, `Tournament Name`, `Board Rankings`, `IOCF Cards`, `All Time Records`, `IOCF 2.0`. Adding rows (players, matches, leagues) is fine; renaming those labels or tabs needs an importer update.
 
+**Earlier series** (before the Command Center) are read from the `Series Matches` tab: the `Completed Series` table (grouped under month rows) and the `Upcoming Series` table, found by their headings and column names (`Series Name`, `Hosting Board`, `Opponents`, `Dates`, `Winners`, `Runners`, `Series Result`, `Bet Amount`, `Format`). They appear in the Command Center under Series History and Upcoming Series, marked as IOCF records. New series are announced on the site only.
+
 **Major Tournament tabs** are found by name (`T20 World Cup 2026`, `IOCF EURO CUP`, `IOCF OCEANIA CUP`, `IOCF ASIA CUP`, `IOCF Associate Nations Cup`, `IOCF ODI WORLD CUP`, `WTC Matches`, `Emerging Talent League`, `Womens Global League`, `IOCF Lone Warrior`, `IOCF Origins Championship`), or by a close match such as "Asia Cup 2026". Each tab is shown as the tables it contains, so no importer change is needed when rows or tables are added. The list is in `scripts/sync/tournaments.mjs`.
 
 ## Command Center (locked profile)

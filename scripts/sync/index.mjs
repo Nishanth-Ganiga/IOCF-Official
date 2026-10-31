@@ -4,6 +4,7 @@ import { Book } from './helpers.mjs';
 import { buildInfo } from './info.mjs';
 import { buildLeagues } from './leagues.mjs';
 import { buildLedger } from './ledger.mjs';
+import { buildSeriesRecords } from './series.mjs';
 import { buildMajorTournaments } from './tournaments.mjs';
 
 export async function readWorkbook(source) {
@@ -26,10 +27,12 @@ export function buildDataset(book, meta = {}) {
     umpireOrder: ledger.umpireOrder,
     leagues,
     majorTournaments: buildMajorTournaments(book, ledger.boards.map((b) => b.name), missingTournaments),
+    // the series played before the Command Center (the "Series Matches" tab); absent if the tab is missing
+    seriesRecords: buildSeriesRecords(book) ?? undefined,
     info: buildInfo(ledger.fed),
   };
   validate(dataset);
-  return { dataset, report: { boards: dataset.boards.length, players: dataset.players.length, umpires: dataset.umpires.length, leagues: leagues.length, majorTournaments: dataset.majorTournaments.length, tournamentsWithoutATab: missingTournaments.join(', ') || 'none', leaguePlayers: leagues.reduce((n, l) => n + l.teams.reduce((m, t) => m + t.players.length, 0), 0), matches: leagues.reduce((n, l) => n + l.matches.length, 0), unmatchedNames: ledger.unmatched + unmatched } };
+  return { dataset, report: { boards: dataset.boards.length, players: dataset.players.length, umpires: dataset.umpires.length, leagues: leagues.length, majorTournaments: dataset.majorTournaments.length, seriesRecords: dataset.seriesRecords ? `${dataset.seriesRecords.completed.length} completed, ${dataset.seriesRecords.upcoming.length} upcoming` : 'no Series Matches tab', tournamentsWithoutATab: missingTournaments.join(', ') || 'none', leaguePlayers: leagues.reduce((n, l) => n + l.teams.reduce((m, t) => m + t.players.length, 0), 0), matches: leagues.reduce((n, l) => n + l.matches.length, 0), unmatchedNames: ledger.unmatched + unmatched } };
 }
 
 /** Refuse to publish a dataset that is obviously broken (e.g. someone renamed a sheet or deleted a tab). */
