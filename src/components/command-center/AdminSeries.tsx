@@ -19,6 +19,9 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
   const [query, setQuery] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState('');
+  const [editing, setEditing] = useState('');
+  const [winner, setWinner] = useState('');
+  const [note, setNote] = useState('');
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -41,6 +44,39 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
       setConfirm('');
       await load();
       setFlash({ ok: true, text: `“${s.name}” was deleted.` });
+    } catch (e) {
+      setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
+    }
+    setBusy('');
+  };
+
+  const openResult = (s: Series) => {
+    setEditing(s.id);
+    setWinner(s.result ? (s.result.winner?.slug ?? 'draw') : '');
+    setNote(s.result?.note ?? '');
+    setConfirm('');
+    setFlash(null);
+  };
+  const saveResult = async (s: Series) => {
+    setBusy(s.id);
+    setFlash(null);
+    try {
+      await api.setSeriesResult(s.id, { winner, note });
+      setEditing('');
+      await load();
+      setFlash({ ok: true, text: `Result saved for “${s.name}”.` });
+    } catch (e) {
+      setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
+    }
+    setBusy('');
+  };
+  const clearResult = async (s: Series) => {
+    setBusy(s.id);
+    setFlash(null);
+    try {
+      await api.clearSeriesResult(s.id);
+      await load();
+      setFlash({ ok: true, text: `Result cleared for “${s.name}”.` });
     } catch (e) {
       setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
     }
@@ -100,6 +136,56 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
                 </span>
               </div>
               <Facts s={s} you="administrator" full />
+              {s.status === 'accepted' && (
+                <div className="mt-4 rounded-lg border border-white/10 p-3">
+                  {editing === s.id ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (winner) void saveResult(s);
+                      }}
+                      className="grid gap-3 sm:grid-cols-2"
+                    >
+                      <label className="block text-[11px] font-semibold tracking-[0.18em] text-mist">
+                        SERIES WINNER
+                        <select value={winner} onChange={(e) => setWinner(e.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-ink px-3 py-2.5 text-sm text-bone outline-none focus:border-[#c9a24b]">
+                          <option value="">Select the winner</option>
+                          {[s.host, ...s.opponents].map((b) => (
+                            <option key={b.slug} value={b.slug}>
+                              {b.name}
+                            </option>
+                          ))}
+                          <option value="draw">Series drawn (no winner)</option>
+                        </select>
+                      </label>
+                      <label className="block text-[11px] font-semibold tracking-[0.18em] text-mist">
+                        RESULT NOTE (OPTIONAL)
+                        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="e.g. won 2–1" className="mt-1 w-full rounded-lg border border-white/15 bg-ink px-3 py-2.5 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b]" />
+                      </label>
+                      <div className="flex items-center gap-3 sm:col-span-2">
+                        <button type="submit" disabled={!winner || busy === s.id} className="rounded-lg bg-[#c9a24b] px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-40">
+                          {busy === s.id ? 'SAVING…' : 'SAVE RESULT'}
+                        </button>
+                        <button type="button" onClick={() => setEditing('')} className="text-xs font-semibold tracking-[0.18em] text-mist hover:text-bone">
+                          CANCEL
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm text-bone">{s.result ? `Result: ${s.result.winner ? `${s.result.winner.name} won` : 'drawn'}${s.result.note ? ` · ${s.result.note}` : ''}` : 'No result recorded yet.'}</span>
+                      <button type="button" onClick={() => openResult(s)} className="rounded-lg border border-[#c9a24b] px-4 py-1.5 text-xs font-bold tracking-[0.18em] text-[#c9a24b] transition hover:bg-[#c9a24b]/10">
+                        {s.result ? 'EDIT RESULT' : 'RECORD RESULT'}
+                      </button>
+                      {s.result && (
+                        <button type="button" onClick={() => void clearResult(s)} disabled={busy === s.id} className="text-xs font-semibold tracking-[0.18em] text-mist hover:text-bone disabled:opacity-50">
+                          CLEAR
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="mt-4">
                 {confirm === s.id ? (
                   <div role="alertdialog" aria-label={`Delete ${s.name}`} className="flex flex-wrap items-center gap-3 rounded-lg border border-crimson/50 px-4 py-3">

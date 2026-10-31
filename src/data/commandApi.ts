@@ -109,13 +109,15 @@ export type Series = {
   /** Label such as "6 overs 6 wickets" (Club format only). */
   clubFormat: string | null;
   status: 'pending' | 'accepted' | 'declined';
+  /** Set by the administrator after the series; `winner` is null for a drawn series. */
+  result: { winner: { slug: string; name: string } | null; note: string | null; at: number | null } | null;
   deadlineAt: number;
   createdAt: number;
   acceptedAt: number | null;
   editable: boolean;
 };
 
-export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; allStadiums: Record<string, string[]>; announced: Series[]; invitations: Series[]; upcoming: Series[] };
+export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; allStadiums: Record<string, string[]>; completed: Series[]; announced: Series[]; invitations: Series[]; upcoming: Series[] };
 
 export type CalendarMatch = {
   seriesId: string;
@@ -133,6 +135,8 @@ export type CalendarMatch = {
   date: string | null;
   format: string;
   bet: number;
+  /** Winner of the series once the administrator has recorded it. */
+  winner: string | null;
 };
 
 export const api = {
@@ -153,4 +157,6 @@ export const api = {
   adminSeries: () => request<{ series: Series[] }>('GET', '/admin/series').then((r) => r.series),
   deleteSeries: (id: string) => request<{ ok: true }>('DELETE', `/admin/series/${encodeURIComponent(id)}`),
   fixtures: (slug: string) => request<{ today: string; matches: CalendarMatch[] }>('GET', `/boards/${encodeURIComponent(slug)}/fixtures`),
+  setSeriesResult: (id: string, result: { winner: string; note?: string }) => request<{ series: Series }>('PUT', `/admin/series/${encodeURIComponent(id)}/result`, result),
+  clearSeriesResult: (id: string) => request<{ series: Series }>('DELETE', `/admin/series/${encodeURIComponent(id)}/result`),
 };

@@ -25,7 +25,7 @@ const involves = (s, slug) => s.host === slug || s.opponents.includes(slug);
 
 /** How many series this board is in: accepted ones, ones it hosts that are still open, and ones it has accepted. */
 export function activeCount(all, slug, t, exceptId) {
-  return all.filter((s) => s.id !== exceptId && isLive(s, t) && involves(s, slug) && (s.status === 'accepted' || s.host === slug || s.accepted.includes(slug))).length;
+  return all.filter((s) => s.id !== exceptId && isLive(s, t) && involves(s, slug) && !s.result_winner && (s.status === 'accepted' || s.host === slug || s.accepted.includes(slug))).length;
 }
 
 const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -95,6 +95,9 @@ export function toApi(s, boards, t) {
     format: s.format,
     clubFormat: s.club_format ? (SERIES_CFG.clubFormats.find((c) => c.id === s.club_format)?.label ?? s.club_format) : null,
     status: s.status,
+    result: s.result_winner
+      ? { winner: s.result_winner === 'draw' ? null : { slug: s.result_winner, name: nameOf(s.result_winner) }, note: s.result_note ?? null, at: s.result_at ?? null }
+      : null,
     deadlineAt: s.deadline_at,
     createdAt: s.created_at,
     acceptedAt: s.accepted_at,
@@ -123,6 +126,17 @@ export function calendarEntries(s, boards) {
     date: f.final ? null : (s.dates?.[f.no - 1] ?? null),
     format: label,
     bet: s.bet,
+    winner: s.result_winner ? (s.result_winner === 'draw' ? 'Series drawn' : nameOf(s.result_winner)) : null,
   }));
 }
 export const todayIst = (t) => istDay(t);
+
+/** Checks the administrator's result for a series: the winner is one of its boards, or "draw". Returns { value } or { error }. */
+export function validateResult(input, s) {
+  const i = input && typeof input === 'object' ? input : {};
+  const winner = String(i.winner ?? '');
+  if (winner !== 'draw' && ![s.host, ...s.opponents].includes(winner)) return { error: 'Choose the winning board, or "Series drawn".' };
+  const note = clean(i.note);
+  if (note.length > 120) return { error: 'The result note can be at most 120 characters.' };
+  return { value: { winner, note: note || null } };
+}

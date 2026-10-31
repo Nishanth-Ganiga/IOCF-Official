@@ -11,6 +11,7 @@
 //   PUT  /admin/boards/:slug/modules    admin only   { moduleId, enabled }
 //   PUT  /admin/boards/:slug/account    admin only   { username?, password?, chairmanName? }  creates or updates the board's login
 //   GET  /admin/series                 admin only   every series, any status
+//   PUT/DELETE /admin/series/:id/result  admin only  { winner: <board slug> | 'draw', note? }  records / clears the series result
 //   DELETE /admin/series/:id           admin only   removes a series for good
 //   GET  /admin/audit                   admin only
 //   GET  /boards/:slug/fixtures         every match of every confirmed series (the calendar)
@@ -22,7 +23,7 @@
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { SERIES_CFG, STADIUMS, activeCount, adminView, calendarEntries, todayIst, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { SERIES_CFG, STADIUMS, activeCount, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -56,6 +57,8 @@ const ACTIONS = {
   series_edited: 'Series edited',
   series_accepted: 'Series accepted',
   series_deleted: 'Series deleted by administrator',
+  series_result_set: 'Series result recorded',
+  series_result_cleared: 'Series result cleared',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -221,7 +224,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             allStadiums: STADIUMS,
             announced: live.filter((x) => x.host === board.slug).map((x) => toApi(x, BOARDS, t)),
             invitations: live.filter((x) => x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).map((x) => toApi(x, BOARDS, t)),
-            upcoming: live.filter((x) => x.status === 'accepted').sort((p, q) => (q.accepted_at ?? 0) - (p.accepted_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
+            completed: live.filter((x) => x.status === 'accepted' && x.result_winner).sort((p, q) => (q.result_at ?? 0) - (p.result_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
+            upcoming: live.filter((x) => x.status === 'accepted' && !x.result_winner).sort((p, q) => (q.accepted_at ?? 0) - (p.accepted_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
           });
         }
 
@@ -297,7 +301,24 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           return json(200, { series: (await store.seriesList()).sort((p, q) => q.created_at - p.created_at).map((x) => adminView(x, BOARDS, t)) });
         }
 
-        if (b === 'series' && c && method === 'DELETE') {
+        if (b === 'series' && c && d === 'result' && (method === 'PUT' || method === 'DELETE')) {
+          const cur = await store.seriesGet(c);
+          if (!cur) return fail(404, 'not_found', 'Series not found.');
+          if (method === 'DELETE') {
+            const row = await store.seriesUpdate(cur.id, { result_winner: null, result_note: null, result_at: null, updated_at: now() });
+            await audit('series_result_cleared', who, cur.id, req, { name: cur.name });
+            return json(200, { series: adminView(row, BOARDS, now()) });
+          }
+          if (cur.status !== 'accepted') return fail(409, 'not_confirmed', 'A result can only be recorded for a series that has been accepted.');
+          const v = validateResult(req.body, cur);
+          if (v.error) return fail(400, 'invalid', v.error);
+          const t = now();
+          const row = await store.seriesUpdate(cur.id, { result_winner: v.value.winner, result_note: v.value.note, result_at: t, updated_at: t });
+          await audit('series_result_set', who, cur.id, req, { name: cur.name, winner: v.value.winner });
+          return json(200, { series: adminView(row, BOARDS, t) });
+        }
+
+        if (b === 'series' && c && !d && method === 'DELETE') {
           const cur = await store.seriesGet(c);
           if (!cur) return fail(404, 'not_found', 'Series not found.');
           await store.seriesDelete(cur.id);
@@ -410,6 +431,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       return fail(404, 'not_found', 'Not found.');
     } catch (err) {
       if (err?.code === 'not_configured') return fail(503, 'not_configured', 'The Command Center database has no logins yet. Import the logins file into Supabase first.');
+      if (err?.code === 'series_outdated') return fail(503, 'series_outdated', 'Series Announcement needs a database update: run the latest series SQL in Supabase.');
       if (err?.code === 'series_missing') return fail(503, 'series_missing', 'Series Announcement is not set up yet: the series table has not been created in Supabase.');
       if (err?.code === 'unsupported') return fail(501, 'unsupported', err.message);
       console.error('[command-center]', err instanceof Error ? err.message : err);

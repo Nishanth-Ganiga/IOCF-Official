@@ -119,6 +119,7 @@ export function Facts({ s, you, full }: { s: Series; you: string; full?: boolean
     ['Matches', String(s.matches)],
     ['Bet amount', money(s.bet)],
     ['Format', formatLabel(s)],
+    ...(s.result ? ([['Result', `${s.result.winner ? `${s.result.winner.name} won the series` : 'Series drawn'}${s.result.note ? ` · ${s.result.note}` : ''}`]] as [string, string][]) : []),
     ...(full ? ([['Announced', ist(s.createdAt)]] as [string, string][]) : []),
     ...(s.status === 'pending' || full ? ([['Deadline', `11:59 PM IST, ${ist(s.deadlineAt)}`]] as [string, string][]) : []),
   ];
@@ -197,6 +198,22 @@ export function Upcoming({ theme, data }: { theme: BoardTheme; data: SeriesOverv
             </li>
           ))}
         </ul>
+      )}
+      {data.completed.length > 0 && (
+        <>
+          <h3 className="mt-10 text-[11px] font-semibold tracking-[0.24em]" style={{ color: pal.highlight }}>
+            COMPLETED SERIES
+          </h3>
+          <ul className="mt-3 grid gap-4 lg:grid-cols-2">
+            {data.completed.map((s) => (
+              <li key={s.id} className={card}>
+                <p className="font-display text-2xl tracking-wide text-bone">{s.name.toUpperCase()}</p>
+                <p className="text-xs font-semibold tracking-[0.18em] text-[#6fcf8e]">{s.result?.winner ? `WON BY ${s.result.winner.name.toUpperCase()}` : 'SERIES DRAWN'}</p>
+                <Facts s={s} you="completed" />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

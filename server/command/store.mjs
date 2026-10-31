@@ -134,7 +134,11 @@ export class SeriesRest {
   async req(method, query, body, extra = {}) {
     const res = await this.fetch(`${this.url}${query}`, { method, headers: { ...this.headers, ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
     if (res.status === 404) throw Object.assign(new Error('The series table does not exist yet.'), { code: 'series_missing' });
-    if (!res.ok) throw new Error(`Database request failed (${res.status})`);
+    if (!res.ok) {
+      // a column the code needs is missing: the series SQL in Supabase is out of date
+      if (res.status === 400 && /PGRST204|column/i.test(await res.text().catch(() => ''))) throw Object.assign(new Error('The series table is out of date.'), { code: 'series_outdated' });
+      throw new Error(`Database request failed (${res.status})`);
+    }
     const text = await res.text();
     return text ? JSON.parse(text) : null;
   }

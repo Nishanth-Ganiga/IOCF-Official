@@ -580,6 +580,20 @@ console.log('\n— Series Announcement —');
   check('the administrator deletes a series: it vanishes for every board', gone.status === 200 && !(await view(cPak, 'pakistan')).upcoming.some((x) => x.id === tid) && !(await view(cIndia, 'india')).announced.some((x) => x.id === tid) && !(await sCall('GET', 'admin/series', { cookie: cAdm })).body.series.some((x) => x.id === tid));
   check('deleting frees the 2-series limit and is recorded in the audit log', (await view(cIndia, 'india')).active === 1 && (await sStore.listAudit(300)).some((x) => x.action === 'series_deleted' && x.target === tid));
   check('deleting an unknown series is a 404', (await sCall('DELETE', 'admin/series/nope', { cookie: cAdm })).status === 404);
+  // the administrator records the series winner
+  const res = (id, body, cookie = cAdm) => sCall('PUT', `admin/series/${id}/result`, { cookie, body });
+  check('only the administrator can record a result', (await res(sid, { winner: 'india' }, cIndia)).status === 403 && (await res(sid, { winner: 'india' }, cAus)).status === 403);
+  check('the winner must be one of the series\' boards (or a draw); the note is limited', (await res(sid, { winner: 'england' })).status === 400 && (await res(sid, { winner: '' })).status === 400 && (await res(sid, { winner: 'india', note: 'x'.repeat(121) })).status === 400);
+  check('a series that was never accepted cannot get a result', (await res(lateSeries.id, { winner: 'india' })).status === 409 && (await res('nope', { winner: 'india' })).status === 404);
+  const before2 = (await view(cIndia, 'india')).active;
+  const won = await res(sid, { winner: 'australia', note: 'won 2–1' });
+  check('the administrator records the winner and a note', won.status === 200 && won.body.series.result.winner.slug === 'australia' && won.body.series.result.note === 'won 2–1');
+  const afterV = await view(cEng, 'england');
+  check('a finished series moves from Upcoming to Completed for every board, with its winner', !afterV.upcoming.some((x) => x.id === sid) && afterV.completed.find((x) => x.id === sid)?.result.winner.name === 'Australia');
+  check('a finished series no longer counts toward the 2-series limit', (await view(cIndia, 'india')).active === before2 - 1);
+  check('the calendar still lists its matches, marked with the winner', (await sCall('GET', 'boards/india/fixtures', { cookie: cIndia })).body.matches.filter((m) => m.seriesId === sid).every((m) => m.winner === 'Australia'));
+  check('the result can be changed to a drawn series, and cleared', (await res(sid, { winner: 'draw' })).body.series.result.winner === null && (await sCall('DELETE', `admin/series/${sid}/result`, { cookie: cAdm })).body.series.result === null && (await view(cEng, 'england')).upcoming.some((x) => x.id === sid) && (await sCall('DELETE', `admin/series/${sid}/result`, { cookie: cIndia })).status === 403);
+  check('results are recorded in the audit log', (await sStore.listAudit(400)).some((x) => x.action === 'series_result_set') && (await sStore.listAudit(400)).some((x) => x.action === 'series_result_cleared'));
   fs.rmSync(sHome, { recursive: true, force: true });
 }
 
@@ -591,6 +605,12 @@ console.log('\n— Series Announcement —');
   let code = null;
   try { await st.seriesList(); } catch (e) { code = e.code; }
   check('a missing series table is reported as such (503 from the API)', code === 'series_missing');
+{
+  const outdated = new SupabaseStore({ url: 'https://x.supabase.co', serviceKey: 'sb_secret_x', fetchImpl: async () => ({ ok: false, status: 400, text: async () => '{"code":"PGRST204","message":"Could not find the \'dates\' column"}' }) });
+  let c2 = null;
+  try { await outdated.seriesInsert({}); } catch (e) { c2 = e.code; }
+  check('an out-of-date series table (missing column) is reported as such', c2 === 'series_outdated');
+}
 }
 
 console.log('\n— 11. the register stays private —');

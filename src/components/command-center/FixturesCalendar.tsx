@@ -52,6 +52,7 @@ function MatchCard({ m, hl, mine }: { m: CalendarMatch; hl: string; mine: boolea
       <p className="mt-0.5 text-xs text-smoke">
         {m.format} · bet {money(m.bet)}
       </p>
+      {m.winner && <p className="mt-1 text-xs font-semibold text-[#6fcf8e]">{m.winner === 'Series drawn' ? 'SERIES DRAWN' : `SERIES WON BY ${m.winner.toUpperCase()}`}</p>}
     </li>
   );
 }
