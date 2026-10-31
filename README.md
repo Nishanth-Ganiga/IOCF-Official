@@ -18,7 +18,7 @@ After the opening sequence, visitors choose who is watching. Each profile is its
 | **Player** | The player directory and individual player profiles |
 | **Umpire** | Umpires and their match assignments |
 | **Franchise Leagues** | League → Season → Team → Player, with results, awards, standings and full player statistics |
-| **Major Tournaments** | T20 World Cup, Euro Cup, Oceania Cup, Asia Cup, Associate Nations Cup, ODI World Cup, World Test Championship, Emerging Talents League, Women's Global League and IOCF Lone Warrior — each with a 2026 edition: every table from its sheet, plus Board → Player statistics |
+| **Major Tournaments** | T20 World Cup, Euro Cup, Oceania Cup, Asia Cup, Associate Nations Cup, ODI World Cup, World Test Championship, Emerging Talents League, Women's Global League, IOCF Origins Championship and IOCF Lone Warrior — each with a 2026 edition: every table from its sheet, plus Board → Player statistics |
 | **Command Center** | Locked. 27 real accounts (1 Master Administrator, 26 board chairmen), signed in on the server. Admin Login opens the administrator dashboard; Board Login opens that chairman's own themed board dashboard |
 
 Global search and favourites work across profiles.
@@ -57,7 +57,7 @@ Boards, players, umpires, franchise leagues, tournaments and the Main-page text 
 
 **Keep the sheet layout.** The importer finds things by their labels: the board tabs, `Chairman:`, `Players`, the `Umpire | Details` table, `All TEAMS` / `All Match Updates` / `AWARDS` in the league tabs, `Tournament Name`, `Board Rankings`, `IOCF Cards`, `All Time Records`, `IOCF 2.0`. Adding rows (players, matches, leagues) is fine; renaming those labels or tabs needs an importer update.
 
-**Major Tournament tabs** are found by name (`T20 World Cup 2026`, `IOCF EURO CUP`, `IOCF OCEANIA CUP`, `IOCF ASIA CUP`, `IOCF Associate Nations Cup`, `IOCF ODI WORLD CUP`, `WTC Matches`, `Emerging Talent League`, `Womens Global League`, `IOCF Lone Warrior`), or by a close match such as "Asia Cup 2026". Each tab is shown as the tables it contains, so no importer change is needed when rows or tables are added. The list is in `scripts/sync/tournaments.mjs`.
+**Major Tournament tabs** are found by name (`T20 World Cup 2026`, `IOCF EURO CUP`, `IOCF OCEANIA CUP`, `IOCF ASIA CUP`, `IOCF Associate Nations Cup`, `IOCF ODI WORLD CUP`, `WTC Matches`, `Emerging Talent League`, `Womens Global League`, `IOCF Lone Warrior`, `IOCF Origins Championship`), or by a close match such as "Asia Cup 2026". Each tab is shown as the tables it contains, so no importer change is needed when rows or tables are added. The list is in `scripts/sync/tournaments.mjs`.
 
 ## Command Center (locked profile)
 

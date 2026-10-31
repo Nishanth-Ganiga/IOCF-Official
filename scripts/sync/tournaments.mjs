@@ -19,6 +19,7 @@ export const MAJOR_TOURNAMENTS = [
   { id: 'world-test-championship', name: 'World Test Championship', sheet: 'WTC Matches', match: /wtc|world.?test|test.?championship/, kind: 'Test championship' },
   { id: 'emerging-talents-league', name: 'Emerging Talents League', sheet: 'Emerging Talent League', match: /emerging/, kind: 'Talent league' },
   { id: 'womens-global-league', name: "Women's Global League", sheet: 'Womens Global League', match: /wom[ae]ns?.*league/, kind: "Women's league" },
+  { id: 'origins-championship', name: 'IOCF Origins Championship', sheet: 'IOCF Origins Championship', match: /origins?/, kind: 'Major tournament' },
   { id: 'lone-warrior', name: 'IOCF Lone Warrior', sheet: 'IOCF Lone Warrior', match: /lone.?warrior/, kind: 'Individual tournament' },
 ];
 
