@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, type AdminCredits as Data, type CreditsInfo } from '../../data/commandApi';
 import { themeOf } from '../../data/commandCenter/boardConfig';
-import { store } from '../../data/store';
 import { BoardFlag } from './Mascot';
-import { rupees, signed, stamp } from './CreditsPanel';
+import { rupees, sheetCreditsOf, signed, stamp } from './CreditsPanel';
 
 type Nav = (...parts: string[]) => void;
 
@@ -73,30 +72,21 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
     setBusy('');
   };
 
-  // the "Available credits" each board has in the IOCF sheet (the same data the rest of the site shows)
-  const sheet = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const b of store.boards) {
-      const theme = (data?.boards ?? []).find((x) => x.name === b.name);
-      const raw = (b as { facts?: { label: string; value: string }[] }).facts?.find((f) => /available credits/i.test(f.label))?.value;
-      const n = raw ? Number(raw.replace(/[^\d]/g, '')) : NaN;
-      if (theme && Number.isFinite(n)) out[theme.slug] = n;
-    }
-    return out;
-  }, [data]);
-  const loadOpening = async () => {
-    setBusy('opening');
+  const enter = async (what: { seriesId?: string; adjustmentId?: string; all?: boolean; entered: boolean }, slug?: string) => {
+    setBusy(what.seriesId ?? what.adjustmentId ?? 'all');
     setFlash(null);
     try {
-      const r = await api.loadOpening(sheet);
-      await load();
-      setFlash({ ok: true, text: `Opening balances loaded for ${r.created.length} board${r.created.length === 1 ? '' : 's'}${r.skipped.length ? `; ${r.skipped.length} already had one` : ''}.` });
+      const r = await api.markEntered(what);
+      if (slug) await refresh(slug);
+      else await load();
+      if (!slug && open) setHistory(await api.credits(open));
+      setFlash({ ok: true, text: what.all ? `${r.updated} change${r.updated === 1 ? '' : 's'} marked as ${what.entered ? 'entered in' : 'not in'} the sheet.` : what.entered ? 'Marked as entered in the sheet.' : 'Marked as not in the sheet.' });
     } catch (e) {
       setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
     }
     setBusy('');
   };
-  const sheetCount = Object.keys(sheet).length;
+  const waiting = (data?.settlements ?? []).filter((x) => !x.entered);
 
   const rows = useMemo(() => (data?.boards ?? []).filter((b) => !query.trim() || b.name.toLowerCase().includes(query.trim().toLowerCase())), [data, query]);
   const field = 'mt-1 w-full rounded-lg border border-white/15 bg-ink px-3 py-2.5 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b]';
@@ -110,7 +100,7 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
         <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">MASTER ADMINISTRATOR</p>
         <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">BOARD CREDITS</h1>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-mist">
-          Balances come from the series results you record (winner gains the bet, loser loses it; <b className="text-bone">a home win doubles the bet</b>; in trilateral and quadrilateral series every other board pays the winner) plus the adjustments you add here. Change a result and the balances correct themselves.
+          The IOCF sheet is the master: each board&apos;s credits are read from it live. On top of that, every series result you record is settled automatically (winner gains the bet, loser loses it; <b className="text-bone">a home win doubles the bet</b>; in trilateral and quadrilateral series every other board pays the winner) and counted as pending until you enter it in the sheet.
         </p>
       </header>
 
@@ -123,15 +113,34 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
         </p>
       )}
 
-      {data && sheetCount > 0 && (
-        <section aria-label="Opening balances" className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
-          <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">OPENING BALANCES FROM THE IOCF SHEET</h2>
+      {data && (
+        <section aria-label="Changes not yet in the sheet" className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
+          <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">SETTLEMENTS TO ENTER IN THE SHEET</h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-mist">
-            The sheet lists the available credits of {sheetCount} boards ({Object.values(sheet).reduce((a, b) => a + b, 0).toLocaleString('en-IN')} in total). Load them once as each board&apos;s starting balance; series results then add to or take from it. A board that already has an opening balance is skipped, so this is safe to press again.
+            A board&apos;s balance below is its <b className="text-bone">Available credits in the IOCF sheet</b> (read live) plus the changes listed here, which the sheet does not include yet. After you add a change to the sheet, press <b className="text-bone">Mark entered</b> so it stops being counted twice.
           </p>
-          <button type="button" onClick={() => void loadOpening()} disabled={busy === 'opening'} className="mt-3 rounded-lg bg-[#c9a24b] px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50">
-            {busy === 'opening' ? 'LOADING…' : 'LOAD OPENING BALANCES'}
-          </button>
+          {!waiting.length ? (
+            <p className="mt-3 text-sm text-mist">Nothing is waiting: every recorded series result is already in the sheet.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-white/5">
+              {waiting.map((x) => (
+                <li key={x.seriesId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
+                  <span className="text-sm text-bone">
+                    {x.name}
+                    <span className="block text-xs text-mist">{x.moves.map((m) => `${m.boardName} ${signed(m.delta)}`).join(' · ')}</span>
+                  </span>
+                  <button type="button" onClick={() => void enter({ seriesId: x.seriesId, entered: true })} disabled={busy === x.seriesId} className="rounded-lg border border-[#c9a24b] px-4 py-1.5 text-xs font-bold tracking-[0.16em] text-[#c9a24b] transition hover:bg-[#c9a24b]/10 disabled:opacity-50">
+                    MARK ENTERED
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(waiting.length > 0 || data.recentAdjustments.some((a) => !a.entered)) && (
+            <button type="button" onClick={() => void enter({ all: true, entered: true })} disabled={busy === 'all'} className="mt-3 rounded-lg bg-[#c9a24b] px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50">
+              {busy === 'all' ? 'MARKING…' : 'MARK EVERYTHING AS ENTERED IN THE SHEET'}
+            </button>
+          )}
         </section>
       )}
 
@@ -176,7 +185,7 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
           </label>
           <label className="block text-[11px] font-semibold tracking-[0.18em] text-mist">
             REASON
-            <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} maxLength={120} placeholder="e.g. Opening credit from the sheet" className={field} />
+            <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} maxLength={120} placeholder="e.g. Correction agreed with the board" className={field} />
           </label>
           <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-4">
             <button type="submit" disabled={busy === 'save' || !form.board || !Number(form.amount) || form.reason.trim().length < 3} className="rounded-lg bg-[#c9a24b] px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-40">
@@ -200,7 +209,18 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
                 <div className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <BoardFlag theme={theme} className="text-2xl" />
                   <span className="min-w-[8rem] flex-1 font-display text-lg tracking-wide text-bone">{b.name.toUpperCase()}</span>
-                  <span className={`font-display text-2xl ${b.balance < 0 ? 'text-crimson-2' : 'text-bone'}`}>{rupees(b.balance)}</span>
+                  {(() => {
+                    const sheet = sheetCreditsOf(b.name);
+                    const total = (sheet ?? 0) + b.pending;
+                    return (
+                      <span className="text-right">
+                        <span className={`block font-display text-2xl ${total < 0 ? 'text-crimson-2' : 'text-bone'}`}>{rupees(total)}</span>
+                        <span className="block text-[11px] text-smoke">
+                          sheet {sheet === null ? '—' : rupees(sheet)} · pending {b.pending === 0 ? '—' : signed(b.pending)}
+                        </span>
+                      </span>
+                    );
+                  })()}
                   <button type="button" onClick={() => void show(b.slug)} aria-expanded={open === b.slug} className="text-xs font-semibold tracking-[0.18em] text-[#c9a24b] hover:underline">
                     {open === b.slug ? 'HIDE HISTORY' : 'HISTORY'}
                   </button>
@@ -230,10 +250,18 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
                               <span style={{ color: e.delta < 0 ? '#e07a7a' : '#6fcf8e' }} className="font-semibold">
                                 {signed(e.delta)}
                               </span>
+                              <span className="text-[10px] font-semibold tracking-[0.14em]" style={{ color: e.entered ? '#6fcf8e' : '#c9a24b' }}>
+                                {e.entered ? 'IN THE SHEET' : 'PENDING'}
+                              </span>
                               {e.id && (
-                                <button type="button" onClick={() => void remove(e.id!, b.slug)} disabled={busy === e.id} className="text-[11px] font-semibold tracking-[0.16em] text-mist hover:text-crimson-2 disabled:opacity-50">
-                                  REMOVE
-                                </button>
+                                <>
+                                  <button type="button" onClick={() => void enter({ adjustmentId: e.id!, entered: !e.entered }, b.slug)} disabled={busy === e.id} className="text-[11px] font-semibold tracking-[0.16em] text-[#c9a24b] hover:underline disabled:opacity-50">
+                                    {e.entered ? 'UNDO' : 'MARK ENTERED'}
+                                  </button>
+                                  <button type="button" onClick={() => void remove(e.id!, b.slug)} disabled={busy === e.id} className="text-[11px] font-semibold tracking-[0.16em] text-mist hover:text-crimson-2 disabled:opacity-50">
+                                    REMOVE
+                                  </button>
+                                </>
                               )}
                             </span>
                           </li>

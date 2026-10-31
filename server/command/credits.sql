@@ -5,8 +5,10 @@ create table if not exists public.command_credit_adjustments (
   amount     integer not null,               -- positive adds credit, negative deducts
   reason     text not null,
   created_by text,
-  created_at bigint not null                 -- epoch milliseconds
+  created_at bigint not null,                -- epoch milliseconds
+  applied_at bigint                          -- when the administrator entered it in the IOCF sheet
 );
+alter table public.command_credit_adjustments add column if not exists applied_at bigint;
 alter table public.command_credit_adjustments enable row level security;
 revoke all on public.command_credit_adjustments from anon, authenticated;
 -- (no policies on purpose: only the server's service-role key can reach this table)

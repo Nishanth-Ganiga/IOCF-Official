@@ -142,11 +142,13 @@ export type CalendarMatch = {
   winner: string | null;
 };
 
-export type CreditEntry = { kind: 'series' | 'adjustment'; at: number; delta: number; text: string; series: string | null; id: string | null };
-export type CreditsInfo = { balance: number; entries: CreditEntry[] };
+export type CreditEntry = { kind: 'series' | 'adjustment'; at: number; delta: number; text: string; series: string | null; id: string | null; /** Already added to the IOCF sheet's available credits. */ entered: boolean };
+/** `pending`: changes recorded here that the IOCF sheet does not include yet. A board's balance is its sheet credits plus this. */
+export type CreditsInfo = { pending: number; entries: CreditEntry[] };
 export type AdminCredits = {
-  boards: { slug: string; name: string; balance: number }[];
-  recentAdjustments: { id: string; at: number; board: string; boardName: string; amount: number; reason: string; by: string | null }[];
+  boards: { slug: string; name: string; pending: number }[];
+  settlements: { seriesId: string; name: string; at: number | null; entered: boolean; moves: { board: string; boardName: string; delta: number }[] }[];
+  recentAdjustments: { id: string; at: number; board: string; boardName: string; amount: number; reason: string; by: string | null; entered: boolean }[];
 };
 
 export const api = {
@@ -172,7 +174,7 @@ export const api = {
   credits: (slug: string) => request<CreditsInfo>('GET', `/boards/${encodeURIComponent(slug)}/credits`),
   adminCredits: () => request<AdminCredits>('GET', '/admin/credits'),
   adjustCredit: (adj: { board: string; amount: number; reason: string }) => request<{ id: string }>('POST', '/admin/credits/adjustments', adj),
-  loadOpening: (balances: Record<string, number>) => request<{ created: string[]; skipped: string[] }>('POST', '/admin/credits/opening', { balances }),
+  markEntered: (what: { seriesId?: string; adjustmentId?: string; all?: boolean; entered: boolean }) => request<{ updated: number }>('POST', '/admin/credits/entered', what),
   removeAdjustment: (id: string) => request<{ ok: true }>('DELETE', `/admin/credits/adjustments/${encodeURIComponent(id)}`),
   declineSeries: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/decline`),
 };

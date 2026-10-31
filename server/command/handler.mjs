@@ -16,7 +16,7 @@
 //   GET  /admin/audit                   admin only
 //   GET  /boards/:slug/credits          the board's balance and history (own board; admin: any)
 //   GET  /admin/credits                 admin only   every board's balance + recent adjustments
-//   POST /admin/credits/opening         admin only   { balances: { <slug>: amount } }  loads opening balances once per board
+//   POST /admin/credits/entered         admin only   { seriesId | adjustmentId | all: true, entered: boolean }  marks changes as entered in the sheet
 //   POST /admin/credits/adjustments     admin only   { board, amount (+/-), reason }
 //   DELETE /admin/credits/adjustments/:id  admin only
 //   GET  /boards/:slug/fixtures         every match of every confirmed series (the calendar)
@@ -30,7 +30,7 @@
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { SERIES_CFG, STADIUMS, activeCount, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
-import { OPENING_REASON, balanceOf, ledger, validateAdjustment, validateOpening } from './credits.mjs';
+import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -69,7 +69,7 @@ const ACTIONS = {
   series_result_cleared: 'Series result cleared',
   credit_adjusted: 'Board credit adjusted',
   credit_adjustment_removed: 'Credit adjustment removed',
-  credit_opening_loaded: 'Opening balances loaded',
+  credit_marked_entered: 'Credit changes marked as entered in the sheet',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -229,7 +229,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         if (!board) return fail(404, 'not_found', 'Board not found.');
         if (who.role !== 'admin' && who.board_slug !== board.slug) return fail(403, 'forbidden', 'You do not have access to this board.');
         const lines = ledger(await store.seriesList(), await store.creditsList(), BOARDS).filter((l) => l.board === board.slug);
-        return json(200, { balance: lines.reduce((n, l) => n + l.delta, 0), entries: lines.map(({ kind, at, delta, text, series, id }) => ({ kind, at, delta, text, series: series ?? null, id: who.role === 'admin' ? (id ?? null) : null })) });
+        return json(200, { pending: lines.filter((l) => !l.applied).reduce((n, l) => n + l.delta, 0), entries: lines.map(({ kind, at, delta, text, series, id, applied }) => ({ kind, at, delta, text, series: series ?? null, id: who.role === 'admin' ? (id ?? null) : null, entered: applied })) });
       }
 
       if (a === 'boards' && b && c === 'series') {
@@ -344,28 +344,42 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         }
 
         if (b === 'credits' && !c && method === 'GET') {
-          const lines = ledger(await store.seriesList(), await store.creditsList(), BOARDS);
+          const seriesList = await store.seriesList();
+          const lines = ledger(seriesList, await store.creditsList(), BOARDS);
+          const nameOf = (slug) => BOARDS.find((x) => x.slug === slug)?.name ?? slug;
           return json(200, {
-            boards: BOARDS.map((bd) => ({ slug: bd.slug, name: bd.name, balance: balanceOf(lines, bd.slug) })),
-            recentAdjustments: lines.filter((l) => l.kind === 'adjustment').slice(0, 15).map((l) => ({ id: l.id, at: l.at, board: l.board, boardName: BOARDS.find((x) => x.slug === l.board)?.name ?? l.board, amount: l.delta, reason: l.text, by: l.by })),
+            boards: BOARDS.map((bd) => ({ slug: bd.slug, name: bd.name, pending: pendingOf(lines, bd.slug) })),
+            // finished series, newest first, with their money moves and whether they are in the sheet yet
+            settlements: seriesList
+              .filter((x) => settleSeries(x, BOARDS).length)
+              .sort((p, q) => (q.result_at ?? 0) - (p.result_at ?? 0))
+              .slice(0, 60)
+              .map((x) => ({ seriesId: x.id, name: x.name, at: x.result_at, entered: Boolean(x.credits_applied_at), moves: settleSeries(x, BOARDS).map((m) => ({ board: m.board, boardName: nameOf(m.board), delta: m.delta })) })),
+            recentAdjustments: lines.filter((l) => l.kind === 'adjustment').slice(0, 15).map((l) => ({ id: l.id, at: l.at, board: l.board, boardName: nameOf(l.board), amount: l.delta, reason: l.text, by: l.by, entered: l.applied })),
           });
         }
 
-        if (b === 'credits' && c === 'opening' && !d && method === 'POST') {
-          const v = validateOpening(req.body, BOARDS);
-          if (v.error) return fail(400, 'invalid', v.error);
-          const have = new Set((await store.creditsList()).filter((x) => x.reason === OPENING_REASON).map((x) => x.board));
-          const created = [];
-          const skipped = [];
-          for (const { board, amount } of v.value) {
-            if (have.has(board) || amount === 0) skipped.push(board);
-            else {
-              await store.creditsInsert({ id: randomUUID(), board, amount, reason: OPENING_REASON, created_by: who.username, created_at: now() });
-              created.push(board);
-            }
-          }
-          await audit('credit_opening_loaded', who, null, req, { created: created.length, skipped: skipped.length });
-          return json(200, { created, skipped });
+        if (b === 'credits' && c === 'entered' && !d && method === 'POST') {
+          const i = req.body && typeof req.body === 'object' ? req.body : {};
+          const entered = i.entered !== false;
+          const t = now();
+          const stamp = entered ? t : null;
+          let count = 0;
+          if (i.all === true) {
+            for (const x of await store.seriesList()) if (settleSeries(x, BOARDS).length && Boolean(x.credits_applied_at) !== entered) (await store.seriesUpdate(x.id, { credits_applied_at: stamp, updated_at: t }), count++);
+            for (const x of await store.creditsList()) if (Boolean(x.applied_at) !== entered) (await store.creditsUpdate(x.id, { applied_at: stamp }), count++);
+          } else if (typeof i.seriesId === 'string') {
+            const x = await store.seriesGet(i.seriesId);
+            if (!x || !settleSeries(x, BOARDS).length) return fail(404, 'not_found', 'That series has no credit settlement.');
+            await store.seriesUpdate(x.id, { credits_applied_at: stamp, updated_at: t });
+            count = 1;
+          } else if (typeof i.adjustmentId === 'string') {
+            if (!(await store.creditsList()).some((x) => x.id === i.adjustmentId)) return fail(404, 'not_found', 'Adjustment not found.');
+            await store.creditsUpdate(i.adjustmentId, { applied_at: stamp });
+            count = 1;
+          } else return fail(400, 'invalid', 'Say which change to mark.');
+          await audit('credit_marked_entered', who, null, req, { entered, count });
+          return json(200, { updated: count });
         }
 
         if (b === 'credits' && c === 'adjustments' && !d && method === 'POST') {
@@ -515,6 +529,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
     } catch (err) {
       if (err?.code === 'not_configured') return fail(503, 'not_configured', 'The Command Center database has no logins yet. Import the logins file into Supabase first.');
       if (err?.code === 'series_outdated') return fail(503, 'series_outdated', 'Series Announcement needs a database update: run the latest series SQL in Supabase.');
+      if (err?.code === 'credits_outdated') return fail(503, 'credits_outdated', 'Board Credits needs a database update: run the latest credits SQL in Supabase.');
       if (err?.code === 'credits_missing') return fail(503, 'credits_missing', 'Board Credits is not set up yet: the credits table has not been created in Supabase.');
       if (err?.code === 'series_missing') return fail(503, 'series_missing', 'Series Announcement is not set up yet: the series table has not been created in Supabase.');
       if (err?.code === 'unsupported') return fail(501, 'unsupported', err.message);

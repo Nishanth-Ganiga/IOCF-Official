@@ -601,47 +601,60 @@ console.log('\n— Series Announcement —');
     const bal = async (cookie, slug) => (await sCall('GET', `boards/${slug}/credits`, { cookie })).body;
     const cJapan = await sLogin('board', sc('Japan'));
     const cNepal = await sLogin('board', sc('Nepal'));
-    check('a board with no finished series has a zero balance', (await bal(cJapan, 'japan')).balance === 0 && (await bal(cJapan, 'japan')).entries.length === 0);
+    check('a board with no finished series has nothing pending', (await bal(cJapan, 'japan')).pending === 0 && (await bal(cJapan, 'japan')).entries.length === 0);
     await mk('japan', ['nepal'], 5000, 'japan');
     const j1 = await bal(cJapan, 'japan');
-    check('HOME win: the host gets double the bet (bet 5000 → +10000) and the opponent loses it', j1.balance === 10000 && (await bal(cNepal, 'nepal')).balance === -10000 && /home win, bet doubled/.test(j1.entries[0].text) && /Nepal/.test(j1.entries[0].text));
+    check('HOME win: the host gets double the bet (bet 5000 → +10000) and the opponent loses it', j1.pending === 10000 && (await bal(cNepal, 'nepal')).pending === -10000 && /home win, bet doubled/.test(j1.entries[0].text) && /Nepal/.test(j1.entries[0].text));
     await mk('nepal', ['japan'], 5000, 'japan');
-    check('AWAY win: the winner gets the plain bet (+5000), the home board loses it', (await bal(cJapan, 'japan')).balance === 15000 && (await bal(cNepal, 'nepal')).balance === -15000);
+    check('AWAY win: the winner gets the plain bet (+5000), the home board loses it', (await bal(cJapan, 'japan')).pending === 15000 && (await bal(cNepal, 'nepal')).pending === -15000);
     await mk('japan', ['nepal'], 5000, 'draw');
-    check('a drawn series changes nothing', (await bal(cJapan, 'japan')).balance === 15000 && (await bal(cJapan, 'japan')).entries.length === 2);
+    check('a drawn series changes nothing', (await bal(cJapan, 'japan')).pending === 15000 && (await bal(cJapan, 'japan')).entries.length === 2);
     await mk('qatar', ['ireland', 'uganda'], 2000, 'ireland');
     const cIre = await sLogin('board', sc('Ireland'));
-    check('trilateral, away winner: each other board pays the plain bet to the winner', (await bal(cIre, 'ireland')).balance === 4000 && (await bal(await sLogin('board', sc('Qatar')), 'qatar')).balance === -2000 && (await bal(await sLogin('board', sc('Uganda')), 'uganda')).balance === -2000);
+    check('trilateral, away winner: each other board pays the plain bet to the winner', (await bal(cIre, 'ireland')).pending === 4000 && (await bal(await sLogin('board', sc('Qatar')), 'qatar')).pending === -2000 && (await bal(await sLogin('board', sc('Uganda')), 'uganda')).pending === -2000);
     await mk('canada', ['italy', 'portugal', 'spain'], 1000, 'canada');
-    check('quadrilateral, home winner: the doubled bet is collected from each of the three others', (await bal(await sLogin('board', sc('Canada')), 'canada')).balance === 6000 && (await bal(await sLogin('board', sc('Italy')), 'italy')).balance === -2000);
-    check('a series that is not finished (no result) or not accepted never moves credits', await (async () => { await sStore.seriesInsert({ ...newSeries({ name: 'Open', series_type: 'bilateral', opponents: ['kenya'], matches: 1, stadiums: ['x'], dates: ['2026-07-01'], bet: 50000, format: 'T20', club_format: null }, 'afghanistan', t0), status: 'accepted', accepted: ['kenya'] }); return (await bal(await sLogin('board', sc('Afghanistan')), 'afghanistan')).balance === 0; })());
+    check('quadrilateral, home winner: the doubled bet is collected from each of the three others', (await bal(await sLogin('board', sc('Canada')), 'canada')).pending === 6000 && (await bal(await sLogin('board', sc('Italy')), 'italy')).pending === -2000);
+    check('a series that is not finished (no result) or not accepted never moves credits', await (async () => { await sStore.seriesInsert({ ...newSeries({ name: 'Open', series_type: 'bilateral', opponents: ['kenya'], matches: 1, stadiums: ['x'], dates: ['2026-07-01'], bet: 50000, format: 'T20', club_format: null }, 'afghanistan', t0), status: 'accepted', accepted: ['kenya'] }); return (await bal(await sLogin('board', sc('Afghanistan')), 'afghanistan')).pending === 0; })());
     check('a board can read only its own credits; the administrator can read any', (await sCall('GET', 'boards/japan/credits', { cookie: cNepal })).status === 403 && (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).status === 200 && (await sCall('GET', 'boards/japan/credits')).status === 401);
     const table = (await sCall('GET', 'admin/credits', { cookie: cAdm })).body;
-    check('the admin table lists all 26 boards and the balances add up to zero', table.boards.length === 26 && table.boards.reduce((n, b) => n + b.balance, 0) === 0 && table.boards.find((b) => b.slug === 'japan').balance === 15000);
+    check('the admin table lists all 26 boards and the balances add up to zero', table.boards.length === 26 && table.boards.reduce((n, b) => n + b.pending, 0) === 0 && table.boards.find((b) => b.slug === 'japan').pending === 15000);
     check('boards cannot open the admin credits routes', (await sCall('GET', 'admin/credits', { cookie: cJapan })).status === 403 && (await sCall('POST', 'admin/credits/adjustments', { cookie: cJapan, body: { board: 'japan', amount: 99999, reason: 'self' } })).status === 403);
 
     const adj = (body) => sCall('POST', 'admin/credits/adjustments', { cookie: cAdm, body });
     const added = await adj({ board: 'japan', amount: 3000, reason: 'Opening credit from the sheet' });
-    check('the administrator adds credit with a reason', added.status === 201 && (await bal(cJapan, 'japan')).balance === 18000 && (await bal(cJapan, 'japan')).entries.some((e) => e.kind === 'adjustment' && e.text === 'Opening credit from the sheet' && e.delta === 3000));
-    check('…and deducts credit; a balance may go below zero', (await adj({ board: 'japan', amount: -50000, reason: 'Penalty' })).status === 201 && (await bal(cJapan, 'japan')).balance === -32000);
+    check('the administrator adds credit with a reason', added.status === 201 && (await bal(cJapan, 'japan')).pending === 18000 && (await bal(cJapan, 'japan')).entries.some((e) => e.kind === 'adjustment' && e.text === 'Opening credit from the sheet' && e.delta === 3000));
+    check('…and deducts credit; a balance may go below zero', (await adj({ board: 'japan', amount: -50000, reason: 'Penalty' })).status === 201 && (await bal(cJapan, 'japan')).pending === -32000);
     check('adjustments are validated (board, whole non-zero amount, reason)', (await adj({ board: 'mars', amount: 5, reason: 'abc' })).status === 400 && (await adj({ board: 'japan', amount: 0, reason: 'abc' })).status === 400 && (await adj({ board: 'japan', amount: 1.5, reason: 'abc' })).status === 400 && (await adj({ board: 'japan', amount: 5, reason: '' })).status === 400 && (await adj({ board: 'japan', amount: 99999999999, reason: 'abc' })).status === 400);
     check('boards never get adjustment ids (only the admin can remove them)', (await bal(cJapan, 'japan')).entries.every((e) => e.id === null) && (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).body.entries.some((e) => e.kind === 'adjustment' && e.id));
     const adjId = (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).body.entries.find((e) => e.text === 'Penalty').id;
-    check('an adjustment can be removed and the balance follows', (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 200 && (await bal(cJapan, 'japan')).balance === 18000 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 404 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cJapan })).status === 403);
+    check('an adjustment can be removed and the balance follows', (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 200 && (await bal(cJapan, 'japan')).pending === 18000 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 404 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cJapan })).status === 403);
     check('adjustments are recorded in the audit log', (await sStore.listAudit(500)).some((x) => x.action === 'credit_adjusted') && (await sStore.listAudit(500)).some((x) => x.action === 'credit_adjustment_removed'));
-    // opening balances loaded from the sheet
-    const openSpain = await sCall('POST', 'admin/credits/opening', { cookie: cAdm, body: { balances: { spain: 154000, kenya: 127000, japan: 0 } } });
-    check('opening balances are loaded for the boards that have none (zero is skipped)', openSpain.status === 200 && openSpain.body.created.join() === 'spain,kenya' && openSpain.body.skipped.join() === 'japan' && (await bal(await sLogin('board', sc('Spain')), 'spain')).balance === 154000 - 2000 /* Spain also lost the quadrilateral series above */ && (await bal(await sLogin('board', sc('Spain')), 'spain')).entries.some((e) => e.text === 'Opening balance from the IOCF sheet' && e.delta === 154000));
-    check('loading again changes nothing, so it is safe to press twice', (await sCall('POST', 'admin/credits/opening', { cookie: cAdm, body: { balances: { spain: 999, kenya: 5 } } })).body.created.length === 0 && (await bal(await sLogin('board', sc('Kenya')), 'kenya')).balance === 127000);
-    check('opening balances accept the real sheet scale (millions) and are validated', (await sCall('POST', 'admin/credits/opening', { cookie: cAdm, body: { balances: { scotland: 17715615 } } })).body.created.join() === 'scotland' && (await sCall('POST', 'admin/credits/opening', { cookie: cAdm, body: { balances: { mars: 5 } } })).status === 400 && (await sCall('POST', 'admin/credits/opening', { cookie: cAdm, body: { balances: { india: -5 } } })).status === 400 && (await sCall('POST', 'admin/credits/opening', { cookie: cAdm, body: { balances: { india: 1.5 } } })).status === 400 && (await sCall('POST', 'admin/credits/opening', { cookie: cAdm, body: {} })).status === 400);
-    check('only the administrator can load opening balances', (await sCall('POST', 'admin/credits/opening', { cookie: cJapan, body: { balances: { india: 5 } } })).status === 403);
+    // the sheet is the master: settlements stay pending until the administrator marks them as entered in the sheet
+    {
+      const ov = (await sCall('GET', 'admin/credits', { cookie: cAdm })).body;
+      const jp = (await bal(cJapan, 'japan'));
+      check('the admin sees the settlements waiting to be entered in the sheet, with each board\'s move', ov.settlements.length >= 4 && ov.settlements.every((x) => x.entered === false && x.moves.length >= 2) && ov.settlements.some((x) => x.moves.some((m) => m.boardName === 'Japan' && m.delta === 10000)));
+      check('every line starts as pending (not in the sheet)', jp.entries.every((e) => e.entered === false));
+      const first = ov.settlements.find((x) => x.moves.some((m) => m.board === 'japan' && m.delta === 10000));
+      const japanBefore = (await bal(cJapan, 'japan')).pending;
+      check('marking a settlement as entered removes it from the pending amount (the sheet now includes it)', (await sCall('POST', 'admin/credits/entered', { cookie: cAdm, body: { seriesId: first.seriesId, entered: true } })).status === 200 && (await bal(cJapan, 'japan')).pending === japanBefore - 10000 && (await bal(cJapan, 'japan')).entries.some((e) => e.entered && e.delta === 10000));
+      check('…and it can be undone', (await sCall('POST', 'admin/credits/entered', { cookie: cAdm, body: { seriesId: first.seriesId, entered: false } })).status === 200 && (await bal(cJapan, 'japan')).pending === japanBefore);
+      const adjId2 = (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).body.entries.find((e) => e.kind === 'adjustment').id;
+      check('an adjustment can be marked as entered too', (await sCall('POST', 'admin/credits/entered', { cookie: cAdm, body: { adjustmentId: adjId2, entered: true } })).status === 200 && (await bal(cJapan, 'japan')).pending === japanBefore - 3000);
+      check('only the administrator can mark; unknown or empty requests are refused', (await sCall('POST', 'admin/credits/entered', { cookie: cJapan, body: { all: true, entered: true } })).status === 403 && (await sCall('POST', 'admin/credits/entered', { cookie: cAdm, body: { seriesId: 'nope', entered: true } })).status === 404 && (await sCall('POST', 'admin/credits/entered', { cookie: cAdm, body: { adjustmentId: 'nope', entered: true } })).status === 404 && (await sCall('POST', 'admin/credits/entered', { cookie: cAdm, body: {} })).status === 400);
+      const nowAll = (await sCall('POST', 'admin/credits/entered', { cookie: cAdm, body: { all: true, entered: true } })).body.updated;
+      const after = (await sCall('GET', 'admin/credits', { cookie: cAdm })).body;
+      check('"mark everything as entered" clears every pending amount', nowAll > 0 && after.boards.every((x) => x.pending === 0) && after.settlements.every((x) => x.entered) && (await bal(cJapan, 'japan')).pending === 0);
+      check('a new result after that is pending again', await (async () => { await mk('japan', ['nepal'], 1000, 'nepal'); return (await bal(cJapan, 'japan')).pending === -1000 && (await bal(cNepal, 'nepal')).pending === 1000; })());
+      check('marking is recorded in the audit log', (await sStore.listAudit(600)).some((x) => x.action === 'credit_marked_entered'));
+    }
     // balances follow the results: change or clear a result and they correct themselves
     const mid = (await mk('ireland', ['uganda'], 4000, 'ireland')).id;
-    const irBefore = (await bal(cIre, 'ireland')).balance;
+    const irBefore = (await bal(cIre, 'ireland')).pending;
     await sCall('PUT', `admin/series/${mid}/result`, { cookie: cAdm, body: { winner: 'uganda' } });
-    check('changing a series result re-settles the credits (home +8000 becomes away −4000)', irBefore === 12000 && (await bal(cIre, 'ireland')).balance === 0);
+    check('changing a series result re-settles the credits (home +8000 becomes away −4000)', irBefore === 8000 /* the earlier settlement is already marked as entered */ && (await bal(cIre, 'ireland')).pending === -4000);
     await sCall('DELETE', `admin/series/${mid}/result`, { cookie: cAdm });
-    check('clearing a result removes its credits', (await bal(cIre, 'ireland')).balance === 4000);
+    check('clearing a result removes its credits', (await bal(cIre, 'ireland')).pending === 0);
   }
   // declining an invitation, and the waiting-invitations badge
   {

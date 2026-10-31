@@ -1,7 +1,10 @@
-// Board Credits: what each finished series is worth, and every board's balance.
+// Board Credits: what each finished series is worth, and what is still to be added to each board's credits.
 //
-// Balances are never stored: they are worked out from the series results the administrator has recorded, plus the manual
-// adjustments (a ledger table). So correcting or clearing a result, or deleting a series, fixes the balances by itself.
+// The IOCF sheet ("Available credits") is the master record and is read live by the site. This module works out the PENDING
+// changes on top of it: the settlement of each finished series and the administrator's manual adjustments, until the
+// administrator marks them as entered in the sheet. A board's balance = sheet credits + pending changes. Marking a change as
+// entered stops it counting, because the sheet then already includes it. Nothing here is stored as a balance: correcting or
+// clearing a result, or deleting a series, fixes the pending amounts by itself.
 //
 // Settlement of a finished series (a drawn series changes nothing):
 //   • the stake is the series' bet amount; when the HOST board wins, the stake is doubled (bet ₹5,000, host wins → ₹10,000)
@@ -10,7 +13,6 @@
 //   • balances may go below zero
 const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
 export const MAX_ADJUSTMENT = 1_000_000_000;
-export const OPENING_REASON = 'Opening balance from the IOCF sheet';
 
 /** The money moves of one finished series: [{ board, delta, summary }] (empty for a draw or an unfinished series). */
 export function settleSeries(s, boards) {
@@ -32,13 +34,14 @@ export function settleSeries(s, boards) {
 export function ledger(seriesList, adjustments, boards) {
   const lines = [];
   for (const s of seriesList) {
-    for (const m of settleSeries(s, boards)) lines.push({ kind: 'series', board: m.board, at: s.result_at ?? s.updated_at ?? 0, delta: m.delta, text: m.summary, series: s.name, seriesId: s.id });
+    for (const m of settleSeries(s, boards)) lines.push({ kind: 'series', board: m.board, at: s.result_at ?? s.updated_at ?? 0, delta: m.delta, text: m.summary, series: s.name, seriesId: s.id, applied: Boolean(s.credits_applied_at) });
   }
-  for (const a of adjustments) lines.push({ kind: 'adjustment', id: a.id, board: a.board, at: a.created_at, delta: a.amount, text: a.reason, by: a.created_by ?? null });
+  for (const a of adjustments) lines.push({ kind: 'adjustment', id: a.id, board: a.board, at: a.created_at, delta: a.amount, text: a.reason, by: a.created_by ?? null, applied: Boolean(a.applied_at) });
   return lines.sort((x, y) => y.at - x.at);
 }
 
-export const balanceOf = (lines, slug) => lines.filter((l) => l.board === slug).reduce((n, l) => n + l.delta, 0);
+/** The changes for one board that are not yet in the sheet. */
+export const pendingOf = (lines, slug) => lines.filter((l) => l.board === slug && !l.applied).reduce((n, l) => n + l.delta, 0);
 
 /** Checks an administrator's adjustment. Returns { value } or { error }. */
 export function validateAdjustment(input, boards) {
@@ -51,16 +54,3 @@ export function validateAdjustment(input, boards) {
   return { value: { board: i.board, amount, reason } };
 }
 
-/** Checks the opening balances the administrator loads from the IOCF sheet: { <board slug>: whole amount ≥ 0 }. */
-export function validateOpening(input, boards) {
-  const map = input && typeof input === 'object' && input.balances && typeof input.balances === 'object' ? input.balances : null;
-  if (!map) return { error: 'No balances were sent.' };
-  const out = [];
-  for (const [slug, v] of Object.entries(map)) {
-    const n = Number(v);
-    if (!boards.some((b) => b.slug === slug)) return { error: `Unknown board: ${slug}.` };
-    if (!Number.isInteger(n) || n < 0 || n > MAX_ADJUSTMENT) return { error: `The balance for ${slug} is not a valid amount.` };
-    out.push({ board: slug, amount: n });
-  }
-  return { value: out };
-}

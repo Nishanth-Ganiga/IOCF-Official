@@ -43,6 +43,13 @@ export class MemoryStore {
     await this.persist();
     return { ...row };
   }
+  async creditsUpdate(id, patch) {
+    const r = (this.data.credits ??= []).find((x) => x.id === id);
+    if (!r) return null;
+    Object.assign(r, patch);
+    await this.persist();
+    return { ...r };
+  }
   async creditsDelete(id) {
     const list = (this.data.credits ??= []);
     const i = list.findIndex((x) => x.id === id);
@@ -185,7 +192,10 @@ export class CreditsRest {
   async req(method, query, body, extra = {}) {
     const res = await this.fetch(`${this.url}${query}`, { method, headers: { ...this.headers, ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
     if (res.status === 404) throw Object.assign(new Error('The credits table does not exist yet.'), { code: 'credits_missing' });
-    if (!res.ok) throw new Error(`Database request failed (${res.status})`);
+    if (!res.ok) {
+      if (res.status === 400 && /PGRST204|column/i.test(await res.text().catch(() => ''))) throw Object.assign(new Error('The credits table is out of date.'), { code: 'credits_outdated' });
+      throw new Error(`Database request failed (${res.status})`);
+    }
     const text = await res.text();
     return text ? JSON.parse(text) : null;
   }
@@ -194,6 +204,9 @@ export class CreditsRest {
   }
   async creditsInsert(row) {
     return (await this.req('POST', '', row, { prefer: 'return=representation' }))[0];
+  }
+  async creditsUpdate(id, patch) {
+    return (await this.req('PATCH', `?id=eq.${encodeURIComponent(id)}`, patch, { prefer: 'return=representation' }))?.[0] ?? null;
   }
   async creditsDelete(id) {
     return ((await this.req('DELETE', `?id=eq.${encodeURIComponent(id)}`, undefined, { prefer: 'return=representation' })) ?? []).length > 0;
@@ -212,6 +225,7 @@ export class SupabaseStore {
   }
   creditsList() { return this.creditsRest.creditsList(); }
   creditsInsert(row) { return this.creditsRest.creditsInsert(row); }
+  creditsUpdate(id, patch) { return this.creditsRest.creditsUpdate(id, patch); }
   creditsDelete(id) { return this.creditsRest.creditsDelete(id); }
   seriesList() { return this.seriesRest.seriesList(); }
   seriesGet(id) { return this.seriesRest.seriesGet(id); }
