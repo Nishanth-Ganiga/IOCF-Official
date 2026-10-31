@@ -70,7 +70,7 @@ export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: B
 export function Hub({ theme, data, go }: { theme: BoardTheme; data: SeriesOverview; go: Go }) {
   const pal = paletteOf(theme);
   const tiles = [
-    { id: 'announce', title: 'Announce a Series', text: 'Set up a new series and send it to your opponent.', badge: `${data.announced.length} announced` },
+    { id: 'announce', title: 'Announce a Series', text: 'Set up a new series and send it to your opponent.', badge: `${data.announced.filter((x) => x.status !== 'declined').length} announced` },
     { id: 'accept', title: 'Accept the Series', text: 'Series other boards have announced to you.', badge: data.invitations.length ? `${data.invitations.length} waiting` : 'none waiting', hot: data.invitations.length > 0 },
     { id: 'upcoming', title: 'Upcoming Series', text: 'Every confirmed series across the federation.', badge: `${data.upcoming.length} confirmed` },
   ];
@@ -224,7 +224,22 @@ export function Upcoming({ theme, data }: { theme: BoardTheme; data: SeriesOverv
 export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data: SeriesOverview; admin: boolean; reload: () => Promise<void> }) {
   const pal = paletteOf(theme);
   const [busy, setBusy] = useState('');
+  const [declining, setDeclining] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const decline = async (s: Series) => {
+    setBusy(s.id);
+    setMsg(null);
+    try {
+      await api.declineSeries(theme.slug, s.id);
+      setDeclining('');
+      await reload();
+      setMsg({ ok: true, text: `You declined “${s.name}”. ${s.host.name} has been told.` });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
+      await reload();
+    }
+    setBusy('');
+  };
   const accept = async (s: Series) => {
     setBusy(s.id);
     setMsg(null);
@@ -252,11 +267,12 @@ export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data
           <>Series that other boards have announced to <b>{theme.name}</b> are listed below. The Series Announcement page shows how many are waiting.</>,
           <>Read every detail: the type, the opponents, the number of matches, the schedule with each match’s stadium and date, the <b>bet amount</b> and the <b>format</b>.</>,
           <>If you agree, press <b>Accept the Series</b>. The series is then confirmed and appears in Upcoming Series for all boards.</>,
-          <>If you do not want it, do nothing: it is declined automatically at the deadline and disappears.</>,
+          <>If you do not want it, press <b>Decline</b>. The hosting board is told straight away and can announce again. If you do nothing, it is declined automatically at the deadline.</>,
         ]}
         rules={[
           <>You must accept before <b>11:59 PM IST on the day the series was announced</b>. After that it can no longer be accepted.</>,
-          <>Once you accept, the hosting board can no longer edit the series. Check the details first — accepting is final.</>,
+          <>Once you accept, the hosting board can no longer edit the series, and you can no longer decline it. Check the details first — accepting is final.</>,
+          <>Declining a trilateral or quadrilateral series cancels it for everyone.</>,
           <>A board can be in at most <b>{data.limit} series at a time</b> (you are in {data.active}). You cannot accept a new one while you are in {data.limit}.</>,
           <>In a trilateral or quadrilateral series it is confirmed only when every invited board has accepted.</>,
         ]}
@@ -274,9 +290,26 @@ export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data
               </p>
               <Facts s={s} you="invitation" />
               {!admin && (
-                <button type="button" onClick={() => void accept(s)} disabled={busy === s.id} className="mt-4 rounded-lg px-6 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: pal.highlight }}>
-                  {busy === s.id ? 'ACCEPTING…' : 'ACCEPT THE SERIES'}
-                </button>
+                declining === s.id ? (
+                  <div role="alertdialog" aria-label={`Decline ${s.name}`} className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-crimson/50 px-4 py-3">
+                    <span className="text-sm text-bone">Decline “{s.name}”? {s.host.name} will see that you declined.</span>
+                    <button type="button" onClick={() => void decline(s)} disabled={busy === s.id} className="rounded-lg bg-crimson px-4 py-2 text-xs font-bold tracking-[0.18em] text-white transition hover:brightness-110 disabled:opacity-50">
+                      {busy === s.id ? 'DECLINING…' : 'YES, DECLINE'}
+                    </button>
+                    <button type="button" onClick={() => setDeclining('')} className="text-xs font-semibold tracking-[0.18em] text-mist hover:text-bone">
+                      CANCEL
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button type="button" onClick={() => void accept(s)} disabled={busy === s.id} className="rounded-lg px-6 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: pal.highlight }}>
+                      {busy === s.id ? 'ACCEPTING…' : 'ACCEPT THE SERIES'}
+                    </button>
+                    <button type="button" onClick={() => setDeclining(s.id)} className="rounded-lg border border-white/25 px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-mist transition hover:border-crimson/60 hover:text-crimson-2">
+                      DECLINE
+                    </button>
+                  </div>
+                )
               )}
             </li>
           ))}
@@ -337,6 +370,13 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
     setEditing(s);
     setMsg(null);
     setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: s.dates, bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const startAgain = (s: Series) => {
+    setEditing(null);
+    setMsg(null);
+    setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: [], bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -501,12 +541,20 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
             <li key={s.id} className={card}>
               <div className="flex items-start justify-between gap-3">
                 <p className="font-display text-2xl tracking-wide text-bone">{s.name.toUpperCase()}</p>
-                <span className="shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em]" style={{ borderColor: s.status === 'accepted' ? '#6fcf8e' : pal.highlight, color: s.status === 'accepted' ? '#6fcf8e' : pal.highlight }}>
-                  {s.status === 'accepted' ? 'ACCEPTED' : 'WAITING FOR ACCEPTANCE'}
+                <span className="shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em]" style={{ borderColor: s.status === 'accepted' ? '#6fcf8e' : s.status === 'declined' ? '#e07a7a' : pal.highlight, color: s.status === 'accepted' ? '#6fcf8e' : s.status === 'declined' ? '#e07a7a' : pal.highlight }}>
+                  {s.status === 'accepted' ? 'ACCEPTED' : s.status === 'declined' ? `DECLINED BY ${(s.declinedBy?.name ?? 'OPPONENT').toUpperCase()}` : 'WAITING FOR ACCEPTANCE'}
                 </span>
               </div>
               <Facts s={s} you="announced" />
-              {!admin && (
+              {!admin && s.status === 'declined' && (
+                <p className="mt-4 flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={() => startAgain(s)} className="rounded-lg border px-5 py-2 text-xs font-bold tracking-[0.2em] transition hover:brightness-125" style={{ borderColor: pal.highlight, color: pal.highlight }}>
+                    ANNOUNCE AGAIN
+                  </button>
+                  <span className="text-xs text-smoke">Declined by {s.declinedBy?.name ?? 'the opponent'} — it no longer counts toward your {data.limit} series. Change the details if you like and send it again.</span>
+                </p>
+              )}
+              {!admin && s.status !== 'declined' && (
                 <p className="mt-4">
                   {s.editable ? (
                     <button type="button" onClick={() => startEdit(s)} className="rounded-lg border px-5 py-2 text-xs font-bold tracking-[0.2em] transition hover:brightness-125" style={{ borderColor: pal.highlight, color: pal.highlight }}>

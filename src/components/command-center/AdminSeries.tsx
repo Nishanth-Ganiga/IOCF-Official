@@ -8,7 +8,7 @@ type Filter = 'all' | 'pending' | 'accepted' | 'declined';
 const BADGE: Record<Series['status'], { text: string; color: string }> = {
   pending: { text: 'WAITING FOR ACCEPTANCE', color: '#c9a24b' },
   accepted: { text: 'ACCEPTED', color: '#6fcf8e' },
-  declined: { text: 'DECLINED (DEADLINE PASSED)', color: '#e07a7a' },
+  declined: { text: 'DECLINED', color: '#e07a7a' },
 };
 
 /** Administrator: every series of every board, with all details, and the power to delete any of them. */
@@ -132,7 +132,7 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
               <div className="flex items-start justify-between gap-3">
                 <p className="font-display text-2xl tracking-wide text-bone">{s.name.toUpperCase()}</p>
                 <span className="shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.16em]" style={{ borderColor: BADGE[s.status].color, color: BADGE[s.status].color }}>
-                  {BADGE[s.status].text}
+                  {s.status === 'declined' ? (s.declinedBy ? `DECLINED BY ${s.declinedBy.name.toUpperCase()}` : 'DECLINED (DEADLINE PASSED)') : BADGE[s.status].text}
                 </span>
               </div>
               <Facts s={s} you="administrator" full />

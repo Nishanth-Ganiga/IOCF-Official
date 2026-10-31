@@ -53,7 +53,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
-export type DashboardInfo = { board: string; preview: boolean; chairmanName: string | null; modules: string[] };
+export type DashboardInfo = { board: string; preview: boolean; chairmanName: string | null; modules: string[]; /** Series invitations waiting for this board. */ invitations: number };
 
 export type Overview = {
   totalBoards: number;
@@ -109,6 +109,9 @@ export type Series = {
   /** Label such as "6 overs 6 wickets" (Club format only). */
   clubFormat: string | null;
   status: 'pending' | 'accepted' | 'declined';
+  /** Who declined the invitation (status 'declined' only; null when it simply lapsed at the deadline). */
+  declinedBy: { slug: string; name: string } | null;
+  declinedAt: number | null;
   /** Set by the administrator after the series; `winner` is null for a drawn series. */
   result: { winner: { slug: string; name: string } | null; note: string | null; at: number | null } | null;
   deadlineAt: number;
@@ -170,4 +173,5 @@ export const api = {
   adminCredits: () => request<AdminCredits>('GET', '/admin/credits'),
   adjustCredit: (adj: { board: string; amount: number; reason: string }) => request<{ id: string }>('POST', '/admin/credits/adjustments', adj),
   removeAdjustment: (id: string) => request<{ ok: true }>('DELETE', `/admin/credits/adjustments/${encodeURIComponent(id)}`),
+  declineSeries: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/decline`),
 };

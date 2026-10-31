@@ -22,12 +22,13 @@
 //   GET  /boards/:slug/series           the board's announced series, invitations and the upcoming list
 //   POST /boards/:slug/series           announce a series (own board)
 //   PUT  /boards/:slug/series/:id       edit it until an opponent accepts
+//   POST /boards/:slug/series/:id/decline  turn an invitation down (own board)
 //   POST /boards/:slug/series/:id/accept  accept an invitation (own board)
 //
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { SERIES_CFG, STADIUMS, activeCount, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { SERIES_CFG, STADIUMS, activeCount, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
 import { balanceOf, ledger, validateAdjustment } from './credits.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
@@ -61,6 +62,7 @@ const ACTIONS = {
   series_announced: 'Series announced',
   series_edited: 'Series edited',
   series_accepted: 'Series accepted',
+  series_declined: 'Series declined',
   series_deleted: 'Series deleted by administrator',
   series_result_set: 'Series result recorded',
   series_result_cleared: 'Series result cleared',
@@ -199,6 +201,15 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           preview: who.role === 'admin',
           chairmanName: account?.chairman_name ?? null,
           modules: await enabledModules(board.slug),
+          // series invitations waiting for this board (shown as a badge); 0 if the series table is not set up yet
+          invitations: await (async () => {
+            try {
+              const t = now();
+              return (await store.seriesList()).filter((x) => isLive(x, t) && x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).length;
+            } catch {
+              return 0;
+            }
+          })(),
         });
       }
 
@@ -237,7 +248,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             canAct: own,
             stadiums: STADIUMS[board.slug] ?? [],
             allStadiums: STADIUMS,
-            announced: live.filter((x) => x.host === board.slug).map((x) => toApi(x, BOARDS, t)),
+            announced: all.filter((x) => x.host === board.slug && (isLive(x, t) || declinedVisibleTo(x, board.slug, t))).map((x) => toApi(x, BOARDS, t)),
             invitations: live.filter((x) => x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).map((x) => toApi(x, BOARDS, t)),
             completed: live.filter((x) => x.status === 'accepted' && x.result_winner).sort((p, q) => (q.result_at ?? 0) - (p.result_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
             upcoming: live.filter((x) => x.status === 'accepted' && !x.result_winner).sort((p, q) => (q.accepted_at ?? 0) - (p.accepted_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
@@ -263,6 +274,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (no) return no;
           const cur = await store.seriesGet(d);
           if (!cur || cur.host !== board.slug) return fail(404, 'not_found', 'Series not found.');
+          if (cur.status === 'declined') return fail(409, 'declined', 'This series was declined and can no longer be edited. Announce it again instead.');
           if (cur.status !== 'pending' || cur.accepted.length > 0) return fail(409, 'locked', 'This series has been accepted and can no longer be edited.');
           if (t > cur.deadline_at) return fail(409, 'expired', 'The deadline for this series has passed.');
           const v = validateSeries(req.body, board.slug, BOARDS, t);
@@ -281,6 +293,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const cur = await store.seriesGet(d);
           if (!cur || !cur.opponents.includes(board.slug)) return fail(404, 'not_found', 'Series not found.');
           if (cur.accepted.includes(board.slug)) return fail(409, 'already', 'You have already accepted this series.');
+          if (cur.status === 'declined') return fail(409, 'declined', 'This series was declined.');
           if (!isLive(cur, t) || cur.status !== 'pending') return fail(409, 'expired', 'The deadline for this series has passed, so it was declined.');
           const all = await store.seriesList();
           if (activeCount(all, board.slug, t, cur.id) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
@@ -289,6 +302,18 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const row = await store.seriesUpdate(cur.id, { accepted, status: done ? 'accepted' : 'pending', accepted_at: done ? t : null, updated_at: t });
           await audit('series_accepted', who, cur.id, req, { name: row.name });
           return json(200, { series: toApi(row, BOARDS, t) });
+        }
+        if (d && e === 'decline' && method === 'POST') {
+          const no = mustOwn();
+          if (no) return no;
+          const cur = await store.seriesGet(d);
+          if (!cur || !cur.opponents.includes(board.slug)) return fail(404, 'not_found', 'Series not found.');
+          if (cur.accepted.includes(board.slug)) return fail(409, 'already', 'You have already accepted this series, so you can no longer decline it.');
+          if (cur.status === 'declined') return fail(409, 'declined', 'This series was already declined.');
+          if (!isLive(cur, t) || cur.status !== 'pending') return fail(409, 'expired', 'The deadline for this series has passed, so it was declined.');
+          const row = await store.seriesUpdate(cur.id, { status: 'declined', declined_by: board.slug, declined_at: t, updated_at: t });
+          await audit('series_declined', who, cur.id, req, { name: row.name });
+          return json(200, { ok: true });
         }
         return fail(404, 'not_found', 'Not found.');
       }

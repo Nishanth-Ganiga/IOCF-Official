@@ -1,6 +1,7 @@
 // Series announcements: the rules, in one place. Used by the API (handler.mjs) and by the self-test.
 //   • a board announces a series (bilateral / trilateral / quadrilateral) and the opponents must each accept it
 //   • the deadline is 11:59 PM IST on the day of the announcement; an unaccepted series after that is treated as declined and is never shown
+//   • an invited board can also decline right away; the host then sees "Declined by <board>" for a few days and can announce again
 //   • the host can edit a series until the first opponent accepts; after that it is locked
 //   • a board can be in at most 2 series at a time
 import { readFileSync } from 'node:fs';
@@ -19,6 +20,9 @@ export function deadlineFor(t) {
 }
 
 export const isExpired = (s, t) => s.status === 'pending' && t > s.deadline_at;
+export const DECLINE_VISIBLE_MS = 3 * 86400000;
+/** A series the opponent declined stays visible to its host for a few days, so the host sees who said no. */
+export const declinedVisibleTo = (s, slug, t) => s.status === 'declined' && s.host === slug && t - (s.declined_at ?? 0) <= DECLINE_VISIBLE_MS;
 /** Accepted, or still waiting and within its deadline. Anything else is declined and invisible. */
 export const isLive = (s, t) => s.status === 'accepted' || (s.status === 'pending' && t <= s.deadline_at);
 const involves = (s, slug) => s.host === slug || s.opponents.includes(slug);
@@ -95,6 +99,8 @@ export function toApi(s, boards, t) {
     format: s.format,
     clubFormat: s.club_format ? (SERIES_CFG.clubFormats.find((c) => c.id === s.club_format)?.label ?? s.club_format) : null,
     status: s.status,
+    declinedBy: s.status === 'declined' && s.declined_by ? { slug: s.declined_by, name: nameOf(s.declined_by) } : null,
+    declinedAt: s.declined_at ?? null,
     result: s.result_winner
       ? { winner: s.result_winner === 'draw' ? null : { slug: s.result_winner, name: nameOf(s.result_winner) }, note: s.result_note ?? null, at: s.result_at ?? null }
       : null,

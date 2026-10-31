@@ -518,7 +518,7 @@ console.log('\n— Series Announcement —');
 
   // limit: India now hosts 2 open series
   check('a board can be in at most 2 series', (await post(cIndia, 'india', good({ name: 'Third', opponents: ['pakistan'] }))).status === 409);
-  check('…and an opponent already in 2 cannot be invited', await (async () => { await post(cPak, 'pakistan', good({ name: 'Pak One', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); await post(cPak, 'pakistan', good({ name: 'Pak Two', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); const r0 = await post(cPak, 'pakistan', good({ name: 'Pak One', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); console.log('DBG', r0.status, JSON.stringify(r0.body).slice(0,200)); const r = await post(cEng, 'england', good({ name: 'Eng One', opponents: ['pakistan'], stadiums: [STADIUMS.england[0]] })); return r.status === 409 && /Pakistan is already in 2/.test(r.body.error.message); })());
+  check('…and an opponent already in 2 cannot be invited', await (async () => { await post(cPak, 'pakistan', good({ name: 'Pak One', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); await post(cPak, 'pakistan', good({ name: 'Pak Two', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); const r = await post(cEng, 'england', good({ name: 'Eng One', opponents: ['pakistan'], stadiums: [STADIUMS.england[0]] })); return r.status === 409 && /Pakistan is already in 2/.test(r.body.error.message); })());
   check('…and a board with 2 open series cannot accept a third', (await sCall('POST', `boards/new-zealand/series/${(await view(cNz, 'new-zealand')).invitations[0].id}/accept`, { cookie: cNz })).status === 200 && (await sCall('POST', `boards/new-zealand/series/${(await view(cNz, 'new-zealand')).invitations[0].id}/accept`, { cookie: cNz })).status === 200 && (await post(cNz, 'new-zealand', good({ name: 'Nz One', opponents: ['england'], stadiums: [STADIUMS['new-zealand'][0]] }))).status === 409);
 
   // editing before acceptance
@@ -636,6 +636,39 @@ console.log('\n— Series Announcement —');
     check('changing a series result re-settles the credits (home +8000 becomes away −4000)', irBefore === 12000 && (await bal(cIre, 'ireland')).balance === 0);
     await sCall('DELETE', `admin/series/${mid}/result`, { cookie: cAdm });
     check('clearing a result removes its credits', (await bal(cIre, 'ireland')).balance === 4000);
+  }
+  // declining an invitation, and the waiting-invitations badge
+  {
+    const cQatar = await sLogin('board', sc('Qatar'));
+    const cUg = await sLogin('board', sc('Uganda'));
+    const dash = async (cookie, slug) => (await sCall('GET', `boards/${slug}/dashboard`, { cookie })).body;
+    const ugBase = (await dash(cUg, 'uganda')).invitations; // Uganda already has the quadrilateral invitation from above
+    check('the badge counts the invitations waiting for the board', ugBase === (await view(cUg, 'uganda')).invitations.length && true);
+    const q1 = await post(cQatar, 'qatar', good({ name: 'Gulf Cup', opponents: ['uganda'], stadiums: [STADIUMS.qatar[0]] }));
+    const qid = q1.body.series?.id;
+    check('the invited board\'s dashboard badge counts the waiting invitation (and only theirs)', (await dash(cUg, 'uganda')).invitations === ugBase + 1 && (await dash(cQatar, 'qatar')).invitations === (await view(cQatar, 'qatar')).invitations.length);
+    check('only the invited board can decline', (await sCall('POST', `boards/england/series/${qid}/decline`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/qatar/series/${qid}/decline`, { cookie: cQatar })).status === 404 && (await sCall('POST', `boards/uganda/series/${qid}/decline`, { cookie: cAdm })).status === 403 && (await sCall('POST', `boards/uganda/series/${qid}/decline`)).status === 401);
+    check('the opponent declines', (await sCall('POST', `boards/uganda/series/${qid}/decline`, { cookie: cUg })).status === 200);
+    const hostView = (await view(cQatar, 'qatar')).announced.find((x) => x.id === qid);
+    check('the host sees "declined by Uganda" straight away', hostView?.status === 'declined' && hostView.declinedBy.name === 'Uganda' && !hostView.editable);
+    check('it disappears from the opponent\'s invitations and badge, and is not upcoming', !(await view(cUg, 'uganda')).invitations.some((x) => x.id === qid) && (await dash(cUg, 'uganda')).invitations === ugBase && !(await view(cEng, 'england')).upcoming.some((x) => x.id === qid));
+    check('a declined series cannot be accepted, declined again or edited', (await sCall('POST', `boards/uganda/series/${qid}/accept`, { cookie: cUg })).body.error.code === 'declined' && (await sCall('POST', `boards/uganda/series/${qid}/decline`, { cookie: cUg })).status === 409 && (await sCall('PUT', `boards/qatar/series/${qid}`, { cookie: cQatar, body: good({ opponents: ['uganda'], stadiums: [STADIUMS.qatar[0]] }) })).body.error.code === 'declined');
+    check('the host can announce again immediately, and a declined series does not count toward the limit', (await view(cQatar, 'qatar')).active === 0 && (await post(cQatar, 'qatar', good({ name: 'Gulf Cup 2', opponents: ['uganda'], stadiums: [STADIUMS.qatar[0]] }))).status === 201 && (await post(cQatar, 'qatar', good({ name: 'Gulf Cup 3', opponents: ['uganda'], stadiums: [STADIUMS.qatar[1]] }))).status === 201);
+    // one decline cancels a multi-board series; a board that already accepted cannot decline
+    const cPor = await sLogin('board', sc('Portugal'));
+    const cJp = await sLogin('board', sc('Japan'));
+    const cNp = await sLogin('board', sc('Nepal'));
+    const tri2 = await post(cPor, 'portugal', good({ name: 'Three Way', type: 'trilateral', opponents: ['japan', 'nepal'], matches: 4, stadiums: [STADIUMS.portugal[0], STADIUMS.portugal[0], STADIUMS.nepal[0]] }));
+    const t2 = tri2.body.series.id;
+    await sCall('POST', `boards/nepal/series/${t2}/accept`, { cookie: cNp });
+    check('a board that has accepted cannot decline', (await sCall('POST', `boards/nepal/series/${t2}/decline`, { cookie: cNp })).status === 409);
+    await sCall('POST', `boards/japan/series/${t2}/decline`, { cookie: cJp });
+    check('one decline cancels a trilateral series for everyone', (await view(cPor, 'portugal')).announced.find((x) => x.id === t2).status === 'declined' && !(await view(cNp, 'nepal')).invitations.some((x) => x.id === t2) && (await sCall('GET', 'admin/series', { cookie: cAdm })).body.series.find((x) => x.id === t2).declinedBy.name === 'Japan' && (await view(cPor, 'portugal')).active === 0);
+    check('declines are recorded in the audit log', (await sStore.listAudit(500)).filter((x) => x.action === 'series_declined').length === 2);
+    // the host sees a decline for 3 days
+    t0 += 4 * 86400000;
+    const cQatar2 = await sLogin('board', sc('Qatar'));
+    check('after a few days a declined series drops off the host\'s list', !(await view(cQatar2, 'qatar')).announced.some((x) => x.id === qid));
   }
   fs.rmSync(sHome, { recursive: true, force: true });
 }

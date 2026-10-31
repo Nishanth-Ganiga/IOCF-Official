@@ -64,14 +64,14 @@ export default function BoardView({ slug, moduleId, sub, user, nav }: { slug: st
             {module?.id === 'series-announcement' && <SeriesAnnouncement theme={theme} sub={sub} admin={admin} go={(next) => nav(...base, moduleId, ...(next ? [next] : []))} />}
           </ModulePage>
         ) : (
-          <Dashboard theme={theme} data={state.data} chairman={chairman} onOpen={(id) => nav(...base, id)} />
+          <Dashboard theme={theme} data={state.data} chairman={chairman} onOpen={(id, sub) => nav(...base, id, ...(sub ? [sub] : []))} />
         )}
       </div>
     </section>
   );
 }
 
-export function Dashboard({ theme, data, chairman, onOpen }: { theme: BoardTheme; data: DashboardInfo; chairman: string | null; onOpen: (id: string) => void }) {
+export function Dashboard({ theme, data, chairman, onOpen }: { theme: BoardTheme; data: DashboardInfo; chairman: string | null; onOpen: (id: string, sub?: string) => void }) {
   const pal = paletteOf(theme);
   const name = theme.name.toUpperCase();
   return (
@@ -104,13 +104,27 @@ export function Dashboard({ theme, data, chairman, onOpen }: { theme: BoardTheme
         </div>
       </motion.div>
 
+      {data.invitations > 0 && data.modules.includes('series-announcement') && (
+        <div role="status" className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 bg-black/70 px-5 py-4 backdrop-blur-sm" style={{ borderColor: pal.highlight }}>
+          <p className="text-sm text-bone">
+            <b>
+              {data.invitations} series invitation{data.invitations === 1 ? ' is' : 's are'} waiting for {theme.name}.
+            </b>{' '}
+            <span className="text-mist">Accept or decline before 11:59 PM IST on the day it was announced, or it lapses.</span>
+          </p>
+          <button type="button" onClick={() => onOpen('series-announcement', 'accept')} className="rounded-lg px-5 py-2 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110" style={{ background: pal.highlight }}>
+            VIEW INVITATIONS
+          </button>
+        </div>
+      )}
+
       <h2 className="mb-4 text-[11px] font-semibold tracking-[0.24em]" style={{ color: pal.highlight }}>
         BOARD MODULES
       </h2>
       <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {MODULES.map((m) => (
           <li key={m.id}>
-            <ModuleTile theme={theme} m={m} enabled={data.modules.includes(m.id)} onOpen={() => onOpen(m.id)} />
+            <ModuleTile theme={theme} m={m} enabled={data.modules.includes(m.id)} waiting={m.id === 'series-announcement' ? data.invitations : 0} onOpen={() => onOpen(m.id)} />
           </li>
         ))}
       </ul>
@@ -118,17 +132,17 @@ export function Dashboard({ theme, data, chairman, onOpen }: { theme: BoardTheme
   );
 }
 
-function ModuleTile({ theme, m, enabled, onOpen }: { theme: BoardTheme; m: ModuleDef; enabled: boolean; onOpen: () => void }) {
+function ModuleTile({ theme, m, enabled, waiting = 0, onOpen }: { theme: BoardTheme; m: ModuleDef; enabled: boolean; waiting?: number; onOpen: () => void }) {
   const pal = paletteOf(theme);
   const active = m.status === 'active' && enabled;
-  const badge = active ? 'ACTIVE' : m.status === 'active' ? 'NOT ENABLED' : 'COMING SOON';
+  const badge = active && waiting > 0 ? `${waiting} WAITING` : active ? 'ACTIVE' : m.status === 'active' ? 'NOT ENABLED' : 'COMING SOON';
   const body = (
     <>
       <span className="flex items-start justify-between gap-3">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl border" style={{ borderColor: active ? pal.highlight : 'rgba(255,255,255,0.12)', color: active ? pal.highlight : '#6d6c75' }}>
           <ModuleIcon icon={m.icon} />
         </span>
-        <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em]" style={{ borderColor: active ? pal.highlight : 'rgba(255,255,255,0.15)', color: active ? pal.highlight : '#8b8a93' }}>
+        <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em]" style={waiting > 0 && active ? { borderColor: pal.highlight, background: pal.highlight, color: '#0b0b0f' } : { borderColor: active ? pal.highlight : 'rgba(255,255,255,0.15)', color: active ? pal.highlight : '#8b8a93' }}>
           {active && <span aria-hidden className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: pal.highlight }} />}
           {badge}
         </span>
