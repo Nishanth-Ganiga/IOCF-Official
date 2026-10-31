@@ -16,6 +16,7 @@
 //   GET  /admin/audit                   admin only
 //   GET  /boards/:slug/credits          the board's balance and history (own board; admin: any)
 //   GET  /admin/credits                 admin only   every board's balance + recent adjustments
+//   POST /admin/credits/opening         admin only   { balances: { <slug>: amount } }  loads opening balances once per board
 //   POST /admin/credits/adjustments     admin only   { board, amount (+/-), reason }
 //   DELETE /admin/credits/adjustments/:id  admin only
 //   GET  /boards/:slug/fixtures         every match of every confirmed series (the calendar)
@@ -29,7 +30,7 @@
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { SERIES_CFG, STADIUMS, activeCount, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
-import { balanceOf, ledger, validateAdjustment } from './credits.mjs';
+import { OPENING_REASON, balanceOf, ledger, validateAdjustment, validateOpening } from './credits.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -68,6 +69,7 @@ const ACTIONS = {
   series_result_cleared: 'Series result cleared',
   credit_adjusted: 'Board credit adjusted',
   credit_adjustment_removed: 'Credit adjustment removed',
+  credit_opening_loaded: 'Opening balances loaded',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -347,6 +349,23 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             boards: BOARDS.map((bd) => ({ slug: bd.slug, name: bd.name, balance: balanceOf(lines, bd.slug) })),
             recentAdjustments: lines.filter((l) => l.kind === 'adjustment').slice(0, 15).map((l) => ({ id: l.id, at: l.at, board: l.board, boardName: BOARDS.find((x) => x.slug === l.board)?.name ?? l.board, amount: l.delta, reason: l.text, by: l.by })),
           });
+        }
+
+        if (b === 'credits' && c === 'opening' && !d && method === 'POST') {
+          const v = validateOpening(req.body, BOARDS);
+          if (v.error) return fail(400, 'invalid', v.error);
+          const have = new Set((await store.creditsList()).filter((x) => x.reason === OPENING_REASON).map((x) => x.board));
+          const created = [];
+          const skipped = [];
+          for (const { board, amount } of v.value) {
+            if (have.has(board) || amount === 0) skipped.push(board);
+            else {
+              await store.creditsInsert({ id: randomUUID(), board, amount, reason: OPENING_REASON, created_by: who.username, created_at: now() });
+              created.push(board);
+            }
+          }
+          await audit('credit_opening_loaded', who, null, req, { created: created.length, skipped: skipped.length });
+          return json(200, { created, skipped });
         }
 
         if (b === 'credits' && c === 'adjustments' && !d && method === 'POST') {

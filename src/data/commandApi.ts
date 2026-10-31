@@ -172,6 +172,7 @@ export const api = {
   credits: (slug: string) => request<CreditsInfo>('GET', `/boards/${encodeURIComponent(slug)}/credits`),
   adminCredits: () => request<AdminCredits>('GET', '/admin/credits'),
   adjustCredit: (adj: { board: string; amount: number; reason: string }) => request<{ id: string }>('POST', '/admin/credits/adjustments', adj),
+  loadOpening: (balances: Record<string, number>) => request<{ created: string[]; skipped: string[] }>('POST', '/admin/credits/opening', { balances }),
   removeAdjustment: (id: string) => request<{ ok: true }>('DELETE', `/admin/credits/adjustments/${encodeURIComponent(id)}`),
   declineSeries: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/decline`),
 };

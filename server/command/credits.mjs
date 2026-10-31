@@ -9,7 +9,8 @@
 //     and in a trilateral / quadrilateral series the winner collects it from each of the others
 //   • balances may go below zero
 const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
-export const MAX_ADJUSTMENT = 10_000_000;
+export const MAX_ADJUSTMENT = 1_000_000_000;
+export const OPENING_REASON = 'Opening balance from the IOCF sheet';
 
 /** The money moves of one finished series: [{ board, delta, summary }] (empty for a draw or an unfinished series). */
 export function settleSeries(s, boards) {
@@ -44,8 +45,22 @@ export function validateAdjustment(input, boards) {
   const i = input && typeof input === 'object' ? input : {};
   if (!boards.some((b) => b.slug === i.board)) return { error: 'Choose a board.' };
   const amount = Number(i.amount);
-  if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > MAX_ADJUSTMENT) return { error: 'Enter a whole amount other than zero (up to ₹1,00,00,000).' };
+  if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > MAX_ADJUSTMENT) return { error: 'Enter a whole amount other than zero (up to ₹100 crore).' };
   const reason = clean(i.reason);
   if (reason.length < 3 || reason.length > 120) return { error: 'Give a reason (3 to 120 characters).' };
   return { value: { board: i.board, amount, reason } };
+}
+
+/** Checks the opening balances the administrator loads from the IOCF sheet: { <board slug>: whole amount ≥ 0 }. */
+export function validateOpening(input, boards) {
+  const map = input && typeof input === 'object' && input.balances && typeof input.balances === 'object' ? input.balances : null;
+  if (!map) return { error: 'No balances were sent.' };
+  const out = [];
+  for (const [slug, v] of Object.entries(map)) {
+    const n = Number(v);
+    if (!boards.some((b) => b.slug === slug)) return { error: `Unknown board: ${slug}.` };
+    if (!Number.isInteger(n) || n < 0 || n > MAX_ADJUSTMENT) return { error: `The balance for ${slug} is not a valid amount.` };
+    out.push({ board: slug, amount: n });
+  }
+  return { value: out };
 }

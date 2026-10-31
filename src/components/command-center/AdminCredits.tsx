@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, type AdminCredits as Data, type CreditsInfo } from '../../data/commandApi';
 import { themeOf } from '../../data/commandCenter/boardConfig';
+import { store } from '../../data/store';
 import { BoardFlag } from './Mascot';
 import { rupees, signed, stamp } from './CreditsPanel';
 
@@ -72,6 +73,31 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
     setBusy('');
   };
 
+  // the "Available credits" each board has in the IOCF sheet (the same data the rest of the site shows)
+  const sheet = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const b of store.boards) {
+      const theme = (data?.boards ?? []).find((x) => x.name === b.name);
+      const raw = (b as { facts?: { label: string; value: string }[] }).facts?.find((f) => /available credits/i.test(f.label))?.value;
+      const n = raw ? Number(raw.replace(/[^\d]/g, '')) : NaN;
+      if (theme && Number.isFinite(n)) out[theme.slug] = n;
+    }
+    return out;
+  }, [data]);
+  const loadOpening = async () => {
+    setBusy('opening');
+    setFlash(null);
+    try {
+      const r = await api.loadOpening(sheet);
+      await load();
+      setFlash({ ok: true, text: `Opening balances loaded for ${r.created.length} board${r.created.length === 1 ? '' : 's'}${r.skipped.length ? `; ${r.skipped.length} already had one` : ''}.` });
+    } catch (e) {
+      setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
+    }
+    setBusy('');
+  };
+  const sheetCount = Object.keys(sheet).length;
+
   const rows = useMemo(() => (data?.boards ?? []).filter((b) => !query.trim() || b.name.toLowerCase().includes(query.trim().toLowerCase())), [data, query]);
   const field = 'mt-1 w-full rounded-lg border border-white/15 bg-ink px-3 py-2.5 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b]';
 
@@ -95,6 +121,18 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
             Try again
           </button>
         </p>
+      )}
+
+      {data && sheetCount > 0 && (
+        <section aria-label="Opening balances" className="mt-6 rounded-2xl border border-white/10 bg-ink-2 p-5">
+          <h2 className="text-[11px] font-semibold tracking-[0.24em] text-[#c9a24b]">OPENING BALANCES FROM THE IOCF SHEET</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-mist">
+            The sheet lists the available credits of {sheetCount} boards ({Object.values(sheet).reduce((a, b) => a + b, 0).toLocaleString('en-IN')} in total). Load them once as each board&apos;s starting balance; series results then add to or take from it. A board that already has an opening balance is skipped, so this is safe to press again.
+          </p>
+          <button type="button" onClick={() => void loadOpening()} disabled={busy === 'opening'} className="mt-3 rounded-lg bg-[#c9a24b] px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50">
+            {busy === 'opening' ? 'LOADING…' : 'LOAD OPENING BALANCES'}
+          </button>
+        </section>
       )}
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
