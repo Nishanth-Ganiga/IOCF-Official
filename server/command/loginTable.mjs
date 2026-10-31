@@ -7,7 +7,7 @@
 // per-account lock still persists in the table). Run the full setup SQL later for all of those.
 import { BOARDS } from './handler.mjs';
 import { hashPassword } from './crypto.mjs';
-import { SeriesRest, SupabaseStore, storeFromEnv } from './store.mjs';
+import { CreditsRest, SeriesRest, SupabaseStore, storeFromEnv } from './store.mjs';
 
 const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const BOARD_ALIASES = { png: 'papuanewguinea', unitedarabemirates: 'uae', unitedstates: 'usa', unitedstatesofamerica: 'usa' };
@@ -52,6 +52,7 @@ const enc = encodeURIComponent;
 export class LoginTableStore {
   constructor({ url, serviceKey, table = 'iocf_logins', fetchImpl = fetch }) {
     this.seriesRest = new SeriesRest({ url, serviceKey, fetchImpl });
+    this.creditsRest = new CreditsRest({ url, serviceKey, fetchImpl });
     if (!/^[a-zA-Z0-9_]+$/.test(table)) throw new Error('Invalid table name');
     this.url = `${url.replace(/\/$/, '')}/rest/v1/${table}`;
     this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
@@ -98,6 +99,9 @@ export class LoginTableStore {
     const row = await this.req('PATCH', `?account_id=eq.${enc(id)}`, body, { prefer: 'return=representation' });
     return row?.[0] ? accountFromRow(row[0]) : null;
   }
+  creditsList() { return this.creditsRest.creditsList(); }
+  creditsInsert(row) { return this.creditsRest.creditsInsert(row); }
+  creditsDelete(id) { return this.creditsRest.creditsDelete(id); }
   seriesList() { return this.seriesRest.seriesList(); }
   seriesGet(id) { return this.seriesRest.seriesGet(id); }
   seriesInsert(row) { return this.seriesRest.seriesInsert(row); }
@@ -211,7 +215,7 @@ export class AutoStore {
     throw Object.assign(new Error('No Command Center tables found.'), { code: 'not_configured' });
   }
 }
-for (const m of ['list', 'findById', 'findByUsername', 'create', 'update', 'moduleOverrides', 'setModuleOverride', 'addAudit', 'listAudit', 'getRate', 'bumpRate', 'clearRate', 'seriesList', 'seriesGet', 'seriesInsert', 'seriesUpdate', 'seriesDelete']) {
+for (const m of ['list', 'findById', 'findByUsername', 'create', 'update', 'moduleOverrides', 'setModuleOverride', 'addAudit', 'listAudit', 'getRate', 'bumpRate', 'clearRate', 'seriesList', 'seriesGet', 'seriesInsert', 'seriesUpdate', 'seriesDelete', 'creditsList', 'creditsInsert', 'creditsDelete']) {
   AutoStore.prototype[m] = async function (...a) {
     return (await this.impl())[m](...a);
   };

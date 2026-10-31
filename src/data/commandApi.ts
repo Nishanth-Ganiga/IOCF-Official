@@ -139,6 +139,13 @@ export type CalendarMatch = {
   winner: string | null;
 };
 
+export type CreditEntry = { kind: 'series' | 'adjustment'; at: number; delta: number; text: string; series: string | null; id: string | null };
+export type CreditsInfo = { balance: number; entries: CreditEntry[] };
+export type AdminCredits = {
+  boards: { slug: string; name: string; balance: number }[];
+  recentAdjustments: { id: string; at: number; board: string; boardName: string; amount: number; reason: string; by: string | null }[];
+};
+
 export const api = {
   me: () => request<{ user: CcUser }>('GET', '/me').then((r) => r.user),
   login: (role: Role, username: string, password: string) => request<{ user: CcUser }>('POST', '/login', { role, username, password }).then((r) => r.user),
@@ -159,4 +166,8 @@ export const api = {
   fixtures: (slug: string) => request<{ today: string; matches: CalendarMatch[] }>('GET', `/boards/${encodeURIComponent(slug)}/fixtures`),
   setSeriesResult: (id: string, result: { winner: string; note?: string }) => request<{ series: Series }>('PUT', `/admin/series/${encodeURIComponent(id)}/result`, result),
   clearSeriesResult: (id: string) => request<{ series: Series }>('DELETE', `/admin/series/${encodeURIComponent(id)}/result`),
+  credits: (slug: string) => request<CreditsInfo>('GET', `/boards/${encodeURIComponent(slug)}/credits`),
+  adminCredits: () => request<AdminCredits>('GET', '/admin/credits'),
+  adjustCredit: (adj: { board: string; amount: number; reason: string }) => request<{ id: string }>('POST', '/admin/credits/adjustments', adj),
+  removeAdjustment: (id: string) => request<{ ok: true }>('DELETE', `/admin/credits/adjustments/${encodeURIComponent(id)}`),
 };

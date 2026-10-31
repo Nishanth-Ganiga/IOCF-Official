@@ -11,7 +11,7 @@ import { createHandler, BOARDS, MODULES } from '../../server/command/handler.mjs
 import { commandCenterRequestListener } from '../../server/command/http.mjs';
 import { MemoryStore, SupabaseStore } from '../../server/command/store.mjs';
 import { buildFixtures } from '../../src/data/commandCenter/fixtures.mjs';
-import { STADIUMS, SERIES_CFG, deadlineFor } from '../../server/command/series.mjs';
+import { newSeries, STADIUMS, SERIES_CFG, deadlineFor } from '../../server/command/series.mjs';
 import { AutoStore, LoginTableStore } from '../../server/command/loginTable.mjs';
 import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet, recordPassword, inspectSupabase, hostingValues, SUPABASE_URL_FOR, describeKey, adminFromRows, readTable, buildSetupSql, buildOverviewCsv, writeLoginsCsv, LOGINS_COLUMNS, LOGINS_CSV_FILE, shortPassword } from './lib.mjs';
 
@@ -131,7 +131,7 @@ check('a wrong password on an inactive account does NOT reveal it is inactive', 
 check('the administrator account cannot be deactivated', (await call('PATCH', `admin/accounts/${admin.accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } })).status === 400);
 check('admin reactivates India', (await call('PATCH', `admin/accounts/${cred('India').accountId}`, { cookie: adm.cookie, body: { status: 'active' } })).status === 200 && (await login('board', cred('India'))).r.status === 200);
 const ov = (await call('GET', 'admin/overview', { cookie: adm.cookie })).body;
-check('overview counts are right', ov.totalBoards === 26 && ov.totalAccounts === 27 && ov.activeBoardAccounts === 26 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 2);
+check('overview counts are right', ov.totalBoards === 26 && ov.totalAccounts === 27 && ov.activeBoardAccounts === 26 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 3);
 await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } });
 check('overview counts inactive boards', (await call('GET', 'admin/overview', { cookie: adm.cookie })).body.inactiveBoardAccounts === 1);
 const list = (await call('GET', 'admin/accounts', { cookie: adm.cookie })).body;
@@ -181,10 +181,10 @@ check('the account list now shows Japan as active and the others as having no lo
 console.log('\n— 7/8. modules —');
 const nz2 = await login('board', cred('New Zealand'));
 const dash = await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie });
-check('Series Announcement and Fixtures & Scheduling are the active modules', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement,fixtures' && dash.body.modules.join() === 'series-announcement,fixtures');
+check('Series Announcement, Fixtures & Scheduling and Board Credits are the active modules', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement,fixtures,credits' && dash.body.modules.join() === 'series-announcement,fixtures,credits');
 check('coming-soon modules cannot be switched on', (await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'squads', enabled: true } })).status === 400);
 await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'series-announcement', enabled: false } });
-check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.join() === 'fixtures' && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 2);
+check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.join() === 'fixtures,credits' && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 3);
 
 console.log('\n— 10. password reset —');
 const before = cred('Pakistan');
@@ -327,7 +327,7 @@ check('admin table: the imported admin can sign in, and an e-mail style user id 
 const sqlAccounts = [...(await store.list())];
 sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x; --" };
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
-check('setup SQL: creates the 5 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 5 && (setupSql.match(/enable row level security/g) ?? []).length === 5);
+check('setup SQL: creates the 6 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 6 && (setupSql.match(/enable row level security/g) ?? []).length === 6);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
 check('setup SQL: has all 27 accounts and 26 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 27 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 26);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
@@ -451,7 +451,7 @@ check('the admin overview works on the single table', ot_ov.totalBoards === 26 &
 const ot_setT = await ot_tcall('PUT', 'admin/boards/portugal/account', { cookie: ot_adm4.cookie, body: { username: 'portugal.boss', password: 'Admin-Set-1' } });
 check('Board Accounts (admin tile) can set a login in the table', ot_setT.status === 200 && (await ot_tlogin('board', 'portugal.boss', 'Admin-Set-1')).r.status === 200);
 check('module switches say they need the full setup instead of failing silently', (await ot_tcall('PUT', 'admin/boards/portugal/modules', { cookie: ot_adm4.cookie, body: { moduleId: 'series-announcement', enabled: false } })).status === 501);
-check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement,fixtures');
+check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement,fixtures,credits');
 
 // nothing configured
 const ot_empty = ot_makeSupabase({});
@@ -594,6 +594,49 @@ console.log('\n— Series Announcement —');
   check('the calendar still lists its matches, marked with the winner', (await sCall('GET', 'boards/india/fixtures', { cookie: cIndia })).body.matches.filter((m) => m.seriesId === sid).every((m) => m.winner === 'Australia'));
   check('the result can be changed to a drawn series, and cleared', (await res(sid, { winner: 'draw' })).body.series.result.winner === null && (await sCall('DELETE', `admin/series/${sid}/result`, { cookie: cAdm })).body.series.result === null && (await view(cEng, 'england')).upcoming.some((x) => x.id === sid) && (await sCall('DELETE', `admin/series/${sid}/result`, { cookie: cIndia })).status === 403);
   check('results are recorded in the audit log', (await sStore.listAudit(400)).some((x) => x.action === 'series_result_set') && (await sStore.listAudit(400)).some((x) => x.action === 'series_result_cleared'));
+  // board credits
+  {
+    const mk = (host, opps, bet, winner) =>
+      sStore.seriesInsert({ ...newSeries({ name: 'Credit Test', series_type: opps.length === 1 ? 'bilateral' : opps.length === 2 ? 'trilateral' : 'quadrilateral', opponents: opps, matches: 1, stadiums: ['x'], dates: ['2026-07-01'], bet, format: 'T20', club_format: null }, host, t0), status: 'accepted', accepted: opps, result_winner: winner, result_at: t0 });
+    const bal = async (cookie, slug) => (await sCall('GET', `boards/${slug}/credits`, { cookie })).body;
+    const cJapan = await sLogin('board', sc('Japan'));
+    const cNepal = await sLogin('board', sc('Nepal'));
+    check('a board with no finished series has a zero balance', (await bal(cJapan, 'japan')).balance === 0 && (await bal(cJapan, 'japan')).entries.length === 0);
+    await mk('japan', ['nepal'], 5000, 'japan');
+    const j1 = await bal(cJapan, 'japan');
+    check('HOME win: the host gets double the bet (bet 5000 → +10000) and the opponent loses it', j1.balance === 10000 && (await bal(cNepal, 'nepal')).balance === -10000 && /home win, bet doubled/.test(j1.entries[0].text) && /Nepal/.test(j1.entries[0].text));
+    await mk('nepal', ['japan'], 5000, 'japan');
+    check('AWAY win: the winner gets the plain bet (+5000), the home board loses it', (await bal(cJapan, 'japan')).balance === 15000 && (await bal(cNepal, 'nepal')).balance === -15000);
+    await mk('japan', ['nepal'], 5000, 'draw');
+    check('a drawn series changes nothing', (await bal(cJapan, 'japan')).balance === 15000 && (await bal(cJapan, 'japan')).entries.length === 2);
+    await mk('qatar', ['ireland', 'uganda'], 2000, 'ireland');
+    const cIre = await sLogin('board', sc('Ireland'));
+    check('trilateral, away winner: each other board pays the plain bet to the winner', (await bal(cIre, 'ireland')).balance === 4000 && (await bal(await sLogin('board', sc('Qatar')), 'qatar')).balance === -2000 && (await bal(await sLogin('board', sc('Uganda')), 'uganda')).balance === -2000);
+    await mk('canada', ['italy', 'portugal', 'spain'], 1000, 'canada');
+    check('quadrilateral, home winner: the doubled bet is collected from each of the three others', (await bal(await sLogin('board', sc('Canada')), 'canada')).balance === 6000 && (await bal(await sLogin('board', sc('Italy')), 'italy')).balance === -2000);
+    check('a series that is not finished (no result) or not accepted never moves credits', await (async () => { await sStore.seriesInsert({ ...newSeries({ name: 'Open', series_type: 'bilateral', opponents: ['kenya'], matches: 1, stadiums: ['x'], dates: ['2026-07-01'], bet: 50000, format: 'T20', club_format: null }, 'afghanistan', t0), status: 'accepted', accepted: ['kenya'] }); return (await bal(await sLogin('board', sc('Afghanistan')), 'afghanistan')).balance === 0; })());
+    check('a board can read only its own credits; the administrator can read any', (await sCall('GET', 'boards/japan/credits', { cookie: cNepal })).status === 403 && (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).status === 200 && (await sCall('GET', 'boards/japan/credits')).status === 401);
+    const table = (await sCall('GET', 'admin/credits', { cookie: cAdm })).body;
+    check('the admin table lists all 26 boards and the balances add up to zero', table.boards.length === 26 && table.boards.reduce((n, b) => n + b.balance, 0) === 0 && table.boards.find((b) => b.slug === 'japan').balance === 15000);
+    check('boards cannot open the admin credits routes', (await sCall('GET', 'admin/credits', { cookie: cJapan })).status === 403 && (await sCall('POST', 'admin/credits/adjustments', { cookie: cJapan, body: { board: 'japan', amount: 99999, reason: 'self' } })).status === 403);
+
+    const adj = (body) => sCall('POST', 'admin/credits/adjustments', { cookie: cAdm, body });
+    const added = await adj({ board: 'japan', amount: 3000, reason: 'Opening credit from the sheet' });
+    check('the administrator adds credit with a reason', added.status === 201 && (await bal(cJapan, 'japan')).balance === 18000 && (await bal(cJapan, 'japan')).entries.some((e) => e.kind === 'adjustment' && e.text === 'Opening credit from the sheet' && e.delta === 3000));
+    check('…and deducts credit; a balance may go below zero', (await adj({ board: 'japan', amount: -50000, reason: 'Penalty' })).status === 201 && (await bal(cJapan, 'japan')).balance === -32000);
+    check('adjustments are validated (board, whole non-zero amount, reason)', (await adj({ board: 'mars', amount: 5, reason: 'abc' })).status === 400 && (await adj({ board: 'japan', amount: 0, reason: 'abc' })).status === 400 && (await adj({ board: 'japan', amount: 1.5, reason: 'abc' })).status === 400 && (await adj({ board: 'japan', amount: 5, reason: '' })).status === 400 && (await adj({ board: 'japan', amount: 99999999999, reason: 'abc' })).status === 400);
+    check('boards never get adjustment ids (only the admin can remove them)', (await bal(cJapan, 'japan')).entries.every((e) => e.id === null) && (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).body.entries.some((e) => e.kind === 'adjustment' && e.id));
+    const adjId = (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).body.entries.find((e) => e.text === 'Penalty').id;
+    check('an adjustment can be removed and the balance follows', (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 200 && (await bal(cJapan, 'japan')).balance === 18000 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 404 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cJapan })).status === 403);
+    check('adjustments are recorded in the audit log', (await sStore.listAudit(500)).some((x) => x.action === 'credit_adjusted') && (await sStore.listAudit(500)).some((x) => x.action === 'credit_adjustment_removed'));
+    // balances follow the results: change or clear a result and they correct themselves
+    const mid = (await mk('ireland', ['uganda'], 4000, 'ireland')).id;
+    const irBefore = (await bal(cIre, 'ireland')).balance;
+    await sCall('PUT', `admin/series/${mid}/result`, { cookie: cAdm, body: { winner: 'uganda' } });
+    check('changing a series result re-settles the credits (home +8000 becomes away −4000)', irBefore === 12000 && (await bal(cIre, 'ireland')).balance === 0);
+    await sCall('DELETE', `admin/series/${mid}/result`, { cookie: cAdm });
+    check('clearing a result removes its credits', (await bal(cIre, 'ireland')).balance === 4000);
+  }
   fs.rmSync(sHome, { recursive: true, force: true });
 }
 

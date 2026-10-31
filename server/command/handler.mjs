@@ -14,6 +14,10 @@
 //   PUT/DELETE /admin/series/:id/result  admin only  { winner: <board slug> | 'draw', note? }  records / clears the series result
 //   DELETE /admin/series/:id           admin only   removes a series for good
 //   GET  /admin/audit                   admin only
+//   GET  /boards/:slug/credits          the board's balance and history (own board; admin: any)
+//   GET  /admin/credits                 admin only   every board's balance + recent adjustments
+//   POST /admin/credits/adjustments     admin only   { board, amount (+/-), reason }
+//   DELETE /admin/credits/adjustments/:id  admin only
 //   GET  /boards/:slug/fixtures         every match of every confirmed series (the calendar)
 //   GET  /boards/:slug/series           the board's announced series, invitations and the upcoming list
 //   POST /boards/:slug/series           announce a series (own board)
@@ -22,8 +26,9 @@
 //
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { SERIES_CFG, STADIUMS, activeCount, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { balanceOf, ledger, validateAdjustment } from './credits.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -59,6 +64,8 @@ const ACTIONS = {
   series_deleted: 'Series deleted by administrator',
   series_result_set: 'Series result recorded',
   series_result_cleared: 'Series result cleared',
+  credit_adjusted: 'Board credit adjusted',
+  credit_adjustment_removed: 'Credit adjustment removed',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -204,6 +211,14 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         return json(200, { today: todayIst(t), matches });
       }
 
+      if (a === 'boards' && b && c === 'credits' && !d && method === 'GET') {
+        const board = BOARDS.find((x) => x.slug === b);
+        if (!board) return fail(404, 'not_found', 'Board not found.');
+        if (who.role !== 'admin' && who.board_slug !== board.slug) return fail(403, 'forbidden', 'You do not have access to this board.');
+        const lines = ledger(await store.seriesList(), await store.creditsList(), BOARDS).filter((l) => l.board === board.slug);
+        return json(200, { balance: lines.reduce((n, l) => n + l.delta, 0), entries: lines.map(({ kind, at, delta, text, series, id }) => ({ kind, at, delta, text, series: series ?? null, id: who.role === 'admin' ? (id ?? null) : null })) });
+      }
+
       if (a === 'boards' && b && c === 'series') {
         const board = BOARDS.find((x) => x.slug === b);
         if (!board) return fail(404, 'not_found', 'Board not found.');
@@ -299,6 +314,30 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         if (b === 'series' && !c && method === 'GET') {
           const t = now();
           return json(200, { series: (await store.seriesList()).sort((p, q) => q.created_at - p.created_at).map((x) => adminView(x, BOARDS, t)) });
+        }
+
+        if (b === 'credits' && !c && method === 'GET') {
+          const lines = ledger(await store.seriesList(), await store.creditsList(), BOARDS);
+          return json(200, {
+            boards: BOARDS.map((bd) => ({ slug: bd.slug, name: bd.name, balance: balanceOf(lines, bd.slug) })),
+            recentAdjustments: lines.filter((l) => l.kind === 'adjustment').slice(0, 15).map((l) => ({ id: l.id, at: l.at, board: l.board, boardName: BOARDS.find((x) => x.slug === l.board)?.name ?? l.board, amount: l.delta, reason: l.text, by: l.by })),
+          });
+        }
+
+        if (b === 'credits' && c === 'adjustments' && !d && method === 'POST') {
+          const v = validateAdjustment(req.body, BOARDS);
+          if (v.error) return fail(400, 'invalid', v.error);
+          const row = await store.creditsInsert({ id: randomUUID(), ...v.value, created_by: who.username, created_at: now() });
+          await audit('credit_adjusted', who, v.value.board, req, { amount: v.value.amount, reason: v.value.reason });
+          return json(201, { id: row.id });
+        }
+
+        if (b === 'credits' && c === 'adjustments' && d && method === 'DELETE') {
+          const found = (await store.creditsList()).find((x) => x.id === d);
+          if (!found) return fail(404, 'not_found', 'Adjustment not found.');
+          await store.creditsDelete(d);
+          await audit('credit_adjustment_removed', who, found.board, req, { amount: found.amount, reason: found.reason });
+          return json(200, { ok: true });
         }
 
         if (b === 'series' && c && d === 'result' && (method === 'PUT' || method === 'DELETE')) {
@@ -432,6 +471,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
     } catch (err) {
       if (err?.code === 'not_configured') return fail(503, 'not_configured', 'The Command Center database has no logins yet. Import the logins file into Supabase first.');
       if (err?.code === 'series_outdated') return fail(503, 'series_outdated', 'Series Announcement needs a database update: run the latest series SQL in Supabase.');
+      if (err?.code === 'credits_missing') return fail(503, 'credits_missing', 'Board Credits is not set up yet: the credits table has not been created in Supabase.');
       if (err?.code === 'series_missing') return fail(503, 'series_missing', 'Series Announcement is not set up yet: the series table has not been created in Supabase.');
       if (err?.code === 'unsupported') return fail(501, 'unsupported', err.message);
       console.error('[command-center]', err instanceof Error ? err.message : err);

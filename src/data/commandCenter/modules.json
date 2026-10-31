@@ -30,8 +30,8 @@
  {
   "id": "credits",
   "title": "Board Credits & Finance",
-  "description": "Review your board's credits and transactions.",
-  "status": "coming-soon",
+  "description": "Your board's credit balance and the history of every series won or lost.",
+  "status": "active",
   "icon": "credits"
  },
  {

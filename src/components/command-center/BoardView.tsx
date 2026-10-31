@@ -6,6 +6,7 @@ import { store } from '../../data/store';
 import { EASE } from '../fx';
 import Mascot, { BoardFlag, ModuleIcon } from './Mascot';
 import SceneBackground from './SceneBackground';
+import CreditsPanel from './CreditsPanel';
 import FixturesCalendar from './FixturesCalendar';
 import SeriesAnnouncement from './SeriesAnnouncement';
 
@@ -58,6 +59,7 @@ export default function BoardView({ slug, moduleId, sub, user, nav }: { slug: st
 
         {moduleId ? (
           <ModulePage theme={theme} module={module} enabled={state.data.modules.includes(moduleId)} onBack={() => nav(...base)}>
+            {module?.id === 'credits' && <CreditsPanel theme={theme} />}
             {module?.id === 'fixtures' && <FixturesCalendar theme={theme} />}
             {module?.id === 'series-announcement' && <SeriesAnnouncement theme={theme} sub={sub} admin={admin} go={(next) => nav(...base, moduleId, ...(next ? [next] : []))} />}
           </ModulePage>

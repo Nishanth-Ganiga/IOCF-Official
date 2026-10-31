@@ -35,6 +35,22 @@ export class MemoryStore {
     await this.persist();
     return { ...r };
   }
+  async creditsList() {
+    return (this.data.credits ??= []).map((x) => ({ ...x }));
+  }
+  async creditsInsert(row) {
+    (this.data.credits ??= []).push({ ...row });
+    await this.persist();
+    return { ...row };
+  }
+  async creditsDelete(id) {
+    const list = (this.data.credits ??= []);
+    const i = list.findIndex((x) => x.id === id);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    await this.persist();
+    return true;
+  }
   /** Returns true if a series was removed. */
   async seriesDelete(id) {
     const list = (this.data.series ??= []);
@@ -159,6 +175,31 @@ export class SeriesRest {
   }
 }
 
+/** The manual credit adjustments table (command_credit_adjustments, see credits.sql). */
+export class CreditsRest {
+  constructor({ url, serviceKey, fetchImpl = fetch, table = 'command_credit_adjustments' }) {
+    this.url = `${url.replace(/\/$/, '')}/rest/v1/${table}`;
+    this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
+    this.fetch = fetchImpl;
+  }
+  async req(method, query, body, extra = {}) {
+    const res = await this.fetch(`${this.url}${query}`, { method, headers: { ...this.headers, ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (res.status === 404) throw Object.assign(new Error('The credits table does not exist yet.'), { code: 'credits_missing' });
+    if (!res.ok) throw new Error(`Database request failed (${res.status})`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
+  async creditsList() {
+    return (await this.req('GET', '?select=*&order=created_at.desc')) ?? [];
+  }
+  async creditsInsert(row) {
+    return (await this.req('POST', '', row, { prefer: 'return=representation' }))[0];
+  }
+  async creditsDelete(id) {
+    return ((await this.req('DELETE', `?id=eq.${encodeURIComponent(id)}`, undefined, { prefer: 'return=representation' })) ?? []).length > 0;
+  }
+}
+
 /** Postgres via Supabase REST. Only the server holds the service-role key; the tables allow no other access (schema.sql). */
 export class SupabaseStore {
   constructor({ url, serviceKey, fetchImpl = fetch }) {
@@ -167,7 +208,11 @@ export class SupabaseStore {
     this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
     this.fetch = fetchImpl;
     this.seriesRest = new SeriesRest({ url, serviceKey, fetchImpl });
+    this.creditsRest = new CreditsRest({ url, serviceKey, fetchImpl });
   }
+  creditsList() { return this.creditsRest.creditsList(); }
+  creditsInsert(row) { return this.creditsRest.creditsInsert(row); }
+  creditsDelete(id) { return this.creditsRest.creditsDelete(id); }
   seriesList() { return this.seriesRest.seriesList(); }
   seriesGet(id) { return this.seriesRest.seriesGet(id); }
   seriesInsert(row) { return this.seriesRest.seriesInsert(row); }
