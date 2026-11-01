@@ -111,8 +111,8 @@ export function toApi(s, boards, t) {
   };
 }
 
-/** For the administrator: every series, including the ones declined at their deadline. */
-export const adminView = (s, boards, t) => ({ ...toApi(s, boards, t), status: isExpired(s, t) ? 'declined' : s.status, editable: false });
+/** For the administrator: every series, including the ones declined at their deadline; a series with a recorded result is 'completed'. */
+export const adminView = (s, boards, t) => ({ ...toApi(s, boards, t), status: isExpired(s, t) ? 'declined' : s.status === 'accepted' && s.result_winner ? 'completed' : s.status, editable: false });
 
 /** Every match of a confirmed series as a calendar entry (the final has no date yet). `teams` are board slugs. */
 export function calendarEntries(s, boards) {

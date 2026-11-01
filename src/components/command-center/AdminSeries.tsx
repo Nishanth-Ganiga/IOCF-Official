@@ -3,19 +3,23 @@ import { api, ApiError, type Series } from '../../data/commandApi';
 import { Facts } from './SeriesAnnouncement';
 
 type Nav = (...parts: string[]) => void;
-type Filter = 'all' | 'pending' | 'accepted' | 'declined';
+type Filter = 'active' | 'completed' | 'declined' | 'all';
 
 const BADGE: Record<Series['status'], { text: string; color: string }> = {
   pending: { text: 'WAITING FOR ACCEPTANCE', color: '#c9a24b' },
   accepted: { text: 'ACCEPTED', color: '#6fcf8e' },
+  completed: { text: 'COMPLETED', color: '#8fb4ff' },
   declined: { text: 'DECLINED', color: '#e07a7a' },
 };
+
+/** The Active view holds series still waiting or accepted; a series moves to Completed when its result is recorded. */
+const inFilter = (s: Series, f: Filter) => (f === 'all' ? true : f === 'active' ? s.status === 'pending' || s.status === 'accepted' : s.status === f);
 
 /** Administrator: every series of every board, with all details, and the power to delete any of them. */
 export default function AdminSeries({ nav }: { nav: Nav }) {
   const [list, setList] = useState<Series[] | null>(null);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('active');
   const [query, setQuery] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState('');
@@ -64,7 +68,7 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
       await api.setSeriesResult(s.id, { winner, note });
       setEditing('');
       await load();
-      setFlash({ ok: true, text: `Result saved for “${s.name}”.` });
+      setFlash({ ok: true, text: `Result saved for “${s.name}”. It has moved to Completed.` });
     } catch (e) {
       setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
     }
@@ -76,7 +80,7 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
     try {
       await api.clearSeriesResult(s.id);
       await load();
-      setFlash({ ok: true, text: `Result cleared for “${s.name}”.` });
+      setFlash({ ok: true, text: `Result cleared for “${s.name}”. It is back under Active.` });
     } catch (e) {
       setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
     }
@@ -85,9 +89,9 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (list ?? []).filter((s) => (filter === 'all' || s.status === filter) && (!q || s.name.toLowerCase().includes(q) || s.host.name.toLowerCase().includes(q) || s.opponents.some((o) => o.name.toLowerCase().includes(q))));
+    return (list ?? []).filter((s) => inFilter(s, filter) && (!q || s.name.toLowerCase().includes(q) || s.host.name.toLowerCase().includes(q) || s.opponents.some((o) => o.name.toLowerCase().includes(q))));
   }, [list, filter, query]);
-  const count = (f: Filter) => (list ?? []).filter((s) => f === 'all' || s.status === f).length;
+  const count = (f: Filter) => (list ?? []).filter((s) => inFilter(s, f)).length;
 
   return (
     <div className="gutter pb-20 pt-28">
@@ -97,7 +101,7 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
       <header className="mt-6">
         <p className="text-[11px] font-semibold tracking-[0.3em] text-[#c9a24b]">MASTER ADMINISTRATOR</p>
         <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">ANNOUNCED SERIES</h1>
-        <p className="mt-3 max-w-2xl text-sm text-mist">Every series announced by any board, with its full details. Deleting a series removes it for good for every board, and cannot be undone.</p>
+        <p className="mt-3 max-w-2xl text-sm text-mist">Series that are waiting or accepted are under Active. When you record a result, the series moves to Completed, so this list stays short. Every series announced by any board, with its full details. Deleting a series removes it for good for every board, and cannot be undone.</p>
       </header>
 
       {error && (
@@ -110,9 +114,9 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
       )}
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        {(['all', 'pending', 'accepted', 'declined'] as Filter[]).map((f) => (
+        {(['active', 'completed', 'declined', 'all'] as Filter[]).map((f) => (
           <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={`rounded-full border px-4 py-1.5 text-xs font-semibold tracking-[0.14em] transition ${filter === f ? 'border-[#c9a24b] bg-[#c9a24b]/10 text-[#c9a24b]' : 'border-white/15 text-mist hover:border-white/40'}`}>
-            {f === 'pending' ? 'WAITING' : f.toUpperCase()} · {count(f)}
+            {f.toUpperCase()} · {count(f)}
           </button>
         ))}
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search series or board" aria-label="Search series or board" className="ml-auto w-full rounded-lg border border-white/15 bg-ink px-3 py-2 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b] sm:w-64" />
@@ -136,7 +140,7 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
                 </span>
               </div>
               <Facts s={s} you="administrator" full />
-              {s.status === 'accepted' && (
+              {(s.status === 'accepted' || s.status === 'completed') && (
                 <div className="mt-4 rounded-lg border border-white/10 p-3">
                   {editing === s.id ? (
                     <form

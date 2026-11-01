@@ -108,7 +108,7 @@ export type Series = {
   format: string;
   /** Label such as "6 overs 6 wickets" (Club format only). */
   clubFormat: string | null;
-  status: 'pending' | 'accepted' | 'declined';
+  status: 'pending' | 'accepted' | 'declined' | 'completed';
   /** Who declined the invitation (status 'declined' only; null when it simply lapsed at the deadline). */
   declinedBy: { slug: string; name: string } | null;
   declinedAt: number | null;

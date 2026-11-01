@@ -592,6 +592,14 @@ console.log('\n— Series Announcement —');
   check('a finished series moves from Upcoming to Completed for every board, with its winner', !afterV.upcoming.some((x) => x.id === sid) && afterV.completed.find((x) => x.id === sid)?.result.winner.name === 'Australia');
   check('a finished series no longer counts toward the 2-series limit', (await view(cIndia, 'india')).active === before2 - 1);
   check('the calendar still lists its matches, marked with the winner', (await sCall('GET', 'boards/india/fixtures', { cookie: cIndia })).body.matches.filter((m) => m.seriesId === sid).every((m) => m.winner === 'Australia'));
+  check('for the administrator a series with a result is "completed" (not active), and is active again when the result is cleared', await (async () => {
+    const st = async () => (await sCall('GET', 'admin/series', { cookie: cAdm })).body.series.find((x) => x.id === sid).status;
+    const during = await st();
+    await sCall('DELETE', `admin/series/${sid}/result`, { cookie: cAdm });
+    const cleared = await st();
+    await res(sid, { winner: 'australia' });
+    return during === 'completed' && cleared === 'accepted';
+  })());
   check('the result can be changed to a drawn series, and cleared', (await res(sid, { winner: 'draw' })).body.series.result.winner === null && (await sCall('DELETE', `admin/series/${sid}/result`, { cookie: cAdm })).body.series.result === null && (await view(cEng, 'england')).upcoming.some((x) => x.id === sid) && (await sCall('DELETE', `admin/series/${sid}/result`, { cookie: cIndia })).status === 403);
   check('results are recorded in the audit log', (await sStore.listAudit(400)).some((x) => x.action === 'series_result_set') && (await sStore.listAudit(400)).some((x) => x.action === 'series_result_cleared'));
   // board credits
