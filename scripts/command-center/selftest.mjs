@@ -757,6 +757,26 @@ console.log('\n— Series Matches tab (earlier series) —');
   }
 }
 
+
+console.log('\n— How to play online cricket (fun game on IOCF Main) —');
+{
+  const { randomDigits, parseDigits, playOver, sumText, ordinal } = await import('../../src/data/funCricket.mjs');
+  const ex = playOver([6, 3, 4, 2, 5, 1], [1, 2, 3, 6, 5, 2]);
+  check('the example from the brief: bowler 123652 vs batsman 634251 → out on ball 5, 6+3+4+2 = 15 runs', ex.outOn === 5 && ex.runs === 15 && ex.scored.join('') === '6342' && sumText(ex.scored) === '6 + 3 + 4 + 2 = 15' && ordinal(5) === '5th');
+  check('no matching place means not out and all six digits count', (() => { const r = playOver([6, 6, 6, 6, 6, 6], [0, 0, 0, 0, 0, 0]); return r.outOn === null && r.runs === 36; })());
+  check('a match on the first ball is a duck (0 runs); on the last ball only the first five count', playOver([4, 1, 1, 1, 1, 1], [4, 0, 0, 0, 0, 0]).runs === 0 && playOver([4, 1, 1, 1, 1, 1], [4, 0, 0, 0, 0, 0]).outOn === 1 && playOver([1, 2, 3, 4, 5, 6], [0, 0, 0, 0, 0, 6]).runs === 15 && playOver([1, 2, 3, 4, 5, 6], [0, 0, 0, 0, 0, 6]).outOn === 6);
+  check('only the first matching place counts, even if more match', playOver([1, 2, 3, 4, 5, 6], [0, 2, 3, 0, 0, 0]).outOn === 2 && playOver([1, 2, 3, 4, 5, 6], [0, 2, 3, 0, 0, 0]).runs === 1);
+  check('a visitor must send exactly six digits, each 0 to 6', parseDigits('634251').join('') === '634251' && parseDigits('63 42 51').join('') === '634251' && parseDigits('63425') === null && parseDigits('6342511') === null && parseDigits('634257') === null && parseDigits('63425a') === null && parseDigits('') === null);
+  let ok = true;
+  const seen = new Set();
+  for (let i = 0; i < 3000; i++) {
+    const d = randomDigits();
+    if (d.length !== 6 || d.some((x) => !Number.isInteger(x) || x < 0 || x > 6)) ok = false;
+    seen.add(d.join(''));
+  }
+  check('random digits are always six digits from 0 to 6, and vary', ok && seen.size > 2500 && Array.from({ length: 6 }, () => randomDigits(() => 0.999999)).every((d) => d.every((x) => x === 6)) && randomDigits(() => 0).every((x) => x === 0));
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

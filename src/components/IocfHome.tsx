@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Capacitor } from '@capacitor/core';
 import { viewerProfiles, type ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
+import HowToPlay from './HowToPlay';
 import { ProfileAvatar } from './ProfileSelector';
 import { EASE } from './fx';
 
@@ -109,7 +110,7 @@ export default function IocfHome({ profileId, onSwitch }: { profileId: ProfileId
 
   return (
     <>
-      <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={[{ id: 'top', label: 'Home' }, ...SECTIONS.map((s) => ({ id: s.id as string, label: s.label as string })), { id: 'my', label: 'My IOCF' }]} />
+      <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={[{ id: 'top', label: 'Home' }, { id: 'how-to-play', label: 'How to play' }, ...SECTIONS.map((s) => ({ id: s.id as string, label: s.label as string })), { id: 'my', label: 'My IOCF' }]} />
       {mine ? (
         <main className="min-h-[100svh]">
           <MyIocf onSwitch={onSwitch} />
@@ -214,6 +215,7 @@ export default function IocfHome({ profileId, onSwitch }: { profileId: ProfileId
         </section>
 
         <RecentResults onSwitch={onSwitch} />
+        <HowToPlay />
         <AboutIocf />
         {SECTIONS.map((s) => (
           <section key={s.id} id={s.id} className="gutter border-t border-white/5 py-16 sm:py-24">

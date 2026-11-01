@@ -75,7 +75,7 @@ export function Hub({ theme, data, go }: { theme: BoardTheme; data: SeriesOvervi
     { id: 'announce', title: 'Announce a Series', text: 'Set up a new series and send it to your opponent.', badge: `${data.announced.filter((x) => x.status !== 'declined').length} announced` },
     { id: 'accept', title: 'Accept the Series', text: 'Series other boards have announced to you.', badge: data.invitations.length ? `${data.invitations.length} waiting` : 'none waiting', hot: data.invitations.length > 0 },
     { id: 'upcoming', title: 'Upcoming Series', text: 'Every confirmed series across the federation.', badge: `${data.upcoming.length + recordItems('upcoming', data).length} upcoming` },
-    { id: 'history', title: 'Series History', text: 'Every completed series: winners, results and bets.', badge: `${data.completed.length + recordItems('completed', data).length} completed` },
+    { id: 'history', title: 'Series History', text: 'Every completed series: winners, results and bets.', badge: `${(data.completed ?? []).length + recordItems('completed', data).length} completed` },
   ];
   return (
     <>
