@@ -20,6 +20,7 @@
 //   PUT  /admin/series-meta/:key        admin only   { format }  sets the format of an earlier series
 //   GET  /series-meta, /series-stats, /series-stats/:key   signed-in: formats of earlier series, statistics of a series
 //   GET  /public/series-stats           public: every player's totals over the uploaded series
+//   GET  /public/series-stats/lines     public: the statistics of every series line by line, with its format
 //   POST /admin/credits/entered         admin only   { seriesId | adjustmentId | all: true, entered: boolean }  marks changes as entered in the sheet
 //   POST /admin/credits/adjustments     admin only   { board, amount (+/-), reason }
 //   DELETE /admin/credits/adjustments/:id  admin only
@@ -199,6 +200,21 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         const entries = await store.statsList();
         const players = aggregate(entries, BOARDS);
         return json(200, { series: entries.length, players }, { 'cache-control': 'public, max-age=60, s-maxage=60' });
+      }
+
+      // public: the uploaded statistics of every series, line by line, with each series' format (player profiles split them by format)
+      if (a === 'public' && b === 'series-stats' && c === 'lines' && method === 'GET') {
+        const entries = await store.statsList();
+        const [meta, series] = await Promise.all([store.metaList().catch(() => []), store.seriesList().catch(() => [])]);
+        const overrides = Object.fromEntries(meta.map((m) => [m.key, m.format]));
+        const formatOf = (key) => {
+          if (key.startsWith('site-')) {
+            const s = series.find((x) => x.id === key.slice(5));
+            return s ? (s.club_format ? `Club · ${SERIES_CFG.clubFormats.find((f) => f.id === s.club_format)?.label ?? s.club_format}` : s.format) : null;
+          }
+          return overrides[key] ?? null; // an earlier series without an override: the browser uses the format in the sheet
+        };
+        return json(200, { series: entries.map((e) => ({ key: e.key, name: e.name, kind: e.kind, format: formatOf(e.key), fields: e.fields, rows: e.rows })) }, { 'cache-control': 'public, max-age=60, s-maxage=60' });
       }
 
       // everything below needs a signed-in account

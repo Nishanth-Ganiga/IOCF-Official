@@ -225,6 +225,8 @@ export const api = {
   uploadSeriesStats: (key: string, csv: string, name: string) => request<{ ok: true; players: number; warnings: string[] }>('PUT', `/admin/series-stats/${encodeURIComponent(key)}`, { csv, name }),
   removeSeriesStats: (key: string) => request<{ ok: true }>('DELETE', `/admin/series-stats/${encodeURIComponent(key)}`),
   setSeriesFormat: (key: string, format: string | null) => request<{ ok: true }>('PUT', `/admin/series-meta/${encodeURIComponent(key)}`, { format }),
+  /** The statistics of every uploaded series, line by line, with each series' format (null: use the sheet's). No sign-in needed. */
+  seriesLines: () => request<{ series: { key: string; name: string; kind: 'site' | 'record'; format: string | null; fields: string[]; rows: (string | number | null)[][] }[] }>('GET', '/public/series-stats/lines'),
   /** The totals of every player over the uploaded series. No sign-in needed. */
   seriesTotals: () => request<TotalsResponse>('GET', '/public/series-stats'),
 };

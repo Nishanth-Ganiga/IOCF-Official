@@ -721,6 +721,10 @@ console.log('\n— Series Announcement —');
     const rs = pub.players.find((p) => p.name === 'Rahul Seenu' && p.board === 'india');
     const sn = pub.players.find((p) => p.name === 'Sai Naveen');
     check('the public totals add a player up over every series (no sign-in needed)', pub.series === 2 && rs.series === 2 && rs.runs === 150 && rs.matches === 5 && rs.wickets === 3 && rs.runsConceded === 60 && rs.best === '2-15' && rs.hs === 71 && rs.avg === 50 && rs.economy === 10 && sn.runs === 200 && sn.hs === 100 && sn.avg === 40);
+    const fm = (key, body, cookie = cAdm) => sCall('PUT', `admin/series-meta/${key}`, { cookie, body });
+    const lines = (await sCall('GET', 'public/series-stats/lines')).body.series;
+    const siteLine = lines.find((x) => x.key === `site-${sid}`);
+    check('the public lines carry every series with its rows and its format (the site series\' own; an earlier series\' override when the admin set one)', lines.length === 2 && siteLine.format === 'ODI' && siteLine.fields.includes('runs') && siteLine.rows.length === 4 && lines.find((x) => x.key === recKey).format === null && (await fm(recKey, { format: 'Club · 7 overs 7 wickets' })).status === 200 && (await sCall('GET', 'public/series-stats/lines')).body.series.find((x) => x.key === recKey).format === 'Club · 7 overs 7 wickets' && (await fm(recKey, { format: null })).status === 200);
     check('players with similar names are separate people (exact name + board only)', pub.players.some((p) => p.name === 'Rahul Sinu') && pub.players.filter((p) => p.name.startsWith('Rahul S')).length === 2);
     check('a player\'s totals are by board: players of unknown teams are kept without a board', pub.players.find((p) => p.name === 'Mystery Man').board === null);
     check('a new upload for the same series replaces the old one instead of adding to it', (await up(`site-${sid}`, { csv: a2 })).status === 200 && (await sCall('GET', 'public/series-stats')).body.players.find((p) => p.name === 'Sai Naveen').runs === 280 && (await sCall('GET', 'series-stats', { cookie: cEng })).body.stats.length === 2);
@@ -728,7 +732,6 @@ console.log('\n— Series Announcement —');
     check('uploads and removals are recorded in the audit log', (await sStore.listAudit(800)).some((x) => x.action === 'series_stats_uploaded') && (await sStore.listAudit(800)).some((x) => x.action === 'series_stats_removed'));
 
     // formats of earlier series
-    const fm = (key, body, cookie = cAdm) => sCall('PUT', `admin/series-meta/${key}`, { cookie, body });
     check('the administrator sets the format of an earlier series (T10, Club + overs/wickets…)', (await fm(recKey, { format: 'T20' })).status === 200 && (await fm('rec-colombo-cup-sri-lanka', { format: 'Club · 6 overs 6 wickets' })).status === 200);
     check('boards read the formats; only a format from the list is accepted; only the administrator can set one', (await sCall('GET', 'series-meta', { cookie: cPak })).body.meta[recKey] === 'T20' && (await fm(recKey, { format: 'T50' })).status === 400 && (await fm('site-abc', { format: 'T20' })).status === 400 && (await fm(recKey, { format: 'ODI' }, cIndia)).status === 403 && (await sCall('GET', 'series-meta', { cookie: cPak })).body.choices.length === 11);
     check('a format can be changed or cleared', (await fm(recKey, { format: 'TEST' })).status === 200 && (await sCall('GET', 'series-meta', { cookie: cPak })).body.meta[recKey] === 'TEST' && (await fm(recKey, { format: null })).status === 200 && (await sCall('GET', 'series-meta', { cookie: cPak })).body.meta[recKey] === undefined);
@@ -874,6 +877,25 @@ console.log('\n— Qatar took over the old Afghanistan team —');
   check('its statistics stay filed under the name in the sheet, and series without the old team are untouched', c1.keyHost === 'Afghanistan' && c2.keyHost === 'South Africa' && c3.keyHost === undefined && c3.opponents[0].name === 'Qatar' && !c3.opponents[0].was);
   const again = JSON.parse(JSON.stringify(rec));
   check('applying the rule twice changes nothing; without The Golden Cup in the list nothing is renamed', JSON.stringify(applyRenames(again)) === JSON.stringify(rec) && applyRenames({ completed: [r('Revival Cup', 'Afghanistan', 'Sri Lanka', null)], upcoming: [] }).completed[0].host.name === 'Afghanistan');
+}
+
+
+console.log('\n— Player profile statistics: formats, boards, sources —');
+{
+  const { formatKey, selectLines, sumLines, formatsIn, TOURNAMENT_FORMAT, FORMAT_ORDER } = await import('../../src/data/careerStats.mjs');
+  check('tournaments are in the formats given: ODI (Asia, Oceania, Euro, ODI World Cup), Test (WTC, Associate Nations), Club (Emerging Talents, Women\'s, Lone Warrior), T20 (T20 World Cup)', ['asia-cup', 'oceania-cup', 'euro-cup', 'odi-world-cup'].every((t) => TOURNAMENT_FORMAT[t] === 'odi') && ['world-test-championship', 'associate-nations-cup'].every((t) => TOURNAMENT_FORMAT[t] === 'test') && ['emerging-talents-league', 'womens-global-league', 'lone-warrior'].every((t) => TOURNAMENT_FORMAT[t] === 'club') && TOURNAMENT_FORMAT['t20-world-cup'] === 't20' && TOURNAMENT_FORMAT['origins-championship'] === undefined && FORMAT_ORDER.join() === 'odi,test,t20,t10,club,l4i');
+  check('series formats are read: ODI, T20, T10, Test, L4I, and every overs/wickets variant is Club', formatKey('ODI') === 'odi' && formatKey('t20') === 't20' && formatKey('T10') === 't10' && formatKey('TEST') === 'test' && formatKey('Test') === 'test' && formatKey('L4i') === 'l4i' && formatKey('Club · 6 overs 6 wickets') === 'club' && formatKey('7 overs 7 wickets') === 'club' && formatKey('5o 5w') === 'club' && formatKey('') === null && formatKey(null) === null && formatKey('whatever') === null);
+  const L = (name, boardSlug, extra = {}) => ({ name, boardSlug, source: 'tournament', id: 't', label: 'T', format: 'odi', line: {}, ...extra });
+  const lines = [L('Ans Sheikh', 'qatar'), L('Ans Sheikh', 'pakistan'), L('Abhishek', 'india'), L('Abhishek', 'ireland'), L('Ans  sheikh ', 'qatar'), L('Ans Sheik', 'qatar'), L('Umar Khan', 'afghanistan')];
+  const sel = selectLines(lines, { name: 'Ans Sheikh', boardSlug: 'qatar' });
+  check('a name of two or more words is the same person on other boards (marked as another board); similar names are not', sel.length === 3 && sel.filter((x) => x.own).length === 2 && sel.some((x) => !x.own && x.boardSlug === 'pakistan') && !sel.some((x) => x.name === 'Ans Sheik'));
+  check('a single name is only matched on his own board', selectLines(lines, { name: 'Abhishek', boardSlug: 'india' }).length === 1 && selectLines(lines, { name: 'Abhishek', boardSlug: 'india' })[0].boardSlug === 'india');
+  const l1 = { matches: 3, pom: 1, batInn: 3, runs: 120, balls: 80, fours: 3, sixes: 4, thirties: 0, fifties: 1, hundreds: 0, notOuts: 1, hs: 71, hsNotOut: true, bowlInn: 1, wickets: 2, runsConceded: 40, maidens: 0, ballsBowled: 24, dots: 0, threeW: 0, fiveW: 0, best: '2-15', catches: 1, stumpings: 0, runOuts: 0, most6: 3, most4: 2, fast50: 30, fast100: null };
+  const l2 = { ...l1, matches: 2, batInn: 2, runs: 30, balls: 25, notOuts: 1, hs: 30, hsNotOut: true, wickets: 1, runsConceded: 20, best: '1-20', ballsBowled: 12, most6: 5, fast50: 22, catches: 0 };
+  const t = sumLines([l1, l2]);
+  check('totals add up, and the averages come from the totals (not an average of averages)', t.matches === 5 && t.runs === 150 && t.wickets === 3 && t.avg === 50 && t.sr === 142.9 && t.economy === 10 && t.bowlAvg === 20 && t.bowlSr === 12 && t.hs === 71 && t.hsNotOut === true && t.best === '2-15' && t.most6 === 5 && t.fast50 === 22 && t.fast100 === null);
+  check('no wickets means no bowling average, and a player who was never out has his runs as his average', sumLines([{ ...l1, wickets: 0, runsConceded: 10 }]).bowlAvg === 0 && sumLines([{ ...l1, notOuts: 3 }]).avg === 120 && sumLines([]).runs === 0);
+  check('only the formats that have data become tabs, in the usual order; entries with no format are in no tab', formatsIn([{ format: 'club' }, { format: 'odi' }, { format: null }, { format: 'test' }]).join() === 'odi,test,club');
 }
 
 console.log('\n— 11. the register stays private —');
