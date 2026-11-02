@@ -12,7 +12,7 @@ import { buildAliasIndex, resolveAlias } from '../../src/data/commandCenter/alia
 // players known under more than one name (src/data/commandCenter/playerAliases.json): their lines are added up together
 const ALIASES = buildAliasIndex(JSON.parse(readFileSync(new URL('../../src/data/commandCenter/playerAliases.json', import.meta.url), 'utf8')));
 
-export const MAX_ROWS = 400;
+export const MAX_ROWS = 2000;
 export const MAX_CSV = 900_000;
 const norm = (x) => String(x ?? '').toLowerCase().replace(/&/g, '').replace(/[^a-z0-9]/g, '');
 export const KEY_RE = /^(site|rec|tour)-[a-z0-9-]{3,220}$/;
