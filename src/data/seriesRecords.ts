@@ -54,6 +54,11 @@ export const keyOf = (r: SeriesRecord) => recordKey(r.name, r.keyHost ?? r.host.
 
 /** The ODI World Cup warm-up games were scored as one file ("ODI WC Warmup all matches.csv"), stored under this key. */
 export const WARMUP_KEY = 'rec-odi-wc-warmup-games';
-export const isWarmup = (r: SeriesRecord) => /warm-?up/i.test(r.name);
+/**
+ * The ODI World Cup warm-up games: the ones named "… Warmup n", and the other warm-up games the sheet lists under their own
+ * names (all in September). All of them are in the one combined statistics file. Add a name here when another turns up.
+ */
+const WARMUP_GAMES = ['Zubeen Garg Tribute Trophy', 'Kingstown Cup', 'Last Of the Summer', 'The Stars & Tigers series', 'The Gulf Cup', 'Rhino - Bear Cup', 'Sammy Warne', 'Rhino - Owl Cup', 'Crown & Pearl', 'Waugh Lara', 'The Indo-Emirates Cup', 'Rhino - Lion Cup', 'The Emirates Royal Cup'].map(slugNorm);
+export const isWarmup = (r: SeriesRecord) => /warm-?up/i.test(r.name) || (r.month === 'September' && WARMUP_GAMES.includes(slugNorm(r.name)));
 /** Where a record's player statistics are stored: its own key, or the combined warm-up file for a warm-up game. */
 export const statsKeyOf = (r: SeriesRecord) => (isWarmup(r) ? WARMUP_KEY : keyOf(r));
