@@ -51,3 +51,9 @@ const slugNorm = (x: string) => x.toLowerCase().replace(/&/g, '').replace(/[^a-z
 export const recordKey = (name: string, host: string) => `rec-${slugNorm(name)}-${slugNorm(host)}`;
 /** The key of a record: from the host's name in the sheet. */
 export const keyOf = (r: SeriesRecord) => recordKey(r.name, r.keyHost ?? r.host.name);
+
+/** The ODI World Cup warm-up games were scored as one file ("ODI WC Warmup all matches.csv"), stored under this key. */
+export const WARMUP_KEY = 'rec-odi-wc-warmup-games';
+export const isWarmup = (r: SeriesRecord) => /warm-?up/i.test(r.name);
+/** Where a record's player statistics are stored: its own key, or the combined warm-up file for a warm-up game. */
+export const statsKeyOf = (r: SeriesRecord) => (isWarmup(r) ? WARMUP_KEY : keyOf(r));

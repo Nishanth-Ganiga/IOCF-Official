@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { api, ApiError, type SeriesStatsSummary } from '../../data/commandApi';
-import { boardLabel, keyOf, recordKey, seriesRecords, type SeriesRecord } from '../../data/seriesRecords';
+import { WARMUP_KEY, boardLabel, isWarmup, keyOf, recordKey, seriesRecords, statsKeyOf, type SeriesRecord } from '../../data/seriesRecords';
 
 const GOLD = '#c9a24b';
 const when = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
@@ -96,14 +96,17 @@ export function RecordsManager({ meta, choices, stats, onChanged, site }: { meta
   }, [site]);
 
   const formatOf = (x: Row) => meta[x.key] ?? x.r.format ?? '';
+  // the ODI World Cup warm-up games are covered by one combined statistics file: no separate upload, and not "missing"
+  const covered = (x: Row) => isWarmup(x.r) && has.has(WARMUP_KEY);
+  const needsStats = (x: Row) => x.kind === 'completed' && !has.has(statsKeyOf(x.r)) && !covered(x);
   const shown = rows.filter((x) => {
     const q = query.trim().toLowerCase();
     if (q && !x.r.name.toLowerCase().includes(q) && ![x.r.host, ...x.r.opponents].some((b) => b.name.toLowerCase().includes(q))) return false;
     if (only === 'noFormat') return !formatOf(x);
-    if (only === 'noStats') return x.kind === 'completed' && !has.has(x.key);
+    if (only === 'noStats') return needsStats(x);
     return true;
   });
-  const counts = { noFormat: rows.filter((x) => !formatOf(x)).length, noStats: rows.filter((x) => x.kind === 'completed' && !has.has(x.key)).length };
+  const counts = { noFormat: rows.filter((x) => !formatOf(x)).length, noStats: rows.filter(needsStats).length };
 
   const setFormat = async (x: Row, format: string) => {
     setBusy(x.key);
@@ -164,7 +167,11 @@ export function RecordsManager({ meta, choices, stats, onChanged, site }: { meta
                   ))}
                 </select>
               </label>
-              {x.kind === 'completed' && <StatsControl statsKey={x.key} name={x.r.name} summary={has.get(x.key)} onChanged={onChanged} />}
+              {x.kind === 'completed' && covered(x) ? (
+                <p className="mt-3 rounded-lg border border-[#6fcf8e]/40 p-3 text-sm text-[#6fcf8e]">Statistics counted: the ODI World Cup warm-up games were scored as one file (“ODI WC Warmup all matches”, {has.get(WARMUP_KEY)?.players} players), so this series needs no separate upload.</p>
+              ) : (
+                x.kind === 'completed' && <StatsControl statsKey={x.key} name={x.r.name} summary={has.get(x.key)} onChanged={onChanged} />
+              )}
             </li>
           ))}
         </ul>

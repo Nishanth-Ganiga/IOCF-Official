@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api, ApiError, type Series, type SeriesOverview, type SeriesStatsDetail, type SeriesStatsSummary } from '../../data/commandApi';
 import { paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
-import { boardLabel, boardsOf, keyOf, resultText, seriesRecords, withoutSiteDuplicates, type SeriesRecord } from '../../data/seriesRecords';
+import { boardLabel, boardsOf, isWarmup, keyOf, resultText, statsKeyOf, seriesRecords, withoutSiteDuplicates, type SeriesRecord } from '../../data/seriesRecords';
 import StatsTable from './StatsTable';
 
 const money = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -16,6 +16,8 @@ export type Item = {
   key: string;
   /** Where its player statistics are stored. */
   statsKey: string;
+  /** The statistics are in a file that covers several series (the ODI World Cup warm-up games). */
+  combinedStats?: boolean;
   source: 'site' | 'record';
   name: string;
   host: string;
@@ -59,13 +61,14 @@ export function fromSite(s: Series): Item {
 }
 
 export function fromRecord(r: SeriesRecord, meta: Record<string, string> = {}): Item {
-  const statsKey = keyOf(r);
+  const statsKey = statsKeyOf(r);
   return {
     key: `rec-${r.name}-${r.host.name}-${r.dates}`,
     statsKey,
     source: 'record',
     name: r.name,
     host: boardLabel(r.host),
+    combinedStats: isWarmup(r),
     opponents: r.opponents.map(boardLabel),
     boards: boardsOf(r).map((b) => b.slug).filter((x): x is string => Boolean(x)),
     dates: r.dates,
@@ -75,7 +78,7 @@ export function fromRecord(r: SeriesRecord, meta: Record<string, string> = {}): 
     result: resultText(r),
     lines: r.resultLines,
     bet: r.bet,
-    format: meta[statsKey] ?? r.format,
+    format: meta[keyOf(r)] ?? r.format,
     month: r.month,
   };
 }
@@ -96,7 +99,7 @@ export function SourceNote({ hl }: { hl: string }) {
 }
 
 /** The player statistics of one series, grouped by board; loaded when opened. */
-function SeriesStatsPanel({ statsKey, hl }: { statsKey: string; hl: string }) {
+function SeriesStatsPanel({ statsKey, hl, combined = false }: { statsKey: string; hl: string; combined?: boolean }) {
   const [state, setState] = useState<{ open: boolean; data?: SeriesStatsDetail; error?: string }>({ open: false });
   const toggle = () => {
     if (state.open) return setState({ ...state, open: false });
@@ -111,7 +114,7 @@ function SeriesStatsPanel({ statsKey, hl }: { statsKey: string; hl: string }) {
   return (
     <div className="mt-4">
       <button type="button" onClick={toggle} aria-expanded={state.open} className="text-xs font-semibold tracking-[0.2em] hover:underline" style={{ color: hl }}>
-        {state.open ? 'HIDE PLAYER STATISTICS' : 'PLAYER STATISTICS →'}
+        {state.open ? 'HIDE PLAYER STATISTICS' : combined ? 'PLAYER STATISTICS (ALL WARM-UP GAMES) →' : 'PLAYER STATISTICS →'}
       </button>
       {state.open && (
         <div className="mt-3 space-y-4">
@@ -173,7 +176,8 @@ export function ItemCard({ it, hl, slug, hasStats = false }: { it: Item; hl: str
           </div>
         )}
       </dl>
-      {hasStats && <SeriesStatsPanel statsKey={it.statsKey} hl={hl} />}
+      {hasStats && it.combinedStats && <p className="mt-3 text-xs text-smoke">The warm-up games were scored together, so their player statistics are one table for all the ODI World Cup warm-up matches.</p>}
+      {hasStats && <SeriesStatsPanel statsKey={it.statsKey} hl={hl} combined={it.combinedStats} />}
     </li>
   );
 }
