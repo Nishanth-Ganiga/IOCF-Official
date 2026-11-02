@@ -15,18 +15,21 @@ export const LOGO = {
 
 const GOLD = '#c9a24b';
 
-/** Android installer served from public/downloads/. Set IOS_URL to the TestFlight / App Store link once published. */
-const APK_URL = '/downloads/IOCF.apk';
+/**
+ * Where to get the apps. Leave both empty until the apps are published in the Google Play Store / App Store, and put those store links here:
+ * a site that offers an installer file to download (an .apk) from its own address is a classic trigger for Chrome's "Dangerous site" warning.
+ */
+const APK_URL = '';
 const IOS_URL = '';
 
 function AppDownload() {
-  if (Capacitor.isNativePlatform()) return null;
+  if (Capacitor.isNativePlatform() || (!APK_URL && !IOS_URL)) return null;
   const btn = 'inline-flex items-center gap-2 rounded border border-[#c9a24b]/50 px-5 py-2.5 text-xs font-semibold tracking-[0.18em] text-[#c9a24b] transition hover:bg-[#c9a24b] hover:text-black';
   return (
     <div className="mt-8 flex flex-col items-center gap-3">
       <span className="text-[0.7rem] font-semibold tracking-[0.25em] text-mist">GET THE IOCF APP</span>
       <div className="flex flex-wrap justify-center gap-3">
-        <a href={APK_URL} download="IOCF.apk" className={btn}>⬇ DOWNLOAD FOR ANDROID</a>
+        {APK_URL ? <a href={APK_URL} target="_blank" rel="noreferrer" className={btn}>⬇ GET IT ON ANDROID</a> : null}
         {IOS_URL ? <a href={IOS_URL} target="_blank" rel="noreferrer" className={btn}>⬇ GET IT ON iOS</a> : null}
       </div>
     </div>
