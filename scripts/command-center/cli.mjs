@@ -16,6 +16,7 @@
 //   npm run cc -- push                     upload the accounts to Supabase (once it is set up)
 //   npm run cc -- verify                   check that the register and the database agree
 //   npm run cc -- status [--sync]          list the accounts (no secrets); --sync copies online status changes into the register
+//   npm run cc -- series-stats [--dir <folder>] [--dry-run]  match a folder of scorer statistics CSVs to the earlier series and upload them
 //   npm run cc -- backup --out <folder>    write an encrypted backup of the register
 //
 // Without SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY it works on a local store in ~/.iocf-command-center/, so you can create
@@ -225,6 +226,33 @@ try {
     if (flag('--sync')) console.log(`Register statuses updated: ${await syncStatuses({ store: s, home })}`);
     table((await s.list()).map((a) => ({ Account: a.account_id, Board: a.board_name ?? '—', Username: a.username, Status: a.status, 'Last sign-in': a.last_login_at?.slice(0, 16).replace('T', ' ') ?? '—' })));
     console.log(`\nRegister rows: ${readRegister(home).length}`);
+  } else if (cmd === 'series-stats') {
+    // uploads the scorer statistics CSVs in a folder to the earlier series they belong to (the same as the admin's Upload button)
+    const { readdirSync } = await import('node:fs');
+    const { planImport } = await import('./seriesStatsImport.mjs');
+    const { BOARDS } = await import('../../server/command/handler.mjs');
+    const dir = path.resolve(opt('--dir') ?? 'All Assests/IOCF ALL Series Stats');
+    const names = readdirSync(dir).filter((f) => !f.startsWith('.')).sort();
+    const snap = JSON.parse(readFileSync('src/data/snapshot.json', 'utf8'));
+    const records = [...(snap.seriesRecords?.completed ?? []), ...(snap.seriesRecords?.upcoming ?? [])];
+    if (!records.length) throw new Error('src/data/snapshot.json has no series records. Run  npm run sync  first.');
+    const items = planImport({ files: names.map((file) => ({ file, text: readFileSync(path.join(dir, file), 'utf8') })), records, boards: BOARDS });
+    const label = { ok: '✓', check: '? CHECK', unmatched: '✗ NO MATCH', invalid: '✗ INVALID', duplicate: '✗ DUPLICATE' };
+    for (const it of items) console.log(`${label[it.status].padEnd(11)} ${it.file.padEnd(46)} ${it.status === 'ok' || it.status === 'check' ? '→ ' + it.series : ''}${it.status === 'ok' ? '' : '  — ' + it.note}`);
+    const ready = items.filter((i) => i.status === 'ok');
+    const count = (s) => items.filter((i) => i.status === s).length;
+    console.log(`\n${items.length} files: ${ready.length} ready, ${count('check')} to check, ${count('unmatched')} without a matching series, ${count('invalid')} invalid, ${count('duplicate')} duplicates.`);
+    if (flag('--dry-run')) console.log('Dry run: nothing was uploaded.');
+    else {
+      if (!remote()) throw new Error('Supabase is not configured: put SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in ' + path.join(home, 'env') + ' first.');
+      const db = store();
+      let done = 0;
+      for (const it of ready) {
+        await db.statsPut({ key: it.key, kind: 'record', name: it.name, title: it.upload.title, tour: it.upload.tour, players: it.upload.players, fields: it.upload.fields, rows: it.upload.rows, uploaded_at: Date.now(), uploaded_by: 'local-cli' });
+        done++;
+      }
+      console.log(`Uploaded the statistics of ${done} series to Supabase. Run it again any time: a series that already has statistics is replaced, not doubled.`);
+    }
   } else if (cmd === 'backup') {
     const out = opt('--out');
     if (!out) throw new Error('Say where: npm run cc -- backup --out <folder>');

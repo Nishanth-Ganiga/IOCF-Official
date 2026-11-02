@@ -819,6 +819,43 @@ console.log('\n— How to play online cricket (fun game on IOCF Main) —');
   check('random digits are always six digits from 0 to 6, and vary', ok && seen.size > 2500 && Array.from({ length: 6 }, () => randomDigits(() => 0.999999)).every((d) => d.every((x) => x === 6)) && randomDigits(() => 0).every((x) => x === 0));
 }
 
+
+console.log('\n— Matching a folder of statistics CSVs to the earlier series —');
+{
+  const { planImport, nameScore } = await import('./seriesStatsImport.mjs');
+  const HEAD = 'No.,Player Name,Team Name,Matches,POM Awards,Bat Innings,Runs Scored,Batting Avg,Bat SR,30s,50s,100s,High Score,6s,4s,Balls Faced,Not Outs,Most 6s by Inn.,Most 4s by Inn.,Fastest 50,Fastest 100,Bowl Inn,Wickets,Runs Conceded,Maiden,Bowl Avg,Bowl SR,Economy,3 Wkts,5 Wkts,Best Bowl,Balls Bowled,Dots Bowled,Catches,Stumpings,Run Outs';
+  const row = (n, name, team) => `${n},${name},${team},1,0,1,10,10.0,100.0,0,0,0,10,0,0,10,0,0,0,,,0,0,0,0,0.0,0.0,0.0,0,0, 0,0,0,0,0,0`;
+  const file = (title, teams) => `,STUMPS - The Cricket scorer\n,${title}\n,Tour ID: x1\n \n${HEAD}\n${teams.map((t, i) => row(i + 1, `Player ${i + 1}`, t)).join('\n')}\n`;
+  const b = (name) => ({ name, slug: name.toLowerCase().replace(/[^a-z]+/g, '-') });
+  const rec = (name, host, ...opp) => ({ name, host: b(host), opponents: opp.map(b) });
+  const records = [rec('Spring Cup', 'India', 'Australia'), rec('RED & GREEN RIVALRY I', 'Ireland', 'Canada'), rec(' RED & GREEN RIVALRY II', 'Ireland', 'Canada'), rec('Anderson-Tendulker t20 trophy', 'England', 'India'), rec('Anderson - Tendulkar Trophy', 'England', 'India'), rec('The Global Four', 'Bangladesh', 'West Indies', 'Netherlands'), rec('Freedom Jalebi Trophy', 'South Africa', 'Afghanistan')];
+  const plan = planImport({
+    records,
+    boards: BOARDS,
+    files: [
+      { file: 'Spring Cup.csv', text: file('Spring Cup', ['INDIA', 'AUSTRALIA']) },
+      { file: 'Red & Green Rivalry I.csv', text: file('Red & Green Rivalry', ['IRELAND', 'CANADA']) },
+      { file: 'Red & Green Rivalry II.csv', text: file('Red & Green Rivalry II', ['IRELAND', 'CANADA']) },
+      { file: 'Anderson Tendulkar T20 Trophy_.csv', text: file('Anderson Tendulkar T20 Trophy', ['ENGLAND', 'INDIA']) },
+      { file: 'The Global Three.csv', text: file('Global Three', ['BANGLADESH', 'WEST INDIES', 'NETHERLANDS']) },
+      { file: 'Freedom Jalebi.csv', text: file('Freedom Jalebi', ['QATAR', 'SOUTH AFRICA']) },
+      { file: 'Spring Cup (copy).csv', text: file('Spring Cup', ['INDIA', 'AUSTRALIA']) },
+      { file: 'ODI WC Warmup all matches.csv', text: file('Warmup Games', ['INDIA', 'CANADA', 'IRELAND']) },
+      { file: 'Nothing like it.csv', text: file('Nothing like it', ['INDIA', 'JAPAN']) },
+      { file: 'Broken.csv', text: 'a,b\n1,2' },
+    ],
+  });
+  const st = (f) => plan.find((x) => x.file === f);
+  check('a file whose name and teams fit a series is matched to it', st('Spring Cup.csv').status === 'ok' && st('Spring Cup.csv').key === 'rec-springcup-india');
+  check('"… Rivalry I" and "… Rivalry II" go to their own series, not each other\'s', st('Red & Green Rivalry I.csv').key === 'rec-redgreenrivalryi-ireland' && st('Red & Green Rivalry II.csv').key === 'rec-redgreenrivalryii-ireland' && nameScore('Red & Green Rivalry II', 'RED & GREEN RIVALRY I') < 1);
+  check('a spelling difference is matched by similar name and teams — to the nearest of two similar names', st('Anderson Tendulkar T20 Trophy_.csv').status === 'ok' && st('Anderson Tendulkar T20 Trophy_.csv').key === 'rec-andersontendulkert20trophy-england');
+  check('"The Global Three" file matches "The Global Four" when the teams are the same boards', st('The Global Three.csv').key === 'rec-theglobalfour-bangladesh');
+  check('a file whose teams are not the series\' boards is never matched automatically', st('Freedom Jalebi.csv').status === 'unmatched' && /Freedom Jalebi Trophy/.test(st('Freedom Jalebi.csv').note));
+  check('two files for the same series: the second is flagged, not uploaded twice', st('Spring Cup (copy).csv').status === 'duplicate');
+  check('a file covering several series is kept as its own entry', st('ODI WC Warmup all matches.csv').key === 'rec-odi-wc-warmup-games' && st('ODI WC Warmup all matches.csv').status === 'ok');
+  check('an unknown name and a broken file are reported', st('Nothing like it.csv').status === 'unmatched' && st('Broken.csv').status === 'invalid');
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);
