@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { FORMAT_LABEL, formatsIn, norm, selectLines, sumLines } from '../data/careerStats.mjs';
+import { aliasNorm, aliasesOf, buildAliasIndex } from '../data/commandCenter/aliases.mjs';
+import aliasList from '../data/commandCenter/playerAliases.json';
 import { franchiseHistory } from '../data/franchise';
 import { loadLeagueStats, playersOf, type AllStats, type PlayerStats } from '../data/leagueStats';
 import { loadCareerLines, type CareerLine } from '../data/playerCareer';
@@ -8,6 +10,7 @@ import { store } from '../data/store';
 import { StatCards } from './PlayerStatCards';
 
 const GOLD = '#c9a24b';
+const ALIASES = buildAliasIndex(aliasList as never);
 type Source = 'all' | 'tournament' | 'series';
 
 const pill = (active: boolean) =>
@@ -88,7 +91,7 @@ export function BoardStats({ player, boardName }: { player: Player; boardName: s
     };
   }, []);
 
-  const mine = useMemo(() => (all ? selectLines(all, { name: player.name, boardSlug: player.boardId }) : []), [all, player.name, player.boardId]);
+  const mine = useMemo(() => (all ? selectLines(all, { name: player.name, boardSlug: player.boardId }, ALIASES) : []), [all, player.name, player.boardId]);
   const bySource = useMemo(() => mine.filter((e) => source === 'all' || e.source === source), [mine, source]);
   const formats = useMemo(() => formatsIn(bySource), [bySource]);
   const active = format !== 'all' && formats.includes(format) ? format : 'all';
@@ -161,9 +164,16 @@ export function FranchiseStats({ player, boardName }: { player: Player; boardNam
     const own = franchiseHistory(player, boardName);
     // the same full name (two or more words) under another board is the same person, as in the board statistics
     const multi = (player.name.match(/[A-Za-z0-9]+/g) ?? []).length >= 2;
-    const extra = multi
-      ? store.leagues.flatMap((league) => league.teams.flatMap((team) => team.players.filter((entry) => norm(entry.name) === norm(player.name) && !own.some((o) => o.entry === entry)).map((entry) => ({ league, team, entry, honours: entry.honours ?? [] }))))
-      : [];
+    // the other names this player is known by (see playerAliases.json): his squad entries in the franchise leagues may use them
+    const names = aliasesOf(ALIASES, player.name, player.boardId);
+    const known = (entry: { name: string }) => names.some((a) => aliasNorm(a.name) === aliasNorm(entry.name));
+    const extra = store.leagues.flatMap((league) =>
+      league.teams.flatMap((team) =>
+        team.players
+          .filter((entry) => !own.some((o) => o.entry === entry) && ((multi && norm(entry.name) === norm(player.name)) || known(entry)))
+          .map((entry) => ({ league, team, entry, honours: entry.honours ?? [] })),
+      ),
+    );
     return [...own, ...extra]
       .map((s) => ({ ...s, stat: playersOf(all, s.league, s.team).find((p) => p.squad === s.entry), other: !own.includes(s as never) }))
       .filter((s) => s.stat);

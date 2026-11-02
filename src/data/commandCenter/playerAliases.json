@@ -1,0 +1,497 @@
+[
+ {
+  "name": "Muhammad Noor",
+  "board": "australia",
+  "aliases": [
+   {
+    "name": "Mohammad Noor",
+    "boards": [
+     "australia"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Partha Pratim Bora",
+  "board": "bangladesh",
+  "aliases": [
+   {
+    "name": "Partha Pratim Das",
+    "boards": [
+     "bangladesh"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Princhi Pratim Bora",
+  "board": "bangladesh",
+  "aliases": [
+   {
+    "name": "Ppb",
+    "boards": [
+     "bangladesh"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Rahees Ashiq",
+  "board": "bangladesh",
+  "aliases": [
+   {
+    "name": "Raees Ashiq",
+    "boards": [
+     "bangladesh"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Blassy",
+  "board": "canada",
+  "aliases": [
+   {
+    "name": "Blessy",
+    "boards": [
+     "canada"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Neak Mohammad",
+  "board": "canada",
+  "aliases": [
+   {
+    "name": "Neak Muhammad",
+    "boards": [
+     "canada"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Aash Muhammad",
+  "board": "england",
+  "aliases": [
+   {
+    "name": "Aash Mohammad",
+    "boards": [
+     "england"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Renjini",
+  "board": "italy",
+  "aliases": [
+   {
+    "name": "Maya",
+    "boards": [
+     "england"
+    ]
+   },
+   {
+    "name": "Rijina Chinnu",
+    "boards": [
+     "england"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Rahman SN",
+  "board": "india",
+  "aliases": [
+   {
+    "name": "Abdul Rahman",
+    "boards": [
+     "india"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Ashish Anandhu",
+  "board": "india",
+  "aliases": [
+   {
+    "name": "Asish Anandhu"
+   }
+  ]
+ },
+ {
+  "name": "Niyas",
+  "board": "india",
+  "aliases": [
+   {
+    "name": "Niyaz",
+    "boards": [
+     "india"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Appu",
+  "board": "italy",
+  "aliases": [
+   {
+    "name": "Appushree",
+    "boards": [
+     "italy"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Sanasil",
+  "board": "italy",
+  "aliases": [
+   {
+    "name": "Sanazil",
+    "boards": [
+     "italy"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Abhi Gulan",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Abhi Vk18",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Anas",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Anaz",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Arun Ozil",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Arunkrishnan 9895",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Hashi",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Hashir Kuttu",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Ahmed Mahsoof",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Machu",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Mohammad Ali",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Mhd Ali",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Murshid",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Murshi",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Abdullah Jutt",
+  "board": "nepal",
+  "aliases": [
+   {
+    "name": "Jani Jutt",
+    "boards": [
+     "nepal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Azeem",
+  "board": "new-zealand",
+  "aliases": [
+   {
+    "name": "Aseem Abd",
+    "boards": [
+     "new-zealand"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Hasan Musabir",
+  "board": "new-zealand",
+  "aliases": [
+   {
+    "name": "Hasan Musabbir",
+    "boards": [
+     "new-zealand"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Hrushikesh HD",
+  "board": "new-zealand",
+  "aliases": [
+   {
+    "name": "Hrushikesh Dinkar",
+    "boards": [
+     "new-zealand"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Nithin Poojary",
+  "board": "new-zealand",
+  "aliases": [
+   {
+    "name": "Nithin Poojari",
+    "boards": [
+     "new-zealand"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Abdullah Ishtiaq",
+  "board": "qatar",
+  "aliases": [
+   {
+    "name": "Abdullah Ishtiyaq",
+    "boards": [
+     "qatar"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Irfan Ali",
+  "board": "spain",
+  "aliases": [
+   {
+    "name": "Irfan Ali Soomro",
+    "boards": [
+     "qatar"
+    ]
+   },
+   {
+    "name": "Irfan Soomro",
+    "boards": [
+     "spain"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Talha Gujjar",
+  "board": "usa",
+  "aliases": [
+   {
+    "name": "Talha Saeed",
+    "boards": [
+     "qatar"
+    ]
+   },
+   {
+    "name": "Talha Saeed Gujjar",
+    "boards": [
+     "usa"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Zuhair",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Zuhair Muhammad",
+    "boards": [
+     "qatar"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Asthu Mohammad",
+  "board": "scotland",
+  "aliases": [
+   {
+    "name": "Asthu Mohammed",
+    "boards": [
+     "scotland"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Huzain Muhammad",
+  "board": "scotland",
+  "aliases": [
+   {
+    "name": "Huzain Muhammed",
+    "boards": [
+     "scotland"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Sasith Jayawardena",
+  "board": "sri-lanka",
+  "aliases": [
+   {
+    "name": "Sasith Jayawardhane",
+    "boards": [
+     "sri-lanka"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Uresh Gnananga",
+  "board": "sri-lanka",
+  "aliases": [
+   {
+    "name": "Uresh Ghananga",
+    "boards": [
+     "sri-lanka"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Hasir Javed",
+  "board": "usa",
+  "aliases": [
+   {
+    "name": "Hashir Javed",
+    "boards": [
+     "usa"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Binal K Binoy",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Binal K Bijoy",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Rukkiya",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Kukku",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Dhurbo Rajbongshi",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "Dhrubo Rajbongshi",
+    "boards": [
+     "zimbabwe"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Karan Ghimerа",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "Karan Ghimera",
+    "boards": [
+     "zimbabwe"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Prayas Parasar",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "Prayash Parsar",
+    "boards": [
+     "zimbabwe"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Ringkan Bayan",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "Rinkan Bayan",
+    "boards": [
+     "zimbabwe"
+    ]
+   }
+  ]
+ }
+]

@@ -6,6 +6,11 @@
 // Players are counted by exact name + board; two similar names are two people.
 import { FIELD_NAMES, parseScorerText } from '../../src/data/commandCenter/scorerCsv.mjs';
 import { SERIES_CFG } from './series.mjs';
+import { readFileSync } from 'node:fs';
+import { buildAliasIndex, resolveAlias } from '../../src/data/commandCenter/aliases.mjs';
+
+// players known under more than one name (src/data/commandCenter/playerAliases.json): their lines are added up together
+const ALIASES = buildAliasIndex(JSON.parse(readFileSync(new URL('../../src/data/commandCenter/playerAliases.json', import.meta.url), 'utf8')));
 
 export const MAX_ROWS = 400;
 export const MAX_CSV = 900_000;
@@ -82,7 +87,9 @@ const SUM = ['matches', 'pom', 'batInn', 'runs', 'balls', 'fours', 'sixes', 'thi
 export function aggregate(entries, boards) {
   const map = new Map();
   for (const entry of entries) {
-    for (const p of decodeStats(entry, boards)) {
+    for (let p of decodeStats(entry, boards)) {
+      const hit = resolveAlias(ALIASES, p.name, p.board ?? '');
+      if (hit) p = { ...p, name: hit.name, board: hit.board, boardName: boards.find((b) => b.slug === hit.board)?.name ?? p.boardName };
       const key = `${norm(p.name)}|${p.board ?? norm(p.team)}`;
       let t = map.get(key);
       if (!t) {

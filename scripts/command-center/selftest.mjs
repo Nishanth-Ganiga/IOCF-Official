@@ -725,6 +725,16 @@ console.log('\n— Series Announcement —');
     const lines = (await sCall('GET', 'public/series-stats/lines')).body.series;
     const siteLine = lines.find((x) => x.key === `site-${sid}`);
     check('the public lines carry every series with its rows and its format (the site series\' own; an earlier series\' override when the admin set one)', lines.length === 2 && siteLine.format === 'ODI' && siteLine.fields.includes('runs') && siteLine.rows.length === 4 && lines.find((x) => x.key === recKey).format === null && (await fm(recKey, { format: 'Club · 7 overs 7 wickets' })).status === 200 && (await sCall('GET', 'public/series-stats/lines')).body.series.find((x) => x.key === recKey).format === 'Club · 7 overs 7 wickets' && (await fm(recKey, { format: null })).status === 200);
+    // players known under two spellings are one player in the totals
+    check('a player known under two names is added up as one (the alias goes to his roster name and board)', await (async () => {
+      const csvAlias = (name, team) => csv([[name, team, 2, 2, 50, '30', 0, 40, 0, 0, '0', 0]]);
+      await up('rec-alias-test-one-india', { csv: csvAlias('Mohammad Noor', 'AUSTRALIA'), name: 'Alias Test One' });
+      await up('rec-alias-test-two-india', { csv: csvAlias('Muhammad Noor', 'AUSTRALIA'), name: 'Alias Test Two' });
+      const t = (await sCall('GET', 'public/series-stats')).body.players.filter((p) => /noor/i.test(p.name));
+      await sCall('DELETE', 'admin/series-stats/rec-alias-test-one-india', { cookie: cAdm });
+      await sCall('DELETE', 'admin/series-stats/rec-alias-test-two-india', { cookie: cAdm });
+      return t.length === 1 && t[0].name === 'Muhammad Noor' && t[0].board === 'australia' && t[0].runs === 100 && t[0].series === 2;
+    })());
     check('players with similar names are separate people (exact name + board only)', pub.players.some((p) => p.name === 'Rahul Sinu') && pub.players.filter((p) => p.name.startsWith('Rahul S')).length === 2);
     check('a player\'s totals are by board: players of unknown teams are kept without a board', pub.players.find((p) => p.name === 'Mystery Man').board === null);
     check('a new upload for the same series replaces the old one instead of adding to it', (await up(`site-${sid}`, { csv: a2 })).status === 200 && (await sCall('GET', 'public/series-stats')).body.players.find((p) => p.name === 'Sai Naveen').runs === 280 && (await sCall('GET', 'series-stats', { cookie: cEng })).body.stats.length === 2);
@@ -889,6 +899,14 @@ console.log('\n— Player profile statistics: formats, boards, sources —');
   const lines = [L('Ans Sheikh', 'qatar'), L('Ans Sheikh', 'pakistan'), L('Abhishek', 'india'), L('Abhishek', 'ireland'), L('Ans  sheikh ', 'qatar'), L('Ans Sheik', 'qatar'), L('Umar Khan', 'afghanistan')];
   const sel = selectLines(lines, { name: 'Ans Sheikh', boardSlug: 'qatar' });
   check('a name of two or more words is the same person on other boards (marked as another board); similar names are not', sel.length === 3 && sel.filter((x) => x.own).length === 2 && sel.some((x) => !x.own && x.boardSlug === 'pakistan') && !sel.some((x) => x.name === 'Ans Sheik'));
+  {
+    const { buildAliasIndex, resolveAlias, aliasesOf } = await import('../../src/data/commandCenter/aliases.mjs');
+    const idx = buildAliasIndex([{ name: 'Irfan Ali', board: 'spain', aliases: [{ name: 'Irfan Ali Soomro', boards: ['qatar'] }, { name: 'Irfan Soomro', boards: ['spain'] }] }, { name: 'Niyas', board: 'india', aliases: [{ name: 'Niyaz' }] }]);
+    const al = [L('Irfan Ali Soomro', 'qatar'), L('Irfan Soomro', 'spain'), L('Irfan Ali', 'spain'), L('Irfan Ali Soomro', 'pakistan'), L('Niyaz', 'canada'), L('Niyas', 'india')];
+    const sp = selectLines(al, { name: 'Irfan Ali', boardSlug: 'spain' }, idx);
+    check('aliases: another name of a known player is counted for him, on whichever board it was played (own board marked)', sp.length === 3 && sp.find((x) => x.boardSlug === 'qatar').own === false && sp.find((x) => x.boardSlug === 'spain' && x.name === 'Irfan Soomro').own === true && !sp.some((x) => x.boardSlug === 'pakistan'));
+    check('aliases: a one-word alias works too (explicitly given), and the lookup refuses an alias on a board it was not given for', selectLines(al, { name: 'Niyas', boardSlug: 'india' }, idx).length === 2 && resolveAlias(idx, 'Niyaz', 'canada').name === 'Niyas' && resolveAlias(idx, 'Irfan Ali Soomro', 'pakistan') === null && aliasesOf(idx, 'Niyas', 'india').length === 1);
+  }
   check('a single name is only matched on his own board', selectLines(lines, { name: 'Abhishek', boardSlug: 'india' }).length === 1 && selectLines(lines, { name: 'Abhishek', boardSlug: 'india' })[0].boardSlug === 'india');
   const l1 = { matches: 3, pom: 1, batInn: 3, runs: 120, balls: 80, fours: 3, sixes: 4, thirties: 0, fifties: 1, hundreds: 0, notOuts: 1, hs: 71, hsNotOut: true, bowlInn: 1, wickets: 2, runsConceded: 40, maidens: 0, ballsBowled: 24, dots: 0, threeW: 0, fiveW: 0, best: '2-15', catches: 1, stumpings: 0, runOuts: 0, most6: 3, most4: 2, fast50: 30, fast100: null };
   const l2 = { ...l1, matches: 2, batInn: 2, runs: 30, balls: 25, notOuts: 1, hs: 30, hsNotOut: true, wickets: 1, runsConceded: 20, best: '1-20', ballsBowled: 12, most6: 5, fast50: 22, catches: 0 };

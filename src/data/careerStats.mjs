@@ -1,3 +1,5 @@
+import { resolveAlias } from './commandCenter/aliases.mjs';
+
 // How a player's board statistics are put together on the Players profile. Plain code (no imports), tested by the self-test.
 //
 //   • Board statistics = the Major Tournaments + the series played for a board, split by FORMAT.
@@ -40,11 +42,17 @@ const words = (s) => (String(s ?? '').toLowerCase().match(/[a-z0-9]+/g) ?? []).l
  * lines: [{ name, boardSlug, ... }] from every source. Returns the ones that are this player: his exact name on his own board,
  * and — for a name of two or more words — on other boards too (flagged own: false).
  */
-export function selectLines(lines, { name, boardSlug }) {
+export function selectLines(lines, { name, boardSlug }, aliases) {
   const me = norm(name);
   const multi = words(name) >= 2;
   const out = [];
   for (const l of lines) {
+    // a name the statistics use for a known player ("Mohammad Noor" for "Muhammad Noor") belongs to that player, on any board
+    const hit = aliases ? resolveAlias(aliases, l.name, l.boardSlug) : null;
+    if (hit) {
+      if (hit.board === boardSlug && norm(hit.name) === me) out.push({ ...l, own: l.boardSlug === boardSlug });
+      continue;
+    }
     if (norm(l.name) !== me) continue;
     if (l.boardSlug === boardSlug) out.push({ ...l, own: true });
     else if (multi) out.push({ ...l, own: false });
