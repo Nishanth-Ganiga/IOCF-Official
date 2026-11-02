@@ -916,6 +916,26 @@ console.log('\n— Player profile statistics: formats, boards, sources —');
   check('only the formats that have data become tabs, in the usual order; entries with no format are in no tab', formatsIn([{ format: 'club' }, { format: 'odi' }, { format: null }, { format: 'test' }]).join() === 'odi,test,club');
 }
 
+
+console.log('\n— Chairmen and CEOs are players too —');
+if (fs.existsSync('IOCF ALL BOARDS .xlsx')) {
+  const { readWorkbook, buildDataset } = await import('../sync/index.mjs');
+  const { dataset } = buildDataset(await readWorkbook('IOCF ALL BOARDS .xlsx'), {});
+  const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const slugOf = (x) => x.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const missing = [];
+  for (const b of dataset.boards) {
+    for (const cell of [b.chairman, b.ceo]) {
+      for (const n of String(cell ?? '').split(/\s*(?:&|\band\b|,)\s*/).map((x) => x.trim()).filter(Boolean)) {
+        const first = n.toLowerCase().split(/\s+/)[0];
+        if (!dataset.players.some((p) => p.boardId === slugOf(b.name) && (norm(p.name) === norm(n) || p.name.toLowerCase().split(/\s+/)[0] === first))) missing.push(`${b.name}: ${n}`);
+      }
+    }
+  }
+  check('every chairman and CEO has a player entry on his board (a roster spelling that fits is used, otherwise one is created)', missing.length === 0, missing.join('; '));
+  check('they are marked with their role, and the players list still has no duplicates of a name on one board', dataset.players.some((p) => p.official === 'Chairman') && dataset.players.some((p) => p.official === 'CEO') && new Set(dataset.players.map((p) => `${p.boardId}|${norm(p.name)}`)).size === dataset.players.length);
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

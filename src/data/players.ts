@@ -61,6 +61,8 @@ export type Player = {
   id: string;
   boardId: string;
   name: string;
+  /** "Chairman", "CEO" or "Chairman & CEO": the chairman and the CEO of a board are players too. */
+  official?: string;
   photo?: string;
   batting?: BattingStats;
   bowling?: BowlingStats;

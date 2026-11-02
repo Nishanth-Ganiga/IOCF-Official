@@ -780,6 +780,7 @@ function PlayerProfile({ board, player, onSwitch }: { board: Board; player: Play
               </span>
             </Fact>
             <Fact label="Player ID" value={player.id} mono />
+            {player.official && <Fact label="Role in the board" value={`${player.official} of ${board.name}`} />}
           </dl>
         </div>
       </Card>

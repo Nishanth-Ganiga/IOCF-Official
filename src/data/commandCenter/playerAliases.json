@@ -493,5 +493,79 @@
     ]
    }
   ]
+ },
+ {
+  "name": "Yohaan Daruwalla",
+  "board": "kenya",
+  "aliases": [
+   {
+    "name": "Yohaan Daruwallaa"
+   }
+  ]
+ },
+ {
+  "name": "Kailas MS",
+  "board": "portugal",
+  "aliases": [
+   {
+    "name": "Kailas",
+    "boards": [
+     "portugal",
+     "scotland"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Waleed Khan",
+  "board": "afghanistan",
+  "aliases": [
+   {
+    "name": "Waleed",
+    "boards": [
+     "qatar",
+     "afghanistan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Srinidhi",
+  "board": "south-africa",
+  "aliases": [
+   {
+    "name": "Srinidhi K",
+    "boards": [
+     "south-africa",
+     "australia"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Ritik",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "Ritik Upadhyay",
+    "boards": [
+     "zimbabwe",
+     "bangladesh",
+     "netherlands"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Churami",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Lilly",
+    "boards": [
+     "england"
+    ]
+   }
+  ]
  }
 ]

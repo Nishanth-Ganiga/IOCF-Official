@@ -379,6 +379,17 @@ export function buildLedger(book) {
     }
   }
 
+  // chairmen and CEOs are players too: one that is not on the roster gets a player entry (a roster spelling that clearly fits is used
+  // instead), and each is marked with his role. A chairman cell can name two people ("A & B").
+  for (const [board, b] of Object.entries(B)) {
+    for (const [role, cell] of [['Chairman', b.chairman], ['CEO', b.ceo]]) {
+      for (const name of String(cell ?? '').split(/\s*(?:&|\band\b|,)\s*/).map((x) => x.trim()).filter(Boolean)) {
+        const p = match(board, name, false) ?? addPlayer(board, name);
+        (p.official ??= []).includes(role) || p.official.push(role);
+      }
+    }
+  }
+
   // boards
   const outBoards = [];
   for (const [board, b] of Object.entries(B)) {
@@ -407,6 +418,7 @@ export function buildLedger(book) {
     pl.forEach((p, i) => {
       const o = { id: `${slug(board)}-${String(i + 1).padStart(2, '0')}`, boardId: slug(board), name: p.name };
       if (Object.keys(p.formats).length) o.formats = Object.fromEntries(Object.entries(p.formats).map(([k, v]) => [k, { batting: v }]));
+      if (p.official?.length) o.official = p.official.join(' & ');
       if (p.ach.length) o.achievements = p.ach;
       if (p.tour.size) o.tournaments = [...p.tour].map(([t, n]) => ({ title: t, detail: `${n} award${n > 1 ? 's' : ''} recorded` }));
       if (p.hl.length) o.highlights = p.hl;
