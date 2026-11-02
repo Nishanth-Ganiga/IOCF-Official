@@ -19,6 +19,7 @@ After the opening sequence, visitors choose who is watching. Each profile is its
 | **Umpire** | Umpires and their match assignments |
 | **Franchise Leagues** | League → Season → Team → Player, with results, awards, standings and full player statistics |
 | **Major Tournaments** | T20 World Cup, Euro Cup, Oceania Cup, Asia Cup, Associate Nations Cup, ODI World Cup, World Test Championship, Emerging Talents League, Women's Global League, IOCF Origins Championship and IOCF Lone Warrior — each with a 2026 edition: every table from its sheet, plus Board → Player statistics |
+| **Rankings** | Twelve tiles, each with its own page: board rankings (Overall and every format, with movement), board credits, series rankings, batting, bowling, fielding and match-award rankings (board cricket and franchise leagues separately, by format), umpires, franchise league tables, Major Tournament titles, Hall of Fame and councils. Worked out from the live data each time, so they stay current |
 | **Command Center** | Locked. 27 real accounts (1 Master Administrator, 26 board chairmen), signed in on the server. Admin Login opens the administrator dashboard; Board Login opens that chairman's own themed board dashboard |
 
 Global search and favourites work across profiles.

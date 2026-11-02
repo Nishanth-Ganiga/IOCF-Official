@@ -936,6 +936,40 @@ if (fs.existsSync('IOCF ALL BOARDS .xlsx')) {
   check('they are marked with their role, and the players list still has no duplicates of a name on one board', dataset.players.some((p) => p.official === 'Chairman') && dataset.players.some((p) => p.official === 'CEO') && new Set(dataset.players.map((p) => `${p.boardId}|${norm(p.name)}`)).size === dataset.players.length);
 }
 
+
+console.log('\n— Rankings profile: how players and boards are ranked —');
+{
+  const { groupPlayers, rankPlayers, rankRows, seriesTable, boardsIn, CATEGORIES } = await import('../../src/data/rankingsCore.mjs');
+  const { buildAliasIndex } = await import('../../src/data/commandCenter/aliases.mjs');
+  const base = { matches: 1, pom: 0, batInn: 1, runs: 0, balls: 0, fours: 0, sixes: 0, thirties: 0, fifties: 0, hundreds: 0, notOuts: 0, hs: null, hsNotOut: false, bowlInn: 0, wickets: 0, runsConceded: 0, maidens: 0, ballsBowled: 0, dots: 0, threeW: 0, fiveW: 0, best: null, catches: 0, stumpings: 0, runOuts: 0, most6: 0, most4: 0, fast50: null, fast100: null };
+  const L = (name, boardSlug, format, extra) => ({ name, boardSlug, boardName: boardSlug.toUpperCase(), format, line: { ...base, ...extra } });
+  const lines = [
+    L('Ans Sheikh', 'qatar', 'odi', { runs: 100, batInn: 2, balls: 80, hs: 70, notOuts: 1 }),
+    L('Ans Sheikh', 'pakistan', 't20', { runs: 60, batInn: 1, balls: 30, hs: 60 }),
+    L('Mohammad Noor', 'australia', 'odi', { runs: 50, batInn: 2, balls: 70, hs: 30 }),
+    L('Muhammad Noor', 'australia', 'odi', { runs: 30, batInn: 1, balls: 20, hs: 30 }),
+    L('Abhishek', 'india', 'odi', { runs: 40, batInn: 1, balls: 30, hs: 40 }),
+    L('Abhishek', 'ireland', 'odi', { runs: 25, batInn: 1, balls: 20, hs: 25 }),
+    L('Bowler One', 'india', 'odi', { bowlInn: 3, wickets: 6, runsConceded: 60, ballsBowled: 72, best: '4-20', fiveW: 0 }),
+    L('Bowler Two', 'india', 'odi', { bowlInn: 3, wickets: 6, runsConceded: 80, ballsBowled: 72, best: '3-10' }),
+  ];
+  const aliases = buildAliasIndex([{ name: 'Muhammad Noor', board: 'australia', aliases: [{ name: 'Mohammad Noor', boards: ['australia'] }] }]);
+  const people = groupPlayers(lines, { aliases, rosterBoard: (n) => (n === 'Ans Sheikh' ? 'qatar' : undefined) });
+  check('players are grouped: a full name is one person across boards (on his roster board), an alias joins his roster name, a single name stays on its board', people.length === 6 && people.find((p) => p.name === 'Ans Sheikh').boardSlug === 'qatar' && people.find((p) => p.name === 'Ans Sheikh').lines.length === 2 && people.find((p) => p.name === 'Muhammad Noor').lines.length === 2 && people.filter((p) => p.name === 'Abhishek').length === 2);
+  const runs = rankPlayers(people, CATEGORIES.batting[0]);
+  check('the runs ranking adds a player up over every board and format', runs[0].name === 'Ans Sheikh' && runs[0].value === 160 && runs[1].name === 'Muhammad Noor' && runs[1].value === 80 && runs.map((r) => r.rank).join() === '1,2,3,4,5,5');
+  check('a format filter ranks only that format', rankPlayers(people, CATEGORIES.batting[0], 't20').length === 1 && rankPlayers(people, CATEGORIES.batting[0], 'odi')[0].value === 100);
+  check('averages and strike rates need a minimum (3 innings / 50 balls): a short career is not ranked', rankPlayers(people, CATEGORIES.batting[1]).map((r) => r.name).join() === 'Ans Sheikh,Muhammad Noor' && !rankPlayers(people, CATEGORIES.batting[2]).some((r) => r.name === 'Abhishek') && rankPlayers(people, CATEGORIES.batting[2]).some((r) => r.name === 'Ans Sheikh'));
+  const wk = rankPlayers(people, CATEGORIES.bowling[0]);
+  check('equal values share a rank (competition ranking: 1, 1, then 3)', wk.map((r) => r.rank).join() === '1,1' && rankRows([{ name: 'a', v: 5 }, { name: 'b', v: 5 }, { name: 'c', v: 3 }], (r) => r.v).map((r) => r.rank).join() === '1,1,3');
+  check('lower is better for economy and bowling average, and best figures rank by wickets then runs', rankPlayers(people, CATEGORIES.bowling[1])[0].name === 'Bowler One' && rankPlayers(people, CATEGORIES.bowling[4])[0].name === 'Bowler One' && rankRows([{ name: 'a', v: 9 }, { name: 'b', v: 5 }], (r) => r.v, true)[0].name === 'b');
+  const st = seriesTable([{ boards: ['india', 'australia'], winner: 'india', format: 'ODI' }, { boards: ['india', 'pakistan'], winner: 'pakistan', format: 'T20' }, { boards: ['india', 'qatar', 'spain'], winner: null, format: null }, { boards: ['india', 'australia'], winner: 'australia', format: 'Club · 6 overs 6 wickets' }]);
+  const ind = st.find((r) => r.slug === 'india');
+  check('series: played, won, lost, drawn and win % per board; a series with no winner is drawn', ind.played === 4 && ind.won === 1 && ind.lost === 2 && ind.drawn === 1 && ind.winPct === 25 && st.find((r) => r.slug === 'spain').drawn === 1);
+  check('series can be filtered by format (ODI, Club by any overs/wickets format)', seriesTable([{ boards: ['india', 'australia'], winner: 'india', format: 'ODI' }, { boards: ['india', 'pakistan'], winner: 'india', format: 'T20' }], { format: 'odi' }).length === 2 && seriesTable([{ boards: ['india', 'australia'], winner: 'india', format: '7 overs 7 wickets' }], { format: 'club' }).length === 2);
+  check('board names are found in champion texts, even inside "Player (Board)" or a shared title', boardsIn('England & Scotland', ['England', 'Scotland', 'India']).join() === 'England,Scotland' && boardsIn('Diljith Das (England)', ['England', 'New England']).join() === 'England' && boardsIn('Newzealand', ['New Zealand']).length === 0);
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

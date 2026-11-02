@@ -39,6 +39,14 @@ const EMBLEMS: Record<Exclude<ProfileId, 'main'>, ReactNode> = {
       <path d="M12 13v4M8.5 20h7M10 17h4" />
     </>
   ),
+  // podium with a star
+  rankings: (
+    <>
+      <path d="M3 20h18" />
+      <path d="M9 20v-8h6v8M3 20v-5h6M15 20v-3h6" />
+      <path d="m12 3 1 2.2 2.4.3-1.8 1.6.5 2.4-2.1-1.2-2.1 1.2.5-2.4L8.6 5.5 11 5.2z" opacity="0.8" />
+    </>
+  ),
   // padlock
   'command-center': (
     <>

@@ -563,7 +563,7 @@ export const introSlides: IntroSlide[] = [
   },
 ];
 
-export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'tournaments' | 'command-center' | 'board';
+export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'tournaments' | 'command-center' | 'board' | 'rankings';
 export type SectionId = 'about' | 'journey' | 'originals' | 'picks' | 'skills' | 'moments' | 'story';
 
 export const viewerProfiles: {
@@ -620,6 +620,13 @@ export const viewerProfiles: {
     name: 'Major Tournaments',
     blurb: 'IOCF world tournaments, results & awards',
     color: '#3b1f5e',
+    order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
+  },
+  {
+    id: 'rankings',
+    name: 'Rankings',
+    blurb: 'Every IOCF ranking: boards, players, umpires & leagues',
+    color: '#7a1f3d',
     order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
   },
   {

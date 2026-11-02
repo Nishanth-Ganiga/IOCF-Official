@@ -20,6 +20,7 @@
 //   PUT  /admin/series-meta/:key        admin only   { format }  sets the format of an earlier series
 //   GET  /series-meta, /series-stats, /series-stats/:key   signed-in: formats of earlier series, statistics of a series
 //   GET  /public/series-stats           public: every player's totals over the uploaded series
+//   GET  /public/series-results         public: series with a recorded result + formats of earlier series (rankings)
 //   GET  /public/series-stats/lines     public: the statistics of every series line by line, with its format
 //   POST /admin/credits/entered         admin only   { seriesId | adjustmentId | all: true, entered: boolean }  marks changes as entered in the sheet
 //   POST /admin/credits/adjustments     admin only   { board, amount (+/-), reason }
@@ -200,6 +201,21 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         const entries = await store.statsList();
         const players = aggregate(entries, BOARDS);
         return json(200, { series: entries.length, players }, { 'cache-control': 'public, max-age=60, s-maxage=60' });
+      }
+
+      // public: the series announced on the site that have a recorded result, and the formats given to earlier series (the Rankings profile)
+      if (a === 'public' && b === 'series-results' && !c && method === 'GET') {
+        const [series, meta] = await Promise.all([store.seriesList().catch(() => []), store.metaList().catch(() => [])]);
+        return json(
+          200,
+          {
+            series: series
+              .filter((x) => x.status === 'accepted' && x.result_winner)
+              .map((x) => ({ key: `site-${x.id}`, name: x.name, host: x.host, opponents: x.opponents, winner: x.result_winner === 'draw' ? null : x.result_winner, drawn: x.result_winner === 'draw', format: x.club_format ? `Club · ${SERIES_CFG.clubFormats.find((f) => f.id === x.club_format)?.label ?? x.club_format}` : x.format })),
+            meta: Object.fromEntries(meta.map((m) => [m.key, m.format])),
+          },
+          { 'cache-control': 'public, max-age=60, s-maxage=60' },
+        );
       }
 
       // public: the uploaded statistics of every series, line by line, with each series' format (player profiles split them by format)
