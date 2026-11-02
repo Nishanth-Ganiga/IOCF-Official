@@ -113,7 +113,9 @@
   "Mandela National Stadium"
  ],
  "usa": [
-  "New York Cricket Stadium"
+  "New York Cricket Stadium",
+  "National Eagle Stadium",
+  "Capital Crown Stadium"
  ],
  "papua-new-guinea": [
   "Royal PNG signature stadium",
@@ -134,6 +136,7 @@
   "Afghan National Sports Complex"
  ],
  "spain": [
-  "Estadi de Cricket"
+  "Estadi de Cricket",
+  "Arena De Hispania"
  ]
 }
