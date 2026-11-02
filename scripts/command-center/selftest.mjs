@@ -856,6 +856,26 @@ console.log('\n— Matching a folder of statistics CSVs to the earlier series �
   check('an unknown name and a broken file are reported', st('Nothing like it.csv').status === 'unmatched' && st('Broken.csv').status === 'invalid');
 }
 
+
+console.log('\n— Qatar took over the old Afghanistan team —');
+{
+  const { applyRenames } = await import('../sync/series.mjs');
+  const bd = (name) => ({ name, slug: name.toLowerCase().replace(/[^a-z]+/g, '-') });
+  const r = (name, host, opp, winner) => ({ name, month: 'January', host: bd(host), opponents: [bd(opp)], dates: null, winner: winner ? bd(winner) : null, runnerUp: null, result: null, resultLines: null, bet: 5000, format: null });
+  const rec = applyRenames({
+    completed: [r('Revival Cup', 'Afghanistan', 'Sri Lanka', 'Sri Lanka'), r('Kallis Rashid Trophy', 'South Africa', 'Afghanistan', 'South Africa'), r('Summer Series', 'Pakistan', 'Qatar', 'Pakistan'), r('Odd Series', 'Afghanistan', 'Qatar', 'Qatar'), r('The Golden Cup', 'West Indies', 'Afghanistan', 'Afghanistan'), r('The Friendly Cup', 'Afghanistan', 'Spain', 'Spain')],
+    upcoming: [r('Later Cup', 'Afghanistan', 'Spain', null)],
+  });
+  const [c1, c2, c3, c4, c5, c6] = rec.completed;
+  check('before The Golden Cup, "Afghanistan" is the team that is now Qatar (host, opponent and winner)', c1.host.name === 'Qatar' && c1.host.slug === 'qatar' && c1.host.was === 'Afghanistan' && c2.opponents[0].name === 'Qatar' && c2.opponents[0].was === 'Afghanistan' && c2.winner.name === 'South Africa');
+  check('the winner of such a series is renamed too', applyRenames({ completed: [r('X', 'Afghanistan', 'Sri Lanka', 'Afghanistan'), r('The Golden Cup', 'India', 'Afghanistan', null)], upcoming: [] }).completed[0].winner.name === 'Qatar');
+  check('from The Golden Cup on, Afghanistan is the new team, with no link to the old one', c5.opponents[0].name === 'Afghanistan' && !c5.opponents[0].was && c5.winner.name === 'Afghanistan' && c6.host.name === 'Afghanistan' && rec.upcoming[0].host.name === 'Afghanistan');
+  check('a series with both Afghanistan and Qatar before it is left as written (it cannot be told apart)', c4.host.name === 'Afghanistan' && c4.opponents[0].name === 'Qatar');
+  check('its statistics stay filed under the name in the sheet, and series without the old team are untouched', c1.keyHost === 'Afghanistan' && c2.keyHost === 'South Africa' && c3.keyHost === undefined && c3.opponents[0].name === 'Qatar' && !c3.opponents[0].was);
+  const again = JSON.parse(JSON.stringify(rec));
+  check('applying the rule twice changes nothing; without The Golden Cup in the list nothing is renamed', JSON.stringify(applyRenames(again)) === JSON.stringify(rec) && applyRenames({ completed: [r('Revival Cup', 'Afghanistan', 'Sri Lanka', null)], upcoming: [] }).completed[0].host.name === 'Afghanistan');
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { api, ApiError, type SeriesStatsSummary } from '../../data/commandApi';
-import { recordKey, seriesRecords, type SeriesRecord } from '../../data/seriesRecords';
+import { boardLabel, keyOf, recordKey, seriesRecords, type SeriesRecord } from '../../data/seriesRecords';
 
 const GOLD = '#c9a24b';
 const when = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
@@ -91,7 +91,7 @@ export function RecordsManager({ meta, choices, stats, onChanged, site }: { meta
       ...recs.upcoming.map((r) => ({ r, kind: 'upcoming' as const })),
       ...[...recs.completed].reverse().map((r) => ({ r, kind: 'completed' as const })),
     ]
-      .map((x) => ({ ...x, key: recordKey(x.r.name, x.r.host.name) }))
+      .map((x) => ({ ...x, key: keyOf(x.r) }))
       .filter((x) => !dup.has(x.key));
   }, [site]);
 
@@ -149,7 +149,7 @@ export function RecordsManager({ meta, choices, stats, onChanged, site }: { meta
                 <p className="font-display text-xl tracking-wide text-bone">{x.r.name.toUpperCase()}</p>
                 <span className="shrink-0 rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-semibold tracking-[0.14em] text-mist">{x.kind === 'completed' ? 'COMPLETED' : 'UPCOMING'}</span>
               </div>
-              <p className="text-xs font-semibold tracking-[0.16em] text-[#c9a24b]">{[x.r.host, ...x.r.opponents].map((b) => b.name).join(' vs ').toUpperCase()}</p>
+              <p className="text-xs font-semibold tracking-[0.16em] text-[#c9a24b]">{[x.r.host, ...x.r.opponents].map(boardLabel).join(' vs ').toUpperCase()}</p>
               <p className="mt-1 text-xs text-smoke">
                 {[x.r.dates, x.r.month, x.r.winner ? `won by ${x.r.winner.name}` : null].filter(Boolean).join(' · ')}
               </p>

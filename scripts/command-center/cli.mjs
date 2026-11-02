@@ -234,7 +234,9 @@ try {
     const dir = path.resolve(opt('--dir') ?? 'All Assests/IOCF ALL Series Stats');
     const names = readdirSync(dir).filter((f) => !f.startsWith('.')).sort();
     const snap = JSON.parse(readFileSync('src/data/snapshot.json', 'utf8'));
-    const records = [...(snap.seriesRecords?.completed ?? []), ...(snap.seriesRecords?.upcoming ?? [])];
+    const { applyRenames } = await import('../sync/series.mjs');
+    const named = applyRenames({ completed: snap.seriesRecords?.completed ?? [], upcoming: snap.seriesRecords?.upcoming ?? [] }); // Qatar took over the old Afghanistan team
+    const records = [...named.completed, ...named.upcoming];
     if (!records.length) throw new Error('src/data/snapshot.json has no series records. Run  npm run sync  first.');
     const items = planImport({ files: names.map((file) => ({ file, text: readFileSync(path.join(dir, file), 'utf8') })), records, boards: BOARDS });
     const label = { ok: '✓', check: '? CHECK', unmatched: '✗ NO MATCH', invalid: '✗ INVALID', duplicate: '✗ DUPLICATE' };

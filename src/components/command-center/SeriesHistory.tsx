@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api, ApiError, type Series, type SeriesOverview, type SeriesStatsDetail, type SeriesStatsSummary } from '../../data/commandApi';
 import { paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
-import { boardsOf, recordKey, resultText, seriesRecords, withoutSiteDuplicates, type SeriesRecord } from '../../data/seriesRecords';
+import { boardLabel, boardsOf, keyOf, resultText, seriesRecords, withoutSiteDuplicates, type SeriesRecord } from '../../data/seriesRecords';
 import StatsTable from './StatsTable';
 
 const money = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -59,18 +59,18 @@ export function fromSite(s: Series): Item {
 }
 
 export function fromRecord(r: SeriesRecord, meta: Record<string, string> = {}): Item {
-  const statsKey = recordKey(r.name, r.host.name);
+  const statsKey = keyOf(r);
   return {
     key: `rec-${r.name}-${r.host.name}-${r.dates}`,
     statsKey,
     source: 'record',
     name: r.name,
-    host: r.host.name,
-    opponents: r.opponents.map((o) => o.name),
+    host: boardLabel(r.host),
+    opponents: r.opponents.map(boardLabel),
     boards: boardsOf(r).map((b) => b.slug).filter((x): x is string => Boolean(x)),
     dates: r.dates,
-    winner: r.winner,
-    runnerUp: r.runnerUp?.name ?? null,
+    winner: r.winner ? { ...r.winner, name: boardLabel(r.winner) } : null,
+    runnerUp: r.runnerUp ? boardLabel(r.runnerUp) : null,
     drawn: false,
     result: resultText(r),
     lines: r.resultLines,

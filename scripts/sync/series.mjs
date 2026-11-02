@@ -58,6 +58,35 @@ const LABELS = {
   format: /^format$/,
 };
 
+/**
+ * Teams that changed hands. Qatar took over the old Afghanistan team (same team and statistics), and a NEW Afghanistan team,
+ * with no connection to it, started with "The Golden Cup". So in the series before that one, "Afghanistan" was the team that is
+ * now Qatar: those series belong to Qatar (marked "then Afghanistan"), and Afghanistan's own history starts at The Golden Cup.
+ */
+export const RENAMES = [{ from: 'Afghanistan', to: 'Qatar', until: 'The Golden Cup' }];
+
+/** Applies RENAMES to { completed, upcoming } (in the order of the sheet). Safe to apply twice. */
+export function applyRenames(rec) {
+  for (const ren of RENAMES) {
+    const cut = rec.completed.findIndex((r) => norm(r.name) === norm(ren.until));
+    if (cut < 0) continue;
+    const from = resolveBoard(ren.from);
+    const to = resolveBoard(ren.to);
+    const swap = (b) => (b && b.name === from.name ? { ...to, was: from.name } : b);
+    for (const r of rec.completed.slice(0, cut)) {
+      const boards = [r.host, ...r.opponents];
+      if (!boards.some((b) => b.name === from.name)) continue;
+      if (boards.some((b) => b.name === to.name)) continue; // both teams in one series: they cannot be told apart, so it is left as written
+      r.keyHost ??= r.host.name; // its statistics and format are filed under the name in the sheet, so a later rule change never loses them
+      r.host = swap(r.host);
+      r.opponents = r.opponents.map(swap);
+      r.winner = swap(r.winner);
+      r.runnerUp = swap(r.runnerUp);
+    }
+  }
+  return rec;
+}
+
 export function buildSeriesRecords(book) {
   if (!book.has(SHEET)) return null;
   const sh = book.sheet(SHEET);
@@ -113,5 +142,5 @@ export function buildSeriesRecords(book) {
     };
     (mode === 'completed' ? completed : upcoming).push(rec);
   }
-  return { completed, upcoming };
+  return applyRenames({ completed, upcoming });
 }

@@ -88,7 +88,7 @@ export function planImport({ files, records, boards }) {
       items.push({ file, status: 'unmatched', note: `no series with this name and these teams (${teams.join(', ')}).${near}`, upload });
       continue;
     }
-    const key = recordKey(pick.r.name, pick.r.host.name);
+    const key = recordKey(pick.r.name, pick.r.keyHost ?? pick.r.host.name);
     if (status === 'ok' && used.has(key)) {
       items.push({ file, status: 'duplicate', key, name: pick.r.name, series: pick.r.name, note: `“${used.get(key)}” already covers this series`, upload });
       continue;

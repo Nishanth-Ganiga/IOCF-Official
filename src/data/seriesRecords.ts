@@ -4,7 +4,9 @@ import { store } from './store';
  * The series announced and played before the Command Center, kept in the IOCF sheet's "Series Matches" tab
  * (read by scripts/sync/series.mjs). They are shown next to the series announced on the site.
  */
-export type RecordBoard = { name: string; slug: string | null };
+export type RecordBoard = { name: string; slug: string | null; /** The name the team had at the time (Qatar took over the old Afghanistan team). */ was?: string };
+/** A board's name as shown in a record: "Qatar (then Afghanistan)" for the team that used to be Afghanistan. */
+export const boardLabel = (b: RecordBoard) => (b.was ? `${b.name} (then ${b.was})` : b.name);
 export type SeriesRecord = {
   name: string;
   /** The month banner it sits under in the sheet (completed series only). */
@@ -21,6 +23,8 @@ export type SeriesRecord = {
   resultLines: string[] | null;
   bet: number | null;
   format: string | null;
+  /** The host's name in the sheet when it has been renamed (see the sync's RENAMES); statistics are filed under it. */
+  keyHost?: string;
 };
 export type SeriesRecords = { completed: SeriesRecord[]; upcoming: SeriesRecord[] };
 
@@ -45,3 +49,5 @@ export function resultText(r: SeriesRecord): string | null {
 const slugNorm = (x: string) => x.toLowerCase().replace(/&/g, '').replace(/[^a-z0-9]/g, '');
 /** The key under which an earlier series' format and statistics are stored. Must match server/command/seriesStats.mjs. */
 export const recordKey = (name: string, host: string) => `rec-${slugNorm(name)}-${slugNorm(host)}`;
+/** The key of a record: from the host's name in the sheet. */
+export const keyOf = (r: SeriesRecord) => recordKey(r.name, r.keyHost ?? r.host.name);
