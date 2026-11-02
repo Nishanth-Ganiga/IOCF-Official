@@ -1,3 +1,4 @@
+import { api } from './commandApi';
 import { decodePlayers, type PlayerStats } from './leagueStats';
 import { store } from './store';
 import type { TournamentEdition } from './tournaments';
@@ -14,9 +15,37 @@ export type AllTournamentStats = Record<string, TournamentStats>;
 type Raw = { fields: string[]; tournaments: Record<string, { title: string; tour: string; rows: (string | number | null)[][] }> };
 
 let cache: Promise<AllTournamentStats> | null = null;
+let live: { at: number; promise: Promise<AllTournamentStats> } | null = null;
 
-/** Loads and decodes the stats (a separate chunk, fetched when a tournament's 2026 page is opened). */
+/**
+ * Loads and decodes the stats: the bundled CSV exports (a separate chunk), with any tournament whose statistics the administrator
+ * has uploaded in the Command Center replaced by that upload (checked every 30 seconds, so a replaced file shows up quickly).
+ */
 export function loadTournamentStats(): Promise<AllTournamentStats> {
+  const base = bundled();
+  if (!live || Date.now() - live.at > 30_000) {
+    live = {
+      at: Date.now(),
+      promise: base.then(async (b) => {
+        try {
+          const { tournaments } = await api.tournamentStatsLive();
+          const out = { ...b };
+          for (const [id, t] of Object.entries(tournaments)) out[id] = { title: t.title, tour: t.tour, players: decodePlayers(t.fields, t.rows) };
+          return out;
+        } catch {
+          return b; // the Command Center service is not reachable (or nothing was uploaded): the bundled statistics
+        }
+      }),
+    };
+  }
+  return live.promise;
+}
+/** Forget the uploaded statistics so the next load fetches them again. */
+export const refreshTournamentStats = () => {
+  live = null;
+};
+
+function bundled(): Promise<AllTournamentStats> {
   cache ??= import('./tournamentStats.json').then((m) => {
     const raw = m.default as unknown as Raw;
     const out: AllTournamentStats = {};

@@ -10,6 +10,7 @@ import { EASE } from './fx';
 import { IocfHeader, LOGO } from './IocfHome';
 import { Flag } from './IocfChairmen';
 import { BackButton, Breadcrumb, Card, Loading, Notice, searchInput } from './IocfPlayers';
+import TournamentStatsUpload from './command-center/TournamentStatsUpload';
 import { Stat, StatCards } from './PlayerStatCards';
 import SiteFooter, { ShareButton } from './SiteFooter';
 
@@ -383,6 +384,7 @@ export function StatsSection({ t, e, all, failed, boards }: { t: MajorTournament
     <section id="player-statistics" className="mt-8 scroll-mt-24" aria-label="Player statistics">
       <h2 className="font-display text-2xl tracking-wide text-bone sm:text-3xl">PLAYER STATISTICS{groups.length > 0 ? ` (${groups.length} BOARDS)` : ''}</h2>
       <p className="mt-1 text-sm text-mist">Choose a board to see its players, then a player for his full {e.year} statistics and awards.</p>
+      <TournamentStatsUpload id={t.id} name={t.name} adminOnly />
       {failed ? (
         <div className="mt-4"><Notice tone="error">The player statistics could not be loaded. Please refresh the page to try again.</Notice></div>
       ) : !all ? (

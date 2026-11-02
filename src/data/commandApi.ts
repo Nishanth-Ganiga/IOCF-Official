@@ -225,6 +225,8 @@ export const api = {
   uploadSeriesStats: (key: string, csv: string, name: string) => request<{ ok: true; players: number; warnings: string[] }>('PUT', `/admin/series-stats/${encodeURIComponent(key)}`, { csv, name }),
   removeSeriesStats: (key: string) => request<{ ok: true }>('DELETE', `/admin/series-stats/${encodeURIComponent(key)}`),
   setSeriesFormat: (key: string, format: string | null) => request<{ ok: true }>('PUT', `/admin/series-meta/${encodeURIComponent(key)}`, { format }),
+  /** Statistics the administrator uploaded for Major Tournaments, by tournament id. No sign-in needed. */
+  tournamentStatsLive: () => request<{ tournaments: Record<string, { title: string; tour: string; fields: string[]; rows: (string | number | null)[][]; uploadedAt: number }> }>('GET', '/public/tournament-stats'),
   /** Series announced on the site with a recorded result, and the formats given to earlier series. No sign-in needed. */
   seriesResults: () => request<{ series: { key: string; name: string; host: string; opponents: string[]; winner: string | null; drawn: boolean; format: string }[]; meta: Record<string, string> }>('GET', '/public/series-results'),
   /** The statistics of every uploaded series, line by line, with each series' format (null: use the sheet's). No sign-in needed. */

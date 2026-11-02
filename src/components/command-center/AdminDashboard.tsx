@@ -129,6 +129,21 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
               <span className="mt-4 block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">OPEN →</span>
             </button>
           </li>
+          <li>
+            <button type="button" onClick={() => nav('tournaments')} className="group block h-full w-full rounded-2xl border border-[#c9a24b]/60 bg-ink-2 p-5 text-left transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]">
+              <span className="flex items-start justify-between gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#c9a24b] text-[#c9a24b]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7" aria-hidden>
+                    <path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4" />
+                  </svg>
+                </span>
+                <span className="rounded-full border border-[#c9a24b] px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em] text-[#c9a24b]">ADMIN</span>
+              </span>
+              <span className="mt-4 block font-display text-2xl tracking-wide text-bone">TOURNAMENT STATISTICS</span>
+              <span className="mt-1.5 block text-sm leading-relaxed text-mist">Replace a Major Tournament&apos;s player statistics with the latest scorer CSV, as often as needed.</span>
+              <span className="mt-4 block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">OPEN →</span>
+            </button>
+          </li>
         </ul>
       </section>
 

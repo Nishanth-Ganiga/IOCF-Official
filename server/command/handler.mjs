@@ -20,6 +20,7 @@
 //   PUT  /admin/series-meta/:key        admin only   { format }  sets the format of an earlier series
 //   GET  /series-meta, /series-stats, /series-stats/:key   signed-in: formats of earlier series, statistics of a series
 //   GET  /public/series-stats           public: every player's totals over the uploaded series
+//   GET  /public/tournament-stats       public: statistics uploaded for a Major Tournament (replace its bundled CSV)
 //   GET  /public/series-results         public: series with a recorded result + formats of earlier series (rankings)
 //   GET  /public/series-stats/lines     public: the statistics of every series line by line, with its format
 //   POST /admin/credits/entered         admin only   { seriesId | adjustmentId | all: true, entered: boolean }  marks changes as entered in the sheet
@@ -36,7 +37,7 @@
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { SERIES_CFG, STADIUMS, activeCount, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
-import { FORMAT_CHOICES, KEY_RE, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
+import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
@@ -77,7 +78,7 @@ const ACTIONS = {
   credit_adjusted: 'Board credit adjusted',
   credit_adjustment_removed: 'Credit adjustment removed',
   credit_marked_entered: 'Credit changes marked as entered in the sheet',
-  series_stats_uploaded: 'Series statistics uploaded',
+  series_stats_uploaded: 'Statistics uploaded',
   series_stats_removed: 'Series statistics removed',
   series_format_set: 'Series format set',
 };
@@ -198,9 +199,15 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
 
       // public: the totals of every player over the uploaded series (the Players profile shows them)
       if (a === 'public' && b === 'series-stats' && !c && method === 'GET') {
-        const entries = await store.statsList();
+        const entries = (await store.statsList()).filter((e) => e.kind !== 'tournament');
         const players = aggregate(entries, BOARDS);
         return json(200, { series: entries.length, players }, { 'cache-control': 'public, max-age=60, s-maxage=60' });
+      }
+
+      // public: the player statistics the administrator uploaded for a Major Tournament; they replace the bundled CSV of that tournament
+      if (a === 'public' && b === 'tournament-stats' && !c && method === 'GET') {
+        const entries = (await store.statsList()).filter((e) => e.kind === 'tournament');
+        return json(200, { tournaments: Object.fromEntries(entries.map((e) => [e.key.slice(5), { title: e.title, tour: e.tour, fields: e.fields, rows: e.rows, uploadedAt: e.uploaded_at }])) }, { 'cache-control': 'public, max-age=30, s-maxage=30' });
       }
 
       // public: the series announced on the site that have a recorded result, and the formats given to earlier series (the Rankings profile)
@@ -220,7 +227,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
 
       // public: the uploaded statistics of every series, line by line, with each series' format (player profiles split them by format)
       if (a === 'public' && b === 'series-stats' && c === 'lines' && method === 'GET') {
-        const entries = await store.statsList();
+        const entries = (await store.statsList()).filter((e) => e.kind !== 'tournament');
         const [meta, series] = await Promise.all([store.metaList().catch(() => []), store.seriesList().catch(() => [])]);
         const overrides = Object.fromEntries(meta.map((m) => [m.key, m.format]));
         const formatOf = (key) => {
@@ -245,7 +252,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       }
       if (a === 'series-stats' && !b && method === 'GET') {
         const list = await store.statsList({ summary: true });
-        return json(200, { stats: list.map((x) => ({ key: x.key, kind: x.kind, name: x.name, title: x.title, players: x.players, uploadedAt: x.uploaded_at })) });
+        return json(200, { stats: list.filter((x) => x.kind !== 'tournament').map((x) => ({ key: x.key, kind: x.kind, name: x.name, title: x.title, players: x.players, uploadedAt: x.uploaded_at })) });
       }
       if (a === 'series-stats' && b && !c && method === 'GET') {
         const entry = await store.statsGet(b);
@@ -463,7 +470,10 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (!KEY_RE.test(c)) return fail(400, 'invalid', 'Invalid series.');
           const i = req.body && typeof req.body === 'object' ? req.body : {};
           let name;
-          if (c.startsWith('site-')) {
+          if (c.startsWith('tour-')) {
+            if (!TOURNAMENT_IDS.includes(c.slice(5))) return fail(400, 'invalid', 'Unknown tournament.');
+            name = String(i.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 120) || c.slice(5);
+          } else if (c.startsWith('site-')) {
             const s = await store.seriesGet(c.slice(5));
             if (!s) return fail(404, 'not_found', 'Series not found.');
             if (s.status !== 'accepted') return fail(409, 'not_confirmed', 'Statistics can only be added to a series that has been accepted.');
@@ -474,7 +484,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           }
           const v = parseUpload(i.csv, BOARDS);
           if (v.error) return fail(400, 'invalid', v.error);
-          await store.statsPut({ key: c, kind: c.startsWith('site-') ? 'site' : 'record', name, title: v.value.title, tour: v.value.tour, players: v.value.players, fields: v.value.fields, rows: v.value.rows, uploaded_at: now(), uploaded_by: who.username });
+          await store.statsPut({ key: c, kind: c.startsWith('tour-') ? 'tournament' : c.startsWith('site-') ? 'site' : 'record', name, title: v.value.title, tour: v.value.tour, players: v.value.players, fields: v.value.fields, rows: v.value.rows, uploaded_at: now(), uploaded_by: who.username });
           await audit('series_stats_uploaded', who, c, req, { name, players: v.value.players });
           return json(200, { ok: true, players: v.value.players, warnings: v.value.warnings });
         }

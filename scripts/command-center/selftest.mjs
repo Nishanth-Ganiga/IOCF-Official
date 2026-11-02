@@ -739,6 +739,21 @@ console.log('\n— Series Announcement —');
     check('a player\'s totals are by board: players of unknown teams are kept without a board', pub.players.find((p) => p.name === 'Mystery Man').board === null);
     check('a new upload for the same series replaces the old one instead of adding to it', (await up(`site-${sid}`, { csv: a2 })).status === 200 && (await sCall('GET', 'public/series-stats')).body.players.find((p) => p.name === 'Sai Naveen').runs === 280 && (await sCall('GET', 'series-stats', { cookie: cEng })).body.stats.length === 2);
     check('statistics can be removed, and the totals follow', (await sCall('DELETE', `admin/series-stats/${recKey}`, { cookie: cAdm })).status === 200 && (await sCall('DELETE', `admin/series-stats/${recKey}`, { cookie: cAdm })).status === 404 && (await sCall('GET', 'public/series-stats')).body.series === 1);
+    // a Major Tournament's statistics replaced by the administrator (the World Test Championship, updated as it is played)
+    {
+      const wtc1 = csv([['Test Player', 'AUSTRALIA', 2, 2, 90, '60', 0, 150, 1, 30, '1-30', 24]]);
+      const wtc2 = csv([['Test Player', 'AUSTRALIA', 4, 4, 210, '120', 1, 400, 3, 70, '2-20', 60], ['New Man', 'INDIA', 1, 1, 5, '5', 0, 10, 0, 0, '0', 0]]);
+      const live0 = (await sCall('GET', 'public/tournament-stats')).body.tournaments;
+      const u1 = await up('tour-world-test-championship', { csv: wtc1, name: 'World Test Championship' });
+      const l1 = (await sCall('GET', 'public/tournament-stats')).body.tournaments['world-test-championship'];
+      check('the administrator uploads a tournament\'s statistics; they are public and carry the rows', Object.keys(live0).length === 0 && u1.status === 200 && l1.rows.length === 1 && l1.fields.includes('runs') && typeof l1.uploadedAt === 'number');
+      await up('tour-world-test-championship', { csv: wtc2, name: 'World Test Championship' });
+      const l2 = (await sCall('GET', 'public/tournament-stats')).body.tournaments['world-test-championship'];
+      check('uploading again REPLACES the statistics (a newer export, not added on top)', l2.rows.length === 2 && l2.rows.find((r) => r[0] === 'Test Player')[l2.fields.indexOf('runs')] === 210);
+      check('tournament statistics are not mixed into the series statistics, totals or lists', !(await sCall('GET', 'public/series-stats')).body.players.some((p) => p.name === 'Test Player') && !(await sCall('GET', 'public/series-stats/lines')).body.series.some((x) => x.key.startsWith('tour-')) && !(await sCall('GET', 'series-stats', { cookie: cEng })).body.stats.some((x) => x.key.startsWith('tour-')));
+      check('only a known tournament can be uploaded, and only by the administrator', (await up('tour-not-a-tournament', { csv: wtc1 })).status === 400 && (await up('tour-world-test-championship', { csv: wtc1 }, cIndia)).status === 403 && (await sCall('PUT', 'admin/series-stats/tour-asia-cup', { body: { csv: wtc1 } })).status === 401);
+      check('removing the upload goes back to the bundled statistics', (await sCall('DELETE', 'admin/series-stats/tour-world-test-championship', { cookie: cAdm })).status === 200 && Object.keys((await sCall('GET', 'public/tournament-stats')).body.tournaments).length === 0);
+    }
     check('uploads and removals are recorded in the audit log', (await sStore.listAudit(800)).some((x) => x.action === 'series_stats_uploaded') && (await sStore.listAudit(800)).some((x) => x.action === 'series_stats_removed'));
 
     // formats of earlier series

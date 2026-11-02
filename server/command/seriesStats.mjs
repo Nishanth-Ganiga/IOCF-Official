@@ -15,7 +15,9 @@ const ALIASES = buildAliasIndex(JSON.parse(readFileSync(new URL('../../src/data/
 export const MAX_ROWS = 400;
 export const MAX_CSV = 900_000;
 const norm = (x) => String(x ?? '').toLowerCase().replace(/&/g, '').replace(/[^a-z0-9]/g, '');
-export const KEY_RE = /^(site|rec)-[a-z0-9-]{3,220}$/;
+export const KEY_RE = /^(site|rec|tour)-[a-z0-9-]{3,220}$/;
+/** The Major Tournaments whose player statistics the administrator can replace (key `tour-<id>`). */
+export const TOURNAMENT_IDS = ['t20-world-cup', 'euro-cup', 'oceania-cup', 'asia-cup', 'associate-nations-cup', 'odi-world-cup', 'world-test-championship', 'emerging-talents-league', 'womens-global-league', 'origins-championship', 'lone-warrior'];
 
 /** The key of an earlier series from the IOCF records. Must match the one the browser builds (src/data/seriesRecords.ts). */
 export const recordKey = (name, host) => `rec-${norm(name)}-${norm(host)}`;
