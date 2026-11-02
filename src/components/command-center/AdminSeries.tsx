@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, ApiError, type Series } from '../../data/commandApi';
+import { api, ApiError, type Series, type SeriesStatsSummary } from '../../data/commandApi';
+import { RecordsManager, StatsControl, readFile } from './AdminStats';
 import { Facts } from './SeriesAnnouncement';
 
 type Nav = (...parts: string[]) => void;
-type Filter = 'active' | 'completed' | 'declined' | 'all';
+type Filter = 'active' | 'completed' | 'declined' | 'all' | 'records';
 
 const BADGE: Record<Series['status'], { text: string; color: string }> = {
   pending: { text: 'WAITING FOR ACCEPTANCE', color: '#c9a24b' },
@@ -13,7 +14,7 @@ const BADGE: Record<Series['status'], { text: string; color: string }> = {
 };
 
 /** The Active view holds series still waiting or accepted; a series moves to Completed when its result is recorded. */
-const inFilter = (s: Series, f: Filter) => (f === 'all' ? true : f === 'active' ? s.status === 'pending' || s.status === 'accepted' : s.status === f);
+const inFilter = (s: Series, f: Filter) => (f === 'all' || f === 'records' ? true : f === 'active' ? s.status === 'pending' || s.status === 'accepted' : s.status === f);
 
 /** Administrator: every series of every board, with all details, and the power to delete any of them. */
 export default function AdminSeries({ nav }: { nav: Nav }) {
@@ -26,8 +27,15 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
   const [editing, setEditing] = useState('');
   const [winner, setWinner] = useState('');
   const [note, setNote] = useState('');
+  const [statsFile, setStatsFile] = useState<File | null>(null);
+  const [extras, setExtras] = useState<{ meta: Record<string, string>; choices: string[]; stats: SeriesStatsSummary[]; ready: boolean }>({ meta: {}, choices: [], stats: [], ready: false });
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // formats of earlier series and the statistics already uploaded (empty if their tables are not set up yet)
+  const loadExtras = useCallback(async () => {
+    const [m, s] = await Promise.allSettled([api.seriesMeta(), api.seriesStatsList()]);
+    setExtras({ meta: m.status === 'fulfilled' ? m.value.meta : {}, choices: m.status === 'fulfilled' ? m.value.choices : [], stats: s.status === 'fulfilled' ? s.value : [], ready: m.status === 'fulfilled' && s.status === 'fulfilled' });
+  }, []);
   const load = useCallback(async () => {
     try {
       setList(await api.adminSeries());
@@ -38,7 +46,8 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
   }, []);
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadExtras();
+  }, [load, loadExtras]);
 
   const remove = async (s: Series) => {
     setBusy(s.id);
@@ -56,6 +65,7 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
 
   const openResult = (s: Series) => {
     setEditing(s.id);
+    setStatsFile(null);
     setWinner(s.result ? (s.result.winner?.slug ?? 'draw') : '');
     setNote(s.result?.note ?? '');
     setConfirm('');
@@ -68,7 +78,18 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
       await api.setSeriesResult(s.id, { winner, note });
       setEditing('');
       await load();
-      setFlash({ ok: true, text: `Result saved for “${s.name}”. It has moved to Completed.` });
+      let extra = '';
+      if (statsFile) {
+        try {
+          const r = await api.uploadSeriesStats(`site-${s.id}`, await readFile(statsFile), s.name);
+          extra = ` Statistics saved for ${r.players} players.${r.warnings.length ? ` Note: ${r.warnings.join(' ')}` : ''}`;
+        } catch (e) {
+          extra = ` The statistics file was not saved: ${e instanceof ApiError ? e.message : 'something went wrong'} You can upload it again below.`;
+        }
+        await loadExtras();
+      }
+      setStatsFile(null);
+      setFlash({ ok: true, text: `Result saved for “${s.name}”. It has moved to Completed.${extra}` });
     } catch (e) {
       setFlash({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
     }
@@ -114,9 +135,9 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
       )}
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        {(['active', 'completed', 'declined', 'all'] as Filter[]).map((f) => (
+        {(['active', 'completed', 'declined', 'all', 'records'] as Filter[]).map((f) => (
           <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={`rounded-full border px-4 py-1.5 text-xs font-semibold tracking-[0.14em] transition ${filter === f ? 'border-[#c9a24b] bg-[#c9a24b]/10 text-[#c9a24b]' : 'border-white/15 text-mist hover:border-white/40'}`}>
-            {f.toUpperCase()} · {count(f)}
+            {f === 'records' ? 'IOCF RECORDS' : f.toUpperCase()}{f === 'records' ? '' : ` · ${count(f)}`}
           </button>
         ))}
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search series or board" aria-label="Search series or board" className="ml-auto w-full rounded-lg border border-white/15 bg-ink px-3 py-2 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b] sm:w-64" />
@@ -125,7 +146,12 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
         {flash?.text}
       </p>
 
-      {!list ? (
+      {filter === 'records' ? (
+        <>
+          {!extras.ready && <p role="alert" className="mt-6 rounded-xl border border-crimson/40 bg-ink-2 px-5 py-4 text-sm text-mist">Formats and statistics are not set up yet: run the statistics SQL (CREATE_SERIES_STATS_TABLES.sql) in Supabase, then reload this page.</p>}
+          <RecordsManager meta={extras.meta} choices={extras.choices} stats={extras.stats} onChanged={loadExtras} site={list ?? []} />
+        </>
+      ) : !list ? (
         !error && <p className="mt-6 text-sm text-smoke">Loading series…</p>
       ) : !rows.length ? (
         <p className="mt-4 rounded-2xl border border-white/10 bg-ink-2 p-6 text-center text-sm text-mist">{list.length ? 'No series match.' : 'No series have been announced yet.'}</p>
@@ -166,6 +192,11 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
                         RESULT NOTE (OPTIONAL)
                         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="e.g. won 2–1" className="mt-1 w-full rounded-lg border border-white/15 bg-ink px-3 py-2.5 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b]" />
                       </label>
+                      <label className="block text-[11px] font-semibold tracking-[0.18em] text-mist sm:col-span-2">
+                        PLAYER STATISTICS CSV (OPTIONAL — THE SCORER&apos;S EXPORT FOR THIS SERIES)
+                        <input type="file" accept=".csv,text/csv" onChange={(e) => setStatsFile(e.target.files?.[0] ?? null)} className="mt-1 block w-full text-sm text-mist file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-bone" />
+                        <span className="mt-1 block text-[11px] font-normal text-smoke">{statsFile ? `Selected: ${statsFile.name}` : 'Upload it now so every player of the series is counted, or later from the card.'}</span>
+                      </label>
                       <div className="flex items-center gap-3 sm:col-span-2">
                         <button type="submit" disabled={!winner || busy === s.id} className="rounded-lg bg-[#c9a24b] px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-40">
                           {busy === s.id ? 'SAVING…' : 'SAVE RESULT'}
@@ -190,6 +221,7 @@ export default function AdminSeries({ nav }: { nav: Nav }) {
                   )}
                 </div>
               )}
+              {(s.status === 'accepted' || s.status === 'completed') && <StatsControl statsKey={`site-${s.id}`} name={s.name} summary={extras.stats.find((x) => x.key === `site-${s.id}`)} onChanged={loadExtras} />}
               <div className="mt-4">
                 {confirm === s.id ? (
                   <div role="alertdialog" aria-label={`Delete ${s.name}`} className="flex flex-wrap items-center gap-3 rounded-lg border border-crimson/50 px-4 py-3">

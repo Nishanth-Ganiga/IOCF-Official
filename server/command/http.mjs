@@ -4,8 +4,9 @@ import { productionStoreFromEnv } from './loginTable.mjs';
 
 const PREFIX = '/api/command';
 const MAX_BODY = 16 * 1024;
+const MAX_STATS_BODY = 1_000_000; // a statistics export uploaded by the administrator
 
-function readBody(req) {
+function readBody(req, max = MAX_BODY) {
   // Vercel has usually parsed a JSON body already
   if (req.body !== undefined && req.body !== null && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   return new Promise((resolve, reject) => {
@@ -13,7 +14,7 @@ function readBody(req) {
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) {
+      if (size > max) {
         reject(new Error('too large'));
         req.destroy();
       } else chunks.push(c);
@@ -46,7 +47,7 @@ export function commandCenterRequestListener({ store = productionStoreFromEnv(),
     let body = null;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       try {
-        body = await readBody(req);
+        body = await readBody(req, path.startsWith('/admin/series-stats/') ? MAX_STATS_BODY : MAX_BODY);
       } catch {
         res.writeHead(400, { 'content-type': 'application/json' });
         return res.end(JSON.stringify({ error: { code: 'bad_request', message: 'Invalid request.' } }));

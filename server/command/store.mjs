@@ -35,6 +35,48 @@ export class MemoryStore {
     await this.persist();
     return { ...r };
   }
+  async statsList({ summary = false } = {}) {
+    return (this.data.stats ??= []).map((x) => (summary ? { ...x, rows: undefined, fields: undefined } : { ...x }));
+  }
+  async statsGet(key) {
+    const r = (this.data.stats ??= []).find((x) => x.key === key);
+    return r ? { ...r } : null;
+  }
+  async statsPut(row) {
+    const list = (this.data.stats ??= []);
+    const i = list.findIndex((x) => x.key === row.key);
+    if (i >= 0) list[i] = { ...row };
+    else list.push({ ...row });
+    await this.persist();
+    return { ...row };
+  }
+  async statsDelete(key) {
+    const list = (this.data.stats ??= []);
+    const i = list.findIndex((x) => x.key === key);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    await this.persist();
+    return true;
+  }
+  async metaList() {
+    return (this.data.meta ??= []).map((x) => ({ ...x }));
+  }
+  async metaPut(row) {
+    const list = (this.data.meta ??= []);
+    const i = list.findIndex((x) => x.key === row.key);
+    if (i >= 0) list[i] = { ...row };
+    else list.push({ ...row });
+    await this.persist();
+    return { ...row };
+  }
+  async metaDelete(key) {
+    const list = (this.data.meta ??= []);
+    const i = list.findIndex((x) => x.key === key);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    await this.persist();
+    return true;
+  }
   async creditsList() {
     return (this.data.credits ??= []).map((x) => ({ ...x }));
   }
@@ -182,6 +224,50 @@ export class SeriesRest {
   }
 }
 
+/** Two small tables keyed by text: series player statistics (command_series_stats) and the formats given to earlier series (command_series_meta). */
+export class KeyedRest {
+  constructor({ url, serviceKey, fetchImpl = fetch, table, missing }) {
+    this.url = `${url.replace(/\/$/, '')}/rest/v1/${table}`;
+    this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
+    this.fetch = fetchImpl;
+    this.missing = missing;
+  }
+  async req(method, query, body, extra = {}) {
+    const res = await this.fetch(`${this.url}${query}`, { method, headers: { ...this.headers, ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (res.status === 404) throw Object.assign(new Error(`The ${this.missing} table does not exist yet.`), { code: 'stats_missing' });
+    if (!res.ok) throw new Error(`Database request failed (${res.status})`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
+  async list(select = '*') {
+    return (await this.req('GET', `?select=${select}&order=key.asc`)) ?? [];
+  }
+  async get(key) {
+    return (await this.req('GET', `?select=*&key=eq.${encodeURIComponent(key)}&limit=1`))?.[0] ?? null;
+  }
+  async put(row) {
+    return (await this.req('POST', '?on_conflict=key', row, { prefer: 'resolution=merge-duplicates,return=representation' }))[0];
+  }
+  async delete(key) {
+    return ((await this.req('DELETE', `?key=eq.${encodeURIComponent(key)}`, undefined, { prefer: 'return=representation' })) ?? []).length > 0;
+  }
+}
+
+/** Binds the two keyed tables to the store method names used by the handler. */
+export function keyedMethods(url, serviceKey, fetchImpl) {
+  const stats = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_series_stats', missing: 'series statistics' });
+  const meta = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_series_meta', missing: 'series details' });
+  return {
+    statsList: ({ summary = false } = {}) => stats.list(summary ? 'key,kind,name,title,tour,players,uploaded_at,uploaded_by' : '*'),
+    statsGet: (key) => stats.get(key),
+    statsPut: (row) => stats.put(row),
+    statsDelete: (key) => stats.delete(key),
+    metaList: () => meta.list(),
+    metaPut: (row) => meta.put(row),
+    metaDelete: (key) => meta.delete(key),
+  };
+}
+
 /** The manual credit adjustments table (command_credit_adjustments, see credits.sql). */
 export class CreditsRest {
   constructor({ url, serviceKey, fetchImpl = fetch, table = 'command_credit_adjustments' }) {
@@ -222,6 +308,7 @@ export class SupabaseStore {
     this.fetch = fetchImpl;
     this.seriesRest = new SeriesRest({ url, serviceKey, fetchImpl });
     this.creditsRest = new CreditsRest({ url, serviceKey, fetchImpl });
+    Object.assign(this, keyedMethods(url, serviceKey, fetchImpl));
   }
   creditsList() { return this.creditsRest.creditsList(); }
   creditsInsert(row) { return this.creditsRest.creditsInsert(row); }

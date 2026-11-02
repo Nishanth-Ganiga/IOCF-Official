@@ -327,7 +327,7 @@ check('admin table: the imported admin can sign in, and an e-mail style user id 
 const sqlAccounts = [...(await store.list())];
 sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x; --" };
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
-check('setup SQL: creates the 6 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 6 && (setupSql.match(/enable row level security/g) ?? []).length === 6);
+check('setup SQL: creates the 8 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 8 && (setupSql.match(/enable row level security/g) ?? []).length === 8);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
 check('setup SQL: has all 27 accounts and 26 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 27 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 26);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
@@ -696,6 +696,48 @@ console.log('\n— Series Announcement —');
     t0 += 4 * 86400000;
     const cQatar2 = await sLogin('board', sc('Qatar'));
     check('after a few days a declined series drops off the host\'s list', !(await view(cQatar2, 'qatar')).announced.some((x) => x.id === qid));
+  }
+  // series statistics (scorer CSV uploaded by the administrator) and the formats of earlier series
+  {
+    [cAdm, cIndia, cEng, cPak] = await Promise.all([sLogin('admin', sCreds.find((c) => c.username === 'iocf.admin')), sLogin('board', sc('India')), sLogin('board', sc('England')), sLogin('board', sc('Pakistan'))]); // the earlier sessions have ended
+    const HEAD = 'No.,Player Name,Team Name,Matches,POM Awards,Bat Innings,Runs Scored,Batting Avg,Bat SR,30s,50s,100s,High Score,6s,4s,Balls Faced,Not Outs,Most 6s by Inn.,Most 4s by Inn.,Fastest 50,Fastest 100,Bowl Inn,Wickets,Runs Conceded,Maiden,Bowl Avg,Bowl SR,Economy,3 Wkts,5 Wkts,Best Bowl,Balls Bowled,Dots Bowled,Catches,Stumpings,Run Outs';
+    // name, team, matches, batInn, runs, hs, notOuts, balls, wickets, runsConceded, best, ballsBowled
+    const line = (n, [name, team, m, bi, runs, hs, no, balls, w, rc, best, bb]) => `${n},${name},${team},${m},0,${bi},${runs},0.0,0.0,0,0,0,${hs},0,0,${balls},${no},0,0,,,${w ? 1 : 0},${w},${rc},0,0.0,0.0,0.0,0,0, ${best},${bb},0,0,0,0`;
+    const csv = (rows) => `,STUMPS - The Cricket scorer\n,Spring Cup\n,Tour ID: abcd1234\n \n${HEAD}\n${rows.map((r, i) => line(i + 1, r)).join('\n')}\n`;
+    const up = (key, body, cookie = cAdm) => sCall('PUT', `admin/series-stats/${key}`, { cookie, body });
+    const a1 = csv([['Rahul Seenu', 'INDIA', 3, 3, 120, '71*', 1, 80, 2, 40, '2-15', 24], ['Rahul Sinu', 'INDIA', 3, 2, 10, '8', 0, 12, 0, 0, '0', 0], ['Sai Naveen', 'AUSTRALIA', 3, 3, 60, '30', 0, 50, 5, 90, '3-20', 30], ['Mystery Man', 'ATLANTIS', 1, 1, 1, '1', 0, 1, 0, 0, '0', 0]]);
+    const a2 = csv([['Rahul Seenu', 'INDIA', 2, 2, 30, '30*', 1, 25, 1, 20, '1-20', 12], ['Sai Naveen', 'AUSTRALIA', 2, 2, 140, '100', 0, 70, 0, 0, '0', 0]]);
+
+    const ok1 = await up(`site-${sid}`, { csv: a1 });
+    check('the administrator uploads a series\' scorer statistics; unknown team names only give a warning', ok1.status === 200 && ok1.body.players === 4 && /ATLANTIS/.test(ok1.body.warnings.join(' ')));
+    check('only the administrator can upload or remove statistics', (await up(`site-${sid}`, { csv: a1 }, cIndia)).status === 403 && (await sCall('DELETE', `admin/series-stats/site-${sid}`, { cookie: cIndia })).status === 403 && (await sCall('PUT', `admin/series-stats/site-${sid}`, { body: { csv: a1 } })).status === 401);
+    check('a file that is not a scorer export is refused with a clear message (nothing is stored)', (await up(`site-${sid}`, { csv: 'a,b,c\n1,2,3' })).body.error.message.includes('No.') && (await up(`site-${sid}`, { csv: 'No.,Player Name\n1,A' })).body.error.message.includes('columns') && (await up(`site-${sid}`, {})).status === 400 && (await up(`site-${sid}`, { csv: HEAD })).body.error.message.includes('no player rows') && (await up(`site-${sid}`, { csv: 'x'.repeat(950000) })).status === 400);
+    check('statistics need a confirmed series (not an unaccepted one, not an unknown one) and a valid key', (await up(`site-${lateSeries.id}`, { csv: a1 })).status === 409 && (await up('site-nope', { csv: a1 })).status === 404 && (await up('bad key!', { csv: a1 })).status === 400);
+    const list1 = (await sCall('GET', 'series-stats', { cookie: cEng })).body.stats;
+    check('signed-in boards see which series have statistics, and the rows with their boards', list1.length === 1 && list1[0].players === 4 && (await sCall('GET', `series-stats/site-${sid}`, { cookie: cEng })).body.players.find((p) => p.name === 'Sai Naveen').board === 'australia' && (await sCall('GET', 'series-stats')).status === 401 && (await sCall('GET', 'series-stats/site-nope', { cookie: cEng })).status === 404);
+    const recKey = 'rec-pointing-cup-australia';
+    check('statistics can be added to an earlier series from the IOCF records (it needs a name)', (await up(recKey, { csv: a2, name: 'Pointing Cup' })).status === 200 && (await up(recKey, { csv: a2 })).status === 200 === false);
+    const pub = (await sCall('GET', 'public/series-stats')).body;
+    const rs = pub.players.find((p) => p.name === 'Rahul Seenu' && p.board === 'india');
+    const sn = pub.players.find((p) => p.name === 'Sai Naveen');
+    check('the public totals add a player up over every series (no sign-in needed)', pub.series === 2 && rs.series === 2 && rs.runs === 150 && rs.matches === 5 && rs.wickets === 3 && rs.runsConceded === 60 && rs.best === '2-15' && rs.hs === 71 && rs.avg === 50 && rs.economy === 10 && sn.runs === 200 && sn.hs === 100 && sn.avg === 40);
+    check('players with similar names are separate people (exact name + board only)', pub.players.some((p) => p.name === 'Rahul Sinu') && pub.players.filter((p) => p.name.startsWith('Rahul S')).length === 2);
+    check('a player\'s totals are by board: players of unknown teams are kept without a board', pub.players.find((p) => p.name === 'Mystery Man').board === null);
+    check('a new upload for the same series replaces the old one instead of adding to it', (await up(`site-${sid}`, { csv: a2 })).status === 200 && (await sCall('GET', 'public/series-stats')).body.players.find((p) => p.name === 'Sai Naveen').runs === 280 && (await sCall('GET', 'series-stats', { cookie: cEng })).body.stats.length === 2);
+    check('statistics can be removed, and the totals follow', (await sCall('DELETE', `admin/series-stats/${recKey}`, { cookie: cAdm })).status === 200 && (await sCall('DELETE', `admin/series-stats/${recKey}`, { cookie: cAdm })).status === 404 && (await sCall('GET', 'public/series-stats')).body.series === 1);
+    check('uploads and removals are recorded in the audit log', (await sStore.listAudit(800)).some((x) => x.action === 'series_stats_uploaded') && (await sStore.listAudit(800)).some((x) => x.action === 'series_stats_removed'));
+
+    // formats of earlier series
+    const fm = (key, body, cookie = cAdm) => sCall('PUT', `admin/series-meta/${key}`, { cookie, body });
+    check('the administrator sets the format of an earlier series (T10, Club + overs/wickets…)', (await fm(recKey, { format: 'T20' })).status === 200 && (await fm('rec-colombo-cup-sri-lanka', { format: 'Club · 6 overs 6 wickets' })).status === 200);
+    check('boards read the formats; only a format from the list is accepted; only the administrator can set one', (await sCall('GET', 'series-meta', { cookie: cPak })).body.meta[recKey] === 'T20' && (await fm(recKey, { format: 'T50' })).status === 400 && (await fm('site-abc', { format: 'T20' })).status === 400 && (await fm(recKey, { format: 'ODI' }, cIndia)).status === 403 && (await sCall('GET', 'series-meta', { cookie: cPak })).body.choices.length === 11);
+    check('a format can be changed or cleared', (await fm(recKey, { format: 'TEST' })).status === 200 && (await sCall('GET', 'series-meta', { cookie: cPak })).body.meta[recKey] === 'TEST' && (await fm(recKey, { format: null })).status === 200 && (await sCall('GET', 'series-meta', { cookie: cPak })).body.meta[recKey] === undefined);
+    // the two new tables missing from Supabase
+    const noTable = new SupabaseStore({ url: 'https://x.supabase.co', serviceKey: 'sb_secret_x', fetchImpl: async () => ({ ok: false, status: 404, text: async () => '{}' }) });
+    let c3 = null;
+    try { await noTable.statsList(); } catch (e) { c3 = e.code; }
+    const hMissing = createHandler({ store: { ...sStore, statsList: async () => { throw Object.assign(new Error('x'), { code: 'stats_missing' }); } }, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => t0 });
+    check('missing statistics tables are reported as such (503), and the public page just gets an error', c3 === 'stats_missing' && (await hMissing({ method: 'GET', path: ['public', 'series-stats'], headers: H, body: null, ip: '5.5.5.5' })).status === 503);
   }
   fs.rmSync(sHome, { recursive: true, force: true });
 }

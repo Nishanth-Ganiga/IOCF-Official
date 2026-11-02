@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
-import type { Series, SeriesOverview } from '../../data/commandApi';
+import { api, ApiError, type Series, type SeriesOverview, type SeriesStatsDetail, type SeriesStatsSummary } from '../../data/commandApi';
 import { paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
-import { boardsOf, resultText, seriesRecords, withoutSiteDuplicates, type SeriesRecord } from '../../data/seriesRecords';
+import { boardsOf, recordKey, resultText, seriesRecords, withoutSiteDuplicates, type SeriesRecord } from '../../data/seriesRecords';
+import StatsTable from './StatsTable';
 
 const money = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 const MONTH_ORDER = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 /** A series from either source, in one shape for display. */
+/** What the administrator has added to the series: formats of earlier series, and which series have player statistics. */
+export type Extras = { meta: Record<string, string>; stats: SeriesStatsSummary[] };
+export const NO_EXTRAS: Extras = { meta: {}, stats: [] };
+
 export type Item = {
   key: string;
+  /** Where its player statistics are stored. */
+  statsKey: string;
   source: 'site' | 'record';
   name: string;
   host: string;
@@ -33,6 +40,7 @@ export function fromSite(s: Series): Item {
   const winner = s.result?.winner ?? null;
   return {
     key: `site-${s.id}`,
+    statsKey: `site-${s.id}`,
     source: 'site',
     name: s.name,
     host: s.host.name,
@@ -50,9 +58,11 @@ export function fromSite(s: Series): Item {
   };
 }
 
-export function fromRecord(r: SeriesRecord): Item {
+export function fromRecord(r: SeriesRecord, meta: Record<string, string> = {}): Item {
+  const statsKey = recordKey(r.name, r.host.name);
   return {
     key: `rec-${r.name}-${r.host.name}-${r.dates}`,
+    statsKey,
     source: 'record',
     name: r.name,
     host: r.host.name,
@@ -65,15 +75,15 @@ export function fromRecord(r: SeriesRecord): Item {
     result: resultText(r),
     lines: r.resultLines,
     bet: r.bet,
-    format: r.format,
+    format: meta[statsKey] ?? r.format,
     month: r.month,
   };
 }
 
 /** The earlier series (the IOCF sheet's records) that are not duplicates of a series announced on the site. */
-export function recordItems(kind: 'completed' | 'upcoming', data: SeriesOverview): Item[] {
+export function recordItems(kind: 'completed' | 'upcoming', data: SeriesOverview, meta: Record<string, string> = {}): Item[] {
   const site = [...data.announced, ...data.upcoming, ...(data.completed ?? [])];
-  return withoutSiteDuplicates(seriesRecords()[kind], site).map(fromRecord);
+  return withoutSiteDuplicates(seriesRecords()[kind], site).map((r) => fromRecord(r, meta));
 }
 
 /** The note shown wherever the two sources meet. */
@@ -85,7 +95,41 @@ export function SourceNote({ hl }: { hl: string }) {
   );
 }
 
-export function ItemCard({ it, hl, slug }: { it: Item; hl: string; slug?: string }) {
+/** The player statistics of one series, grouped by board; loaded when opened. */
+function SeriesStatsPanel({ statsKey, hl }: { statsKey: string; hl: string }) {
+  const [state, setState] = useState<{ open: boolean; data?: SeriesStatsDetail; error?: string }>({ open: false });
+  const toggle = () => {
+    if (state.open) return setState({ ...state, open: false });
+    setState({ ...state, open: true });
+    if (!state.data) api.seriesStats(statsKey).then((data) => setState({ open: true, data }), (e: unknown) => setState({ open: true, error: e instanceof ApiError ? e.message : 'Something went wrong.' }));
+  };
+  const groups = useMemo(() => {
+    const m = new Map<string, SeriesStatsDetail['players']>();
+    for (const p of state.data?.players ?? []) m.set(p.boardName, [...(m.get(p.boardName) ?? []), p]);
+    return [...m.entries()];
+  }, [state.data]);
+  return (
+    <div className="mt-4">
+      <button type="button" onClick={toggle} aria-expanded={state.open} className="text-xs font-semibold tracking-[0.2em] hover:underline" style={{ color: hl }}>
+        {state.open ? 'HIDE PLAYER STATISTICS' : 'PLAYER STATISTICS →'}
+      </button>
+      {state.open && (
+        <div className="mt-3 space-y-4">
+          {state.error && <p className="text-sm text-crimson-2">{state.error}</p>}
+          {!state.data && !state.error && <p className="text-sm text-smoke">Loading…</p>}
+          {groups.map(([board, rows]) => (
+            <section key={board} aria-label={`${board} players`}>
+              <h4 className="mb-2 text-[11px] font-semibold tracking-[0.2em] text-mist">{board.toUpperCase()}</h4>
+              <StatsTable rows={rows} hl={hl} />
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ItemCard({ it, hl, slug, hasStats = false }: { it: Item; hl: string; slug?: string; hasStats?: boolean }) {
   const mine = slug ? it.winner?.slug === slug : false;
   return (
     <li className="rounded-2xl border border-white/10 bg-black/60 p-5 backdrop-blur-sm">
@@ -129,17 +173,19 @@ export function ItemCard({ it, hl, slug }: { it: Item; hl: string; slug?: string
           </div>
         )}
       </dl>
+      {hasStats && <SeriesStatsPanel statsKey={it.statsKey} hl={hl} />}
     </li>
   );
 }
 
 /** Every completed series: the ones announced on the site with a recorded result, and the IOCF records from before. */
-export default function SeriesHistory({ theme, data }: { theme: BoardTheme; data: SeriesOverview }) {
+export default function SeriesHistory({ theme, data, extras }: { theme: BoardTheme; data: SeriesOverview; extras: Extras }) {
   const pal = paletteOf(theme);
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [query, setQuery] = useState('');
 
-  const { site, records } = useMemo(() => ({ site: data.completed.map(fromSite), records: recordItems('completed', data) }), [data]);
+  const { site, records } = useMemo(() => ({ site: data.completed.map(fromSite), records: recordItems('completed', data, extras.meta) }), [data, extras.meta]);
+  const withStats = useMemo(() => new Set(extras.stats.map((x) => x.key)), [extras.stats]);
   const match = (it: Item) => {
     const q = query.trim().toLowerCase();
     return (scope === 'all' || it.boards.includes(theme.slug)) && (!q || it.name.toLowerCase().includes(q) || [it.host, ...it.opponents].some((b) => b.toLowerCase().includes(q)));
@@ -182,7 +228,7 @@ export default function SeriesHistory({ theme, data }: { theme: BoardTheme; data
           </h3>
           <ul className="mt-3 grid gap-4 lg:grid-cols-2">
             {siteShown.map((it) => (
-              <ItemCard key={it.key} it={it} hl={pal.highlight} slug={theme.slug} />
+              <ItemCard key={it.key} it={it} hl={pal.highlight} slug={theme.slug} hasStats={withStats.has(it.statsKey)} />
             ))}
           </ul>
         </>
@@ -198,7 +244,7 @@ export default function SeriesHistory({ theme, data }: { theme: BoardTheme; data
               .filter((r) => (r.month ?? '') === m)
               .reverse()
               .map((it) => (
-                <ItemCard key={it.key} it={it} hl={pal.highlight} slug={theme.slug} />
+                <ItemCard key={it.key} it={it} hl={pal.highlight} slug={theme.slug} hasStats={withStats.has(it.statsKey)} />
               ))}
           </ul>
         </section>

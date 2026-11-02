@@ -16,6 +16,10 @@
 //   GET  /admin/audit                   admin only
 //   GET  /boards/:slug/credits          the board's balance and history (own board; admin: any)
 //   GET  /admin/credits                 admin only   every board's balance + recent adjustments
+//   PUT/DELETE /admin/series-stats/:key  admin only  { csv, name? } uploads / removes the scorer statistics of a series
+//   PUT  /admin/series-meta/:key        admin only   { format }  sets the format of an earlier series
+//   GET  /series-meta, /series-stats, /series-stats/:key   signed-in: formats of earlier series, statistics of a series
+//   GET  /public/series-stats           public: every player's totals over the uploaded series
 //   POST /admin/credits/entered         admin only   { seriesId | adjustmentId | all: true, entered: boolean }  marks changes as entered in the sheet
 //   POST /admin/credits/adjustments     admin only   { board, amount (+/-), reason }
 //   DELETE /admin/credits/adjustments/:id  admin only
@@ -30,6 +34,7 @@
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { SERIES_CFG, STADIUMS, activeCount, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { FORMAT_CHOICES, KEY_RE, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
@@ -70,6 +75,9 @@ const ACTIONS = {
   credit_adjusted: 'Board credit adjusted',
   credit_adjustment_removed: 'Credit adjustment removed',
   credit_marked_entered: 'Credit changes marked as entered in the sheet',
+  series_stats_uploaded: 'Series statistics uploaded',
+  series_stats_removed: 'Series statistics removed',
+  series_format_set: 'Series format set',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -186,11 +194,32 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         return json(200, { ok: true }, { 'set-cookie': cookie('', 0, production || isHttps(req)) });
       }
 
+      // public: the totals of every player over the uploaded series (the Players profile shows them)
+      if (a === 'public' && b === 'series-stats' && !c && method === 'GET') {
+        const entries = await store.statsList();
+        const players = aggregate(entries, BOARDS);
+        return json(200, { series: entries.length, players }, { 'cache-control': 'public, max-age=60, s-maxage=60' });
+      }
+
       // everything below needs a signed-in account
       const who = await authenticate(req);
       if (!who) return fail(401, 'unauthenticated', 'Please sign in.');
 
       if (a === 'me' && method === 'GET' && !b) return json(200, { user: publicUser(who) });
+
+      // formats given to earlier series, and which series have statistics (any signed-in board may read these)
+      if (a === 'series-meta' && !b && method === 'GET') {
+        return json(200, { meta: Object.fromEntries((await store.metaList()).map((m) => [m.key, m.format])), choices: FORMAT_CHOICES });
+      }
+      if (a === 'series-stats' && !b && method === 'GET') {
+        const list = await store.statsList({ summary: true });
+        return json(200, { stats: list.map((x) => ({ key: x.key, kind: x.kind, name: x.name, title: x.title, players: x.players, uploadedAt: x.uploaded_at })) });
+      }
+      if (a === 'series-stats' && b && !c && method === 'GET') {
+        const entry = await store.statsGet(b);
+        if (!entry) return fail(404, 'not_found', 'No statistics have been uploaded for this series.');
+        return json(200, { key: entry.key, name: entry.name, title: entry.title, uploadedAt: entry.uploaded_at, players: decodeStats(entry, BOARDS) });
+      }
 
       if (a === 'boards' && b && c === 'dashboard' && method === 'GET') {
         const board = BOARDS.find((x) => x.slug === b);
@@ -398,6 +427,45 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           return json(200, { ok: true });
         }
 
+        if (b === 'series-stats' && c && method === 'PUT') {
+          if (!KEY_RE.test(c)) return fail(400, 'invalid', 'Invalid series.');
+          const i = req.body && typeof req.body === 'object' ? req.body : {};
+          let name;
+          if (c.startsWith('site-')) {
+            const s = await store.seriesGet(c.slice(5));
+            if (!s) return fail(404, 'not_found', 'Series not found.');
+            if (s.status !== 'accepted') return fail(409, 'not_confirmed', 'Statistics can only be added to a series that has been accepted.');
+            name = s.name;
+          } else {
+            name = String(i.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
+            if (!name) return fail(400, 'invalid', 'The series name is missing.');
+          }
+          const v = parseUpload(i.csv, BOARDS);
+          if (v.error) return fail(400, 'invalid', v.error);
+          await store.statsPut({ key: c, kind: c.startsWith('site-') ? 'site' : 'record', name, title: v.value.title, tour: v.value.tour, players: v.value.players, fields: v.value.fields, rows: v.value.rows, uploaded_at: now(), uploaded_by: who.username });
+          await audit('series_stats_uploaded', who, c, req, { name, players: v.value.players });
+          return json(200, { ok: true, players: v.value.players, warnings: v.value.warnings });
+        }
+
+        if (b === 'series-stats' && c && method === 'DELETE') {
+          if (!(await store.statsDelete(c))) return fail(404, 'not_found', 'No statistics have been uploaded for this series.');
+          await audit('series_stats_removed', who, c, req);
+          return json(200, { ok: true });
+        }
+
+        if (b === 'series-meta' && c && method === 'PUT') {
+          if (!/^rec-[a-z0-9-]{3,220}$/.test(c)) return fail(400, 'invalid', 'Invalid series.');
+          const format = req.body && typeof req.body === 'object' ? req.body.format : undefined;
+          if (format === null || format === '') {
+            await store.metaDelete(c);
+          } else {
+            if (!FORMAT_CHOICES.includes(format)) return fail(400, 'invalid', 'Choose a format from the list.');
+            await store.metaPut({ key: c, format, updated_at: now(), updated_by: who.username });
+          }
+          await audit('series_format_set', who, c, req, { format: format || null });
+          return json(200, { ok: true });
+        }
+
         if (b === 'series' && c && d === 'result' && (method === 'PUT' || method === 'DELETE')) {
           const cur = await store.seriesGet(c);
           if (!cur) return fail(404, 'not_found', 'Series not found.');
@@ -529,6 +597,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
     } catch (err) {
       if (err?.code === 'not_configured') return fail(503, 'not_configured', 'The Command Center database has no logins yet. Import the logins file into Supabase first.');
       if (err?.code === 'series_outdated') return fail(503, 'series_outdated', 'Series Announcement needs a database update: run the latest series SQL in Supabase.');
+      if (err?.code === 'stats_missing') return fail(503, 'stats_missing', 'Series statistics are not set up yet: the statistics tables have not been created in Supabase.');
       if (err?.code === 'credits_outdated') return fail(503, 'credits_outdated', 'Board Credits needs a database update: run the latest credits SQL in Supabase.');
       if (err?.code === 'credits_missing') return fail(503, 'credits_missing', 'Board Credits is not set up yet: the credits table has not been created in Supabase.');
       if (err?.code === 'series_missing') return fail(503, 'series_missing', 'Series Announcement is not set up yet: the series table has not been created in Supabase.');

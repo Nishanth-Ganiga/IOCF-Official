@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import SeriesStatsCard from './SeriesStatsCard';
 import { motion } from 'framer-motion';
 import type { Board } from '../data/boards';
 import type { Entry, FormatId, Player } from '../data/players';
@@ -828,6 +829,8 @@ function PlayerProfile({ board, player, onSwitch }: { board: Board; player: Play
           </Card>
         </>
       )}
+
+      <SeriesStatsCard name={player.name} boardId={player.boardId} className="mt-6" />
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <Card title="RECENT PERFORMANCES">

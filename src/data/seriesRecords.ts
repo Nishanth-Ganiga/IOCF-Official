@@ -41,3 +41,7 @@ export function resultText(r: SeriesRecord): string | null {
   if (!r.result) return null;
   return /^\d+-\d+$/.test(r.result) ? `${r.host.name} ${r.result.split('-')[0]} – ${r.result.split('-')[1]} ${r.opponents.length === 1 ? r.opponents[0].name : 'opponents'}` : r.result;
 }
+
+const slugNorm = (x: string) => x.toLowerCase().replace(/&/g, '').replace(/[^a-z0-9]/g, '');
+/** The key under which an earlier series' format and statistics are stored. Must match server/command/seriesStats.mjs. */
+export const recordKey = (name: string, host: string) => `rec-${slugNorm(name)}-${slugNorm(host)}`;

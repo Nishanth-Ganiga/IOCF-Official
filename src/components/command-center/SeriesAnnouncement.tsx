@@ -3,7 +3,8 @@ import { api, ApiError, type Series, type SeriesInput, type SeriesOverview } fro
 import { BOARD_THEMES, paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
 import cfg from '../../data/commandCenter/series.json';
 import { buildFixtures, stadiumBoards } from '../../data/commandCenter/fixtures.mjs';
-import SeriesHistory, { ItemCard, SourceNote, recordItems } from './SeriesHistory';
+import SeriesHistory, { ItemCard, NO_EXTRAS, SourceNote, recordItems, type Extras } from './SeriesHistory';
+import SeriesPlayerStats from './SeriesPlayerStats';
 
 type Go = (sub?: string) => void;
 
@@ -27,7 +28,10 @@ const day = (d: string | null) => (d ? new Date(`${d}T00:00:00Z`).toLocaleDateSt
 export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: BoardTheme; sub?: string; admin: boolean; go: Go }) {
   const [data, setData] = useState<SeriesOverview | null>(null);
   const [error, setError] = useState('');
+  const [extras, setExtras] = useState<Extras>(NO_EXTRAS);
   const load = useCallback(async () => {
+    // formats and statistics added by the administrator; if their tables are not set up yet the page simply shows without them
+    void Promise.allSettled([api.seriesMeta(), api.seriesStatsList()]).then(([m, s]) => setExtras({ meta: m.status === 'fulfilled' ? m.value.meta : {}, stats: s.status === 'fulfilled' ? s.value : [] }));
     try {
       setData(await api.series(theme.slug));
       setError('');
@@ -52,7 +56,7 @@ export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: B
     );
   if (!data) return <p className="mt-8 text-sm text-smoke" aria-busy="true">Loading…</p>;
 
-  const page = sub === 'announce' || sub === 'accept' || sub === 'upcoming' || sub === 'history' ? sub : null;
+  const page = sub === 'announce' || sub === 'accept' || sub === 'upcoming' || sub === 'history' || sub === 'stats' ? sub : null;
   return (
     <div className="mt-8">
       {page && (
@@ -60,22 +64,24 @@ export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: B
           ← BACK TO SERIES ANNOUNCEMENT
         </button>
       )}
-      {!page && <Hub theme={theme} data={data} go={go} />}
+      {!page && <Hub theme={theme} data={data} go={go} extras={extras} />}
       {page === 'announce' && <Announce theme={theme} data={data} admin={admin} reload={load} />}
       {page === 'accept' && <Accept theme={theme} data={data} admin={admin} reload={load} />}
-      {page === 'upcoming' && <Upcoming theme={theme} data={data} />}
-      {page === 'history' && <SeriesHistory theme={theme} data={data} />}
+      {page === 'upcoming' && <Upcoming theme={theme} data={data} extras={extras} />}
+      {page === 'history' && <SeriesHistory theme={theme} data={data} extras={extras} />}
+      {page === 'stats' && <SeriesPlayerStats theme={theme} />}
     </div>
   );
 }
 
-export function Hub({ theme, data, go }: { theme: BoardTheme; data: SeriesOverview; go: Go }) {
+export function Hub({ theme, data, go, extras = NO_EXTRAS }: { theme: BoardTheme; data: SeriesOverview; go: Go; extras?: Extras }) {
   const pal = paletteOf(theme);
   const tiles = [
     { id: 'announce', title: 'Announce a Series', text: 'Set up a new series and send it to your opponent.', badge: `${data.announced.filter((x) => x.status !== 'declined').length} announced` },
     { id: 'accept', title: 'Accept the Series', text: 'Series other boards have announced to you.', badge: data.invitations.length ? `${data.invitations.length} waiting` : 'none waiting', hot: data.invitations.length > 0 },
-    { id: 'upcoming', title: 'Upcoming Series', text: 'Every confirmed series across the federation.', badge: `${data.upcoming.length + recordItems('upcoming', data).length} upcoming` },
-    { id: 'history', title: 'Series History', text: 'Every completed series: winners, results and bets.', badge: `${(data.completed ?? []).length + recordItems('completed', data).length} completed` },
+    { id: 'upcoming', title: 'Upcoming Series', text: 'Every confirmed series across the federation.', badge: `${data.upcoming.length + recordItems('upcoming', data, extras.meta).length} upcoming` },
+    { id: 'history', title: 'Series History', text: 'Every completed series: winners, results and bets.', badge: `${(data.completed ?? []).length + recordItems('completed', data, extras.meta).length} completed` },
+    { id: 'stats', title: 'Player Stats', text: 'Every player\'s totals from the series statistics.', badge: `${extras.stats.length} series counted` },
   ];
   return (
     <>
@@ -86,7 +92,7 @@ export function Hub({ theme, data, go }: { theme: BoardTheme; data: SeriesOvervi
         <b className="text-bone">How it works:</b> use <b>Announce a Series</b> to propose a series to another board; the opponent confirms it under <b>Accept the Series</b> before 11:59 PM IST the same day; confirmed series are listed in <b>Upcoming Series</b>. Open each tile for step-by-step instructions.
       </p>
       <SourceNote hl={pal.highlight} />
-      <ul className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <ul className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {tiles.map((t) => (
           <li key={t.id}>
             <button type="button" onClick={() => go(t.id)} className="group block h-full w-full rounded-2xl border bg-black/55 p-5 text-left backdrop-blur-sm transition hover:-translate-y-0.5" style={{ borderColor: `${pal.highlight}66` }}>
@@ -182,9 +188,9 @@ function Guide({ title, hl, steps, rules }: { title: string; hl: string; steps: 
 
 /* ---------- upcoming ---------- */
 
-export function Upcoming({ theme, data }: { theme: BoardTheme; data: SeriesOverview }) {
+export function Upcoming({ theme, data, extras = NO_EXTRAS }: { theme: BoardTheme; data: SeriesOverview; extras?: Extras }) {
   const pal = paletteOf(theme);
-  const records = recordItems('upcoming', data);
+  const records = recordItems('upcoming', data, extras.meta);
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
       <Heading>UPCOMING SERIES</Heading>

@@ -151,6 +151,48 @@ export type AdminCredits = {
   recentAdjustments: { id: string; at: number; board: string; boardName: string; amount: number; reason: string; by: string | null; entered: boolean }[];
 };
 
+/** One player's line in a series' statistics (or, for the totals, over every uploaded series). */
+export type StatLine = {
+  name: string;
+  board: string | null;
+  boardName: string;
+  matches: number;
+  pom: number;
+  batInn: number;
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  thirties: number;
+  fifties: number;
+  hundreds: number;
+  notOuts: number;
+  bowlInn: number;
+  wickets: number;
+  runsConceded: number;
+  maidens: number;
+  ballsBowled: number;
+  dots: number;
+  threeW: number;
+  fiveW: number;
+  catches: number;
+  stumpings: number;
+  runOuts: number;
+  avg: number;
+  sr: number;
+  bowlAvg: number;
+  economy: number;
+  /** The highest score as the scorer wrote it ("71*"), or the number for totals. */
+  hs: string | number | null;
+  best: string | null;
+  hsNotOut?: boolean;
+  /** Totals only: in how many series he appears. */
+  series?: number;
+};
+export type SeriesStatsSummary = { key: string; kind: 'site' | 'record'; name: string; title: string | null; players: number; uploadedAt: number };
+export type SeriesStatsDetail = { key: string; name: string; title: string | null; uploadedAt: number; players: StatLine[] };
+export type TotalsResponse = { series: number; players: StatLine[] };
+
 export const api = {
   me: () => request<{ user: CcUser }>('GET', '/me').then((r) => r.user),
   login: (role: Role, username: string, password: string) => request<{ user: CcUser }>('POST', '/login', { role, username, password }).then((r) => r.user),
@@ -177,4 +219,12 @@ export const api = {
   markEntered: (what: { seriesId?: string; adjustmentId?: string; all?: boolean; entered: boolean }) => request<{ updated: number }>('POST', '/admin/credits/entered', what),
   removeAdjustment: (id: string) => request<{ ok: true }>('DELETE', `/admin/credits/adjustments/${encodeURIComponent(id)}`),
   declineSeries: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/decline`),
+  seriesMeta: () => request<{ meta: Record<string, string>; choices: string[] }>('GET', '/series-meta'),
+  seriesStatsList: () => request<{ stats: SeriesStatsSummary[] }>('GET', '/series-stats').then((r) => r.stats),
+  seriesStats: (key: string) => request<SeriesStatsDetail>('GET', `/series-stats/${encodeURIComponent(key)}`),
+  uploadSeriesStats: (key: string, csv: string, name: string) => request<{ ok: true; players: number; warnings: string[] }>('PUT', `/admin/series-stats/${encodeURIComponent(key)}`, { csv, name }),
+  removeSeriesStats: (key: string) => request<{ ok: true }>('DELETE', `/admin/series-stats/${encodeURIComponent(key)}`),
+  setSeriesFormat: (key: string, format: string | null) => request<{ ok: true }>('PUT', `/admin/series-meta/${encodeURIComponent(key)}`, { format }),
+  /** The totals of every player over the uploaded series. No sign-in needed. */
+  seriesTotals: () => request<TotalsResponse>('GET', '/public/series-stats'),
 };
