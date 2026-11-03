@@ -435,18 +435,6 @@
   ]
  },
  {
-  "name": "Rukkiya",
-  "board": "west-indies",
-  "aliases": [
-   {
-    "name": "Kukku",
-    "boards": [
-     "west-indies"
-    ]
-   }
-  ]
- },
- {
   "name": "Dhurbo Rajbongshi",
   "board": "zimbabwe",
   "aliases": [
@@ -594,6 +582,24 @@
     "name": "Aashutosh",
     "boards": [
      "new-zealand"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Ajitha Thankachan",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Kukku",
+    "boards": [
+     "west-indies"
+    ]
+   },
+   {
+    "name": "Ajitha",
+    "boards": [
+     "west-indies"
     ]
    }
   ]
