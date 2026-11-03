@@ -576,5 +576,26 @@
     "name": "Aditya Mahajan"
    }
   ]
+ },
+ {
+  "name": "Ashutosh Jha",
+  "board": "new-zealand",
+  "aliases": [
+   {
+    "name": "Aashutosh Jha"
+   },
+   {
+    "name": "Ashutosh",
+    "boards": [
+     "new-zealand"
+    ]
+   },
+   {
+    "name": "Aashutosh",
+    "boards": [
+     "new-zealand"
+    ]
+   }
+  ]
  }
 ]
