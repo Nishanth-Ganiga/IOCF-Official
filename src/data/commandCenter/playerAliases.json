@@ -603,5 +603,17 @@
     ]
    }
   ]
+ },
+ {
+  "name": "Anish Babu Koni",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Anish Babu",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
  }
 ]
