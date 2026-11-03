@@ -951,6 +951,8 @@ if (fs.existsSync('IOCF ALL BOARDS .xlsx')) {
     }
   }
   check('every chairman and CEO has a player entry on his board (a roster spelling that fits is used, otherwise one is created)', missing.length === 0, missing.join('; '));
+  const bhavin = dataset.players.filter((p) => p.name === 'Bhavin Kumar');
+  check('a player who moved boards (scripts/sync/transfers.mjs) is only on his new board, which also gets the awards recorded under the old one', bhavin.length === 1 && bhavin[0].boardId === 'south-africa' && bhavin[0].achievements.some((x) => x.title === 'Best Bat Average') && bhavin[0].achievements.some((x) => x.title === 'Best Bowler'));
   check('they are marked with their role, and the players list still has no duplicates of a name on one board', dataset.players.some((p) => p.official === 'Chairman') && dataset.players.some((p) => p.official === 'CEO') && new Set(dataset.players.map((p) => `${p.boardId}|${norm(p.name)}`)).size === dataset.players.length);
 }
 
