@@ -18,6 +18,7 @@ const EMPTY: SeriesInput = { name: '', type: '', opponents: [], matches: 0, stad
 
 /** Today's date in India (YYYY-MM-DD): match dates cannot be earlier. */
 const todayIst = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 const lastDay = () => new Date(Date.now() + 330 * 60000 + 366 * 86400000).toISOString().slice(0, 10);
 const day = (d: string | null) => (d ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }) : 'date to be confirmed');
 
@@ -409,7 +410,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
   };
 
   const ready =
-    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] >= todayIst() && (i === 0 || form.dates[i] >= form.dates[i - 1])) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
+    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] > todayIst() && (i === 0 || form.dates[i] > form.dates[i - 1])) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
 
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
@@ -429,7 +430,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
           <><b>Series type</b> — choose Bilateral (you and one opponent), Trilateral (you and two opponents) or Quadrilateral (you and three opponents).</>,
           <><b>Opponent board(s)</b> — pick them from the list of the other 25 boards. A board can only be chosen once.</>,
           <><b>Number of matches</b> — Bilateral: 1, 3, 5 or 7. Trilateral: 4 or 7. Quadrilateral: 7 or 13.</>,
-          <><b>Stadium and date for each match</b> — in a bilateral series choose your home stadium and the date for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium and a date for each one; the stadium comes from the stadiums of the two teams playing it. Dates cannot be in the past, cannot be more than a year away, and must not go backwards from one match to the next. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled, so it has no stadium or date.</>,
+          <><b>Stadium and date for each match</b> — in a bilateral series choose your home stadium and the date for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium and a date for each one; the stadium comes from the stadiums of the two teams playing it. A series cannot start on the day you announce it, so the first match must be on a later date. Each match needs its own date: two matches of the same series cannot be on the same day, and each match must be after the one before it. Dates cannot be more than a year away. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled, so it has no stadium or date.</>,
           <><b>Bet amount</b> — choose one of ₹1,000 · 2,000 · 3,000 · 4,000 · 5,000 · 10,000 · 20,000 · 50,000.</>,
           <><b>Format</b> — Club, T10, T20, TEST, ODI or L4I. If you choose <b>Club</b>, also choose the club format: 4 overs 4 wickets up to 9 overs 9 wickets.</>,
           <>Press <b>Send</b>. The series goes straight to your opponent’s “Accept the Series” tile.</>,
@@ -511,7 +512,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
                         </label>
                         <label className="block">
                           <span className="sr-only">Date of match {f.no}</span>
-                          <input type="date" value={form.dates[f.no - 1] ?? ''} min={f.no > 1 && form.dates[f.no - 2] && form.dates[f.no - 2] > todayIst() ? form.dates[f.no - 2] : todayIst()} max={lastDay()} onChange={(e) => set({ dates: scheduled.map((_, i) => (i === f.no - 1 ? e.target.value : (form.dates[i] ?? ''))) })} className={`${field} mt-0`} />
+                          <input type="date" value={form.dates[f.no - 1] ?? ''} min={f.no > 1 && form.dates[f.no - 2] && form.dates[f.no - 2] > todayIst() ? nextDay(form.dates[f.no - 2]) : nextDay(todayIst())} max={lastDay()} onChange={(e) => set({ dates: scheduled.map((_, i) => (i === f.no - 1 ? e.target.value : (form.dates[i] ?? ''))) })} className={`${field} mt-0`} />
                         </label>
                       </>
                     )}

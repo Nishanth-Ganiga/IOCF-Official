@@ -59,13 +59,16 @@ export function validateSeries(input, host, boards, t = Date.now()) {
   if (stadiums.length !== fixtures.length || fixtures.some((f, k) => !stadiumBoards(type.id, f, host).some((b) => (STADIUMS[b] ?? []).includes(stadiums[k])))) {
     return { error: fixtures.length === 1 ? 'Choose the stadium for the match.' : `Choose a stadium for each of the ${fixtures.length} scheduled matches.` };
   }
-  // every scheduled match also has a date: not in the past, within a year, and never earlier than the match before it
+  // every scheduled match also has a date: after the day the series is announced (a series cannot start on that day), within a year, and
+  // every match on a later date than the one before it (two matches of one series are never on the same date)
   const dates = Array.isArray(i.dates) ? i.dates.map(String) : [];
   const today = istDay(t);
   const last = istDay(t + 366 * 86400000);
   if (dates.length !== fixtures.length || dates.some((d) => !validDay(d))) return { error: fixtures.length === 1 ? 'Choose the date of the match.' : `Choose a date for each of the ${fixtures.length} scheduled matches.` };
   if (dates.some((d) => d < today)) return { error: 'A match date cannot be in the past.' };
+  if (dates.some((d) => d === today)) return { error: 'A series cannot start on the day it is announced. Choose a later date for the first match.' };
   if (dates.some((d) => d > last)) return { error: 'A match date cannot be more than a year away.' };
+  if (dates.some((d, k) => k > 0 && d === dates[k - 1])) return { error: 'Two matches of the same series cannot be on the same date. Give each match its own date.' };
   if (dates.some((d, k) => k > 0 && d < dates[k - 1])) return { error: 'Match dates must be in order: a match cannot be earlier than the one before it.' };
   const bet = Number(i.bet);
   if (!SERIES_CFG.bets.includes(bet)) return { error: 'Choose the bet amount from the list.' };
