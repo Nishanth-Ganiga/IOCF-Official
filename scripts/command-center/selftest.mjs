@@ -999,6 +999,29 @@ console.log('\n— A deployment can switch sign-in off —');
   check('with COMMAND_CENTER_SIGNIN=off the login does not exist (404), while the public data still works', r1.status === 404 && r2.status === 200);
 }
 
+
+console.log('\n— Data modules that copy the dataset when first loaded —');
+{
+  // leagues.ts, boards.ts, players.ts and umpires.ts take a copy of the dataset when they are first loaded, so they must only be loaded
+  // after the data has arrived (dynamic import). A static import of a VALUE from them would load them at start-up, empty, and the
+  // Franchise Leagues, Boards, Players and Umpires profiles would show nothing.
+  const offenders = [];
+  const walk = (dir) => {
+    for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, f.name);
+      if (f.isDirectory()) walk(full);
+      else if (/\.(tsx?|mjs)$/.test(f.name)) {
+        for (const line of fs.readFileSync(full, 'utf8').split('\n')) {
+          if (/^import\s+(?!type\b)[^;]*from\s+'(\.{1,2}\/)+(data\/)?(leagues|boards|players|umpires)'/.test(line) && !/^import\s+type\b/.test(line)) offenders.push(`${path.relative('src', full)}: ${line.trim()}`);
+        }
+      }
+    }
+  };
+  walk('src/components');
+  walk('src/hooks');
+  check('no component loads leagues / boards / players / umpires at start-up (they are imported dynamically, after the data)', offenders.length === 0, offenders.join(' | '));
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

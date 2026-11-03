@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Board } from '../data/boards';
 import { FORMAT_LABEL, FORMAT_ORDER } from '../data/careerStats.mjs';
-import { standings } from '../data/leagues';
 import type { ProfileId } from '../data/portfolio';
 import { CATEGORIES, boardsIn, rankPlayers, rankRows, seriesTable, type Category, type Person, type RankedPlayer } from '../data/rankingsCore.mjs';
 import { loadBoardPeople, loadFranchisePeople, loadSeriesResults, type SeriesResult } from '../data/rankingsData';
@@ -14,6 +13,9 @@ import SiteFooter from './SiteFooter';
 
 type BoardsModule = typeof import('../data/boards');
 type InsightsModule = typeof import('../data/boardInsights');
+// NOT imported at the top of this file: data/leagues.ts takes a copy of the leagues when it is first loaded, so it must only be loaded after the
+// dataset (and so also from the Franchise Leagues profile, which loads it the same way).
+type LeaguesModule = typeof import('../data/leagues');
 const ROUTE = '#/rankings';
 const GOLD = '#c9a24b';
 
@@ -53,12 +55,12 @@ function useRoute() {
   return route;
 }
 
-type Data = { b: BoardsModule; i: InsightsModule };
+type Data = { b: BoardsModule; i: InsightsModule; l: LeaguesModule };
 function useData() {
   const [data, setData] = useState<Data | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    Promise.all([import('../data/boards'), import('../data/boardInsights')]).then(([b, i]) => setData({ b, i }), () => setFailed(true));
+    Promise.all([import('../data/boards'), import('../data/boardInsights'), import('../data/leagues')]).then(([b, i, l]) => setData({ b, i, l }), () => setFailed(true));
   }, []);
   return { data, failed };
 }
@@ -397,8 +399,7 @@ function LeagueTables({ data }: { data: Data }) {
   const [id, setId] = useState(leagues[0]?.id ?? '');
   const league = leagues.find((l) => l.id === id);
   if (!league) return <Notice tone="info">No franchise league has results yet.</Notice>;
-  const rows = ranked(standings(league), (r) => r.won * 1000 - r.lost, (r) => r.team);
-  void data;
+  const rows = ranked(data.l.standings(league), (r) => r.won * 1000 - r.lost, (r) => r.team);
   return (
     <>
       <Pills value={id} options={leagues.map((l) => ({ id: l.id, label: l.shortName ?? l.name }))} onPick={setId} label="League" />
