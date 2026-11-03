@@ -3,4 +3,8 @@
 // every sync, so it keeps holding until the line is removed (remove it if the player ever returns). Board names as in the sheet's tabs.
 export const TRANSFERS = [
   { name: 'Bhavin Kumar', from: 'Pakistan', to: 'South Africa' },
+  // Adithya Mahajan ("Aditya" in the scorer exports) played for these boards and is now in the USA
+  { name: 'Adithya Mahajan', from: 'Bangladesh', to: 'USA' },
+  { name: 'Adithya Mahajan', from: 'Qatar', to: 'USA' },
+  { name: 'Adithya Mahajan', from: 'South Africa', to: 'USA' },
 ];
