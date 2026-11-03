@@ -3,7 +3,7 @@ export type Person = { key: string; name: string; boardSlug: string; boardName: 
 export function groupPlayers(lines: any[], opts?: { aliases?: AliasIndex; rosterBoard?: (name: string) => string | undefined }): Person[];
 export type Category = { id: string; label: string; get: (t: any) => number; show?: (t: any) => string; low?: boolean; ok: (t: any) => boolean; note?: string };
 export const CATEGORIES: { batting: Category[]; bowling: Category[]; fielding: Category[]; awards: Category[] };
-export type RankedPlayer = { rank: number; name: string; boardName: string; boardSlug: string; totals: any; display: string; value: number };
+export type RankedPlayer = { key: string; rank: number; name: string; boardName: string; boardSlug: string; totals: any; display: string; value: number };
 export function rankRows<T extends { name: string }>(rows: T[], value: (r: T) => number, low?: boolean): (T & { rank: number })[];
 export function rankPlayers(people: Person[], category: Category, format?: string): RankedPlayer[];
 export function seriesTable(series: { boards: (string | null)[]; winner: string | null; format?: string | null }[], opts?: { format?: string }): { slug: string; played: number; won: number; lost: number; drawn: number; winPct: number }[];

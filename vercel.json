@@ -64,8 +64,8 @@
       "includeFiles": "iocf.config.json"
     },
     "api/command-center.mjs": {
-      "maxDuration": 15,
-      "includeFiles": "src/data/commandCenter/**"
+      "maxDuration": 30,
+      "includeFiles": "{src/data/**,iocf.config.json}"
     }
   }
 }

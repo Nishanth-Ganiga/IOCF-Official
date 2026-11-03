@@ -96,7 +96,7 @@ export function rankPlayers(people, category, format = 'all') {
     if (!lines.length) continue;
     const totals = sumLines(lines);
     if (!category.ok(totals)) continue;
-    rows.push({ name: p.name, boardName: p.boardName, boardSlug: p.boardSlug, totals, display: category.show ? category.show(totals) : String(category.get(totals)), value: category.get(totals) });
+    rows.push({ key: p.key, name: p.name, boardName: p.boardName, boardSlug: p.boardSlug, totals, display: category.show ? category.show(totals) : String(category.get(totals)), value: category.get(totals) });
   }
   return rankRows(rows, (r) => r.value, Boolean(category.low));
 }

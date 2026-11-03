@@ -3,6 +3,8 @@ import type { Board } from '../data/boards';
 import { FORMAT_LABEL, FORMAT_ORDER } from '../data/careerStats.mjs';
 import type { ProfileId } from '../data/portfolio';
 import { CATEGORIES, boardsIn, rankPlayers, rankRows, seriesTable, type Category, type Person, type RankedPlayer } from '../data/rankingsCore.mjs';
+import { api } from '../data/commandApi';
+import { rankingId } from '../data/commandCenter/rankingIds.mjs';
 import { loadBoardPeople, loadFranchisePeople, loadSeriesResults, type SeriesResult } from '../data/rankingsData';
 import { store } from '../data/store';
 import { useSmoothScroll } from '../hooks/smoothScroll';
@@ -225,11 +227,35 @@ function BoardCell({ name, slug, data }: { name: string; slug?: string | null; d
   );
 }
 
-function Move({ by }: { by: number | undefined }) {
-  if (by === undefined) return <span className="text-smoke">—</span>;
-  if (by === 0) return <span className="text-smoke">–</span>;
-  return <span style={{ color: by > 0 ? '#6fcf8e' : '#e07a7a' }}>{by > 0 ? `▲ ${by}` : `▼ ${-by}`}</span>;
+type Moves = Record<string, { by: number; isNew: boolean }>;
+
+/**
+ * How far each entry of a ranking moved in the last 10 days, worked out and remembered by the server (a move disappears after 10 days).
+ * undefined while loading; null if the server could not be reached (the Move column then shows nothing).
+ */
+function useMoves(id: string): Moves | null | undefined {
+  const [state, setState] = useState<{ id: string; moves: Moves | null } | undefined>();
+  useEffect(() => {
+    let live = true;
+    api.rankMoves(id).then(
+      (r) => live && setState({ id, moves: r.moves }),
+      () => live && setState({ id, moves: null }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  return state?.id === id ? state.moves : undefined;
 }
+
+function Move({ m, loading = false }: { m?: { by: number; isNew: boolean }; loading?: boolean }) {
+  if (loading) return <span className="text-smoke">·</span>;
+  if (!m) return <span className="text-smoke" title="No move in the last 10 days">–</span>;
+  if (m.isNew) return <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-[0.12em]" style={{ borderColor: GOLD, color: GOLD }} title="New in this ranking in the last 10 days">NEW</span>;
+  return <span style={{ color: m.by > 0 ? '#6fcf8e' : '#e07a7a' }} title="Moved in the last 10 days">{m.by > 0 ? `▲ ${m.by}` : `▼ ${-m.by}`}</span>;
+}
+
+const MOVE_NOTE = 'Move: how far an entry has moved up (▲) or down (▼) since its rank last changed. A move shows for 10 days and then disappears.';
 
 /** Ranks with ties from a list already ordered best first. */
 const ranked = <T,>(rows: T[], value: (r: T) => number, name: (r: T) => string, low = false) => rankRows(rows.map((r) => ({ r, name: name(r) })), (x) => value(x.r), low).map((x) => ({ ...x.r, rank: x.rank }));
@@ -264,6 +290,7 @@ function BoardRankings({ data }: { data: Data }) {
   const formats = ['Overall', ...['T10', 'T20', 'ODI', 'Test', 'Club']].filter((f) => data.b.boards.some((b) => data.i.rankIn(b, f)));
   const [format, setFormat] = useState(formats[0] ?? 'Overall');
   const rows = data.b.boards.filter((b) => data.i.rankIn(b, format)).sort((a, b) => data.i.rankIn(a, format)!.rank - data.i.rankIn(b, format)!.rank);
+  const moves = useMoves(rankingId.boards(format));
   return (
     <>
       <Pills value={format} options={formats.map((f) => ({ id: f, label: f }))} onPick={setFormat} label="Format" />
@@ -273,11 +300,11 @@ function BoardRankings({ data }: { data: Data }) {
           rows={rows.map((b: Board) => {
             const r = data.i.rankIn(b, format)!;
             const win = data.i.winRate(r);
-            return { key: b.name, cells: [r.rank, <BoardCell key="b" name={b.name} data={data} />, r.points ?? '—', r.played ?? '—', r.won ?? '—', win === undefined ? '—' : `${Math.round(win * 100)}%`, <Move key="m" by={data.i.movement(b, format)} />] };
+            return { key: b.name, cells: [r.rank, <BoardCell key="b" name={b.name} data={data} />, r.points ?? '—', r.played ?? '—', r.won ?? '—', win === undefined ? '—' : `${Math.round(win * 100)}%`, <Move key="m" m={moves?.[data.b.boardSlug(b)]} loading={moves === undefined} />] };
           })}
         />
       </div>
-      <p className="mt-3 text-xs text-smoke">Movement is the change since the rankings last changed.</p>
+      <p className="mt-3 text-xs text-smoke">{MOVE_NOTE}</p>
     </>
   );
 }
@@ -288,12 +315,19 @@ function CreditRankings({ data }: { data: Data }) {
     (b) => data.i.creditsOf(b)!,
     (b) => b.name,
   );
-  return <Table head={[{ label: 'Rank' }, { label: 'Board' }, { label: 'Credits', right: true }]} rows={rows.map((b) => ({ key: b.name, cells: [b.rank, <BoardCell key="b" name={b.name} data={data} />, data.i.creditsOf(b)!.toLocaleString('en-IN')] }))} />;
+  const moves = useMoves(rankingId.credits());
+  return (
+    <>
+      <Table head={[{ label: 'Rank' }, { label: 'Board' }, { label: 'Credits', right: true }, { label: 'Move', right: true }]} rows={rows.map((b) => ({ key: b.name, cells: [b.rank, <BoardCell key="b" name={b.name} data={data} />, data.i.creditsOf(b)!.toLocaleString('en-IN'), <Move key="m" m={moves?.[data.b.boardSlug(b)]} loading={moves === undefined} />] }))} />
+      <p className="mt-3 text-xs text-smoke">{MOVE_NOTE}</p>
+    </>
+  );
 }
 
 function SeriesRankings({ data }: { data: Data }) {
   const [list, setList] = useState<SeriesResult[] | null>(null);
   const [format, setFormat] = useState('all');
+  const moves = useMoves(rankingId.series(format));
   useEffect(() => {
     loadSeriesResults().then(setList, () => setList([]));
   }, []);
@@ -307,10 +341,11 @@ function SeriesRankings({ data }: { data: Data }) {
       <p className="mt-3 text-xs text-smoke">{list.length} finished series: the earlier series from the IOCF records and the ones announced on the site. Ranked by series won, then win %. A series with no format counts in “All formats” only.</p>
       <div className="mt-4">
         <Table
-          head={[{ label: 'Rank' }, { label: 'Board' }, { label: 'Played', right: true }, { label: 'Won', right: true }, { label: 'Lost', right: true }, { label: 'Drawn', right: true }, { label: 'Win %', right: true }]}
-          rows={rows.map((r) => ({ key: r.slug, cells: [r.rank, <BoardCell key="b" name={r.name} slug={r.slug} data={data} />, r.played, r.won, r.lost, r.drawn || '—', `${r.winPct}%`] }))}
+          head={[{ label: 'Rank' }, { label: 'Board' }, { label: 'Played', right: true }, { label: 'Won', right: true }, { label: 'Lost', right: true }, { label: 'Drawn', right: true }, { label: 'Win %', right: true }, { label: 'Move', right: true }]}
+          rows={rows.map((r) => ({ key: r.slug, cells: [r.rank, <BoardCell key="b" name={r.name} slug={r.slug} data={data} />, r.played, r.won, r.lost, r.drawn || '—', `${r.winPct}%`, <Move key="m" m={moves?.[r.slug]} loading={moves === undefined} />] }))}
         />
       </div>
+      <p className="mt-3 text-xs text-smoke">{MOVE_NOTE}</p>
     </>
   );
 }
@@ -342,6 +377,7 @@ function PlayerRankings({ kind }: { kind: 'batting' | 'bowling' | 'fielding' | '
   const q = query.trim().toLowerCase();
   const shown = q ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.boardName.toLowerCase().includes(q)) : rows;
   const cols = KIND_COLS[kind];
+  const moves = useMoves(rankingId.players(scope, kind, category.id, scope === 'board' ? format : 'all'));
 
   if (error) return <Notice tone="error">The statistics could not be loaded. Please refresh the page to try again.</Notice>;
   return (
@@ -361,11 +397,11 @@ function PlayerRankings({ kind }: { kind: 'batting' | 'bowling' | 'fielding' | '
           <Loading />
         ) : (
           <Table
-            head={[{ label: 'Rank' }, { label: 'Player' }, ...cols.map((c) => ({ label: c.label, right: true })), { label: category.label, right: true }]}
+            head={[{ label: 'Rank' }, { label: 'Player' }, ...cols.map((c) => ({ label: c.label, right: true })), { label: category.label, right: true }, { label: 'Move', right: true }]}
             empty={q ? 'No player matches.' : 'Nobody is ranked here yet.'}
             rows={shown.slice(0, limit).map((r) => ({
-              key: `${r.name}-${r.boardSlug}`,
-              cells: [r.rank, <span key="p" className="block"><span className="font-medium">{r.name}</span><span className="block text-[11px] text-smoke">{r.boardName}</span></span>, ...cols.map((c) => c.get(r.totals)), <b key="v" style={{ color: GOLD }}>{r.display}</b>],
+              key: r.key,
+              cells: [r.rank, <span key="p" className="block"><span className="font-medium">{r.name}</span><span className="block text-[11px] text-smoke">{r.boardName}</span></span>, ...cols.map((c) => c.get(r.totals)), <b key="v" style={{ color: GOLD }}>{r.display}</b>, <Move key="m" m={moves?.[r.key]} loading={moves === undefined} />],
             }))}
           />
         )}
@@ -375,6 +411,7 @@ function PlayerRankings({ kind }: { kind: 'batting' | 'bowling' | 'fielding' | '
           SHOW 50 MORE ({shown.length - limit} LEFT)
         </button>
       )}
+      <p className="mt-3 text-xs text-smoke">{MOVE_NOTE} Moves are tracked for the top 100 of each ranking.</p>
     </>
   );
 }
@@ -386,11 +423,15 @@ function UmpireRankings({ data }: { data: Data }) {
     (u) => u.name,
   );
   const board = (slug?: string) => data.b.boards.find((b) => data.b.boardSlug(b) === slug)?.name ?? '—';
+  const moves = useMoves(rankingId.umpires());
   return (
-    <Table
-      head={[{ label: 'Rank' }, { label: 'Umpire' }, { label: 'Board' }, { label: 'Matches', right: true }, { label: 'Credits', right: true }, { label: 'Points', right: true }]}
-      rows={rows.map((u) => ({ key: u.id, cells: [u.rank, u.name, board(u.boardId), u.career?.total ?? '—', u.performance?.credits?.toLocaleString('en-IN') ?? '—', <b key="p" style={{ color: GOLD }}>{u.performance!.points}</b>] }))}
-    />
+    <>
+      <Table
+        head={[{ label: 'Rank' }, { label: 'Umpire' }, { label: 'Board' }, { label: 'Matches', right: true }, { label: 'Credits', right: true }, { label: 'Points', right: true }, { label: 'Move', right: true }]}
+        rows={rows.map((u) => ({ key: u.id, cells: [u.rank, u.name, board(u.boardId), u.career?.total ?? '—', u.performance?.credits?.toLocaleString('en-IN') ?? '—', <b key="p" style={{ color: GOLD }}>{u.performance!.points}</b>, <Move key="m" m={moves?.[u.id]} loading={moves === undefined} />] }))}
+      />
+      <p className="mt-3 text-xs text-smoke">{MOVE_NOTE}</p>
+    </>
   );
 }
 
@@ -398,6 +439,7 @@ function LeagueTables({ data }: { data: Data }) {
   const leagues = store.leagues.filter((l) => l.matches.length > 0);
   const [id, setId] = useState(leagues[0]?.id ?? '');
   const league = leagues.find((l) => l.id === id);
+  const moves = useMoves(rankingId.league(id));
   if (!league) return <Notice tone="info">No franchise league has results yet.</Notice>;
   const rows = ranked(data.l.standings(league), (r) => r.won * 1000 - r.lost, (r) => r.team);
   return (
@@ -409,11 +451,11 @@ function LeagueTables({ data }: { data: Data }) {
       </p>
       <div className="mt-4">
         <Table
-          head={[{ label: 'Rank' }, { label: 'Team' }, { label: 'Played', right: true }, { label: 'Won', right: true }, { label: 'Lost', right: true }]}
-          rows={rows.map((r) => ({ key: r.id, cells: [r.rank, <span key="t" className={r.team === league.champions ? 'font-semibold' : ''} style={r.team === league.champions ? { color: GOLD } : undefined}>{r.team}{r.team === league.champions ? ' 🏆' : ''}</span>, r.played, r.won, r.lost] }))}
+          head={[{ label: 'Rank' }, { label: 'Team' }, { label: 'Played', right: true }, { label: 'Won', right: true }, { label: 'Lost', right: true }, { label: 'Move', right: true }]}
+          rows={rows.map((r) => ({ key: r.id, cells: [r.rank, <span key="t" className={r.team === league.champions ? 'font-semibold' : ''} style={r.team === league.champions ? { color: GOLD } : undefined}>{r.team}{r.team === league.champions ? ' 🏆' : ''}</span>, r.played, r.won, r.lost, <Move key="m" m={moves?.[`${league.id}:${r.id}`]} loading={moves === undefined} />] }))}
         />
       </div>
-      <p className="mt-3 text-xs text-smoke">League-stage matches only, ranked by wins.</p>
+      <p className="mt-3 text-xs text-smoke">League-stage matches only, ranked by wins. {MOVE_NOTE}</p>
     </>
   );
 }
@@ -430,11 +472,13 @@ function MajorTitles({ data }: { data: Data }) {
     return { name, titles, runnersUp };
   }).filter((r) => r.titles + r.runnersUp > 0);
   const rows = ranked(tally, (r) => r.titles * 1000 + r.runnersUp, (r) => r.name);
+  const moves = useMoves(rankingId.majors());
   return (
     <>
       <h2 className="font-display text-2xl tracking-wide text-bone">BOARDS BY TITLES</h2>
       <div className="mt-3">
-        <Table head={[{ label: 'Rank' }, { label: 'Board' }, { label: 'Titles', right: true }, { label: 'Runners-up', right: true }]} rows={rows.map((r) => ({ key: r.name, cells: [r.rank, <BoardCell key="b" name={r.name} data={data} />, r.titles, r.runnersUp] }))} />
+        <Table head={[{ label: 'Rank' }, { label: 'Board' }, { label: 'Titles', right: true }, { label: 'Runners-up', right: true }, { label: 'Move', right: true }]} rows={rows.map((r) => ({ key: r.name, cells: [r.rank, <BoardCell key="b" name={r.name} data={data} />, r.titles, r.runnersUp, <Move key="m" m={moves?.[r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')]} loading={moves === undefined} />] }))} />
+        <p className="mt-3 text-xs text-smoke">{MOVE_NOTE}</p>
       </div>
       <h2 className="mt-10 font-display text-2xl tracking-wide text-bone">EVERY MAJOR TOURNAMENT</h2>
       <div className="mt-3">

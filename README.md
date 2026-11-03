@@ -145,3 +145,7 @@ Browsers' phishing checks can flag a public site that contains a username and pa
 
 With nothing set, everything works as before (one site, Command Center included).
 
+### Rank movement
+
+Every ranking in the Rankings profile has a **Move** column (▲ up, ▼ down, NEW). The server re-works out all rankings from the live data at most every 10 minutes (when someone opens a ranking), compares them with the last ranks it stored (table `command_rank_state`, created by `server/command/rank.sql`), and records when each entry's rank last changed. A move shows for **10 days** and then disappears. The first run only stores a baseline, so nothing shows as moved until something changes. Moves are tracked for the top 100 of each ranking.
+

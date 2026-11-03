@@ -61,6 +61,22 @@ export class MemoryStore {
   async metaList() {
     return (this.data.meta ??= []).map((x) => ({ ...x }));
   }
+  async rankList() {
+    return (this.data.rank ??= []).map((x) => ({ ...x }));
+  }
+  async rankGet(key) {
+    const r = (this.data.rank ??= []).find((x) => x.key === key);
+    return r ? { ...r } : null;
+  }
+  async rankPutMany(rows) {
+    const list = (this.data.rank ??= []);
+    for (const row of rows) {
+      const i = list.findIndex((x) => x.key === row.key);
+      if (i >= 0) list[i] = { ...row };
+      else list.push({ ...row });
+    }
+    await this.persist();
+  }
   async metaPut(row) {
     const list = (this.data.meta ??= []);
     const i = list.findIndex((x) => x.key === row.key);
@@ -248,6 +264,9 @@ export class KeyedRest {
   async put(row) {
     return (await this.req('POST', '?on_conflict=key', row, { prefer: 'resolution=merge-duplicates,return=representation' }))[0];
   }
+  async putMany(rows) {
+    if (rows.length) await this.req('POST', '?on_conflict=key', rows, { prefer: 'resolution=merge-duplicates,return=minimal' });
+  }
   async delete(key) {
     return ((await this.req('DELETE', `?key=eq.${encodeURIComponent(key)}`, undefined, { prefer: 'return=representation' })) ?? []).length > 0;
   }
@@ -257,6 +276,7 @@ export class KeyedRest {
 export function keyedMethods(url, serviceKey, fetchImpl) {
   const stats = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_series_stats', missing: 'series statistics' });
   const meta = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_series_meta', missing: 'series details' });
+  const rank = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_rank_state', missing: 'rankings' });
   return {
     statsList: ({ summary = false } = {}) => stats.list(summary ? 'key,kind,name,title,tour,players,uploaded_at,uploaded_by' : '*'),
     statsGet: (key) => stats.get(key),
@@ -265,6 +285,9 @@ export function keyedMethods(url, serviceKey, fetchImpl) {
     metaList: () => meta.list(),
     metaPut: (row) => meta.put(row),
     metaDelete: (key) => meta.delete(key),
+    rankList: () => rank.list(),
+    rankGet: (key) => rank.get(key),
+    rankPutMany: (rows) => rank.putMany(rows),
   };
 }
 

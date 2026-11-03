@@ -20,6 +20,7 @@
 //   PUT  /admin/series-meta/:key        admin only   { format }  sets the format of an earlier series
 //   GET  /series-meta, /series-stats, /series-stats/:key   signed-in: formats of earlier series, statistics of a series
 //   GET  /public/series-stats           public: every player's totals over the uploaded series
+//   GET  /public/rank-moves/:ranking    public: how far each entry of a ranking moved in the last 10 days (refreshes the ranks)
 //   GET  /public/tournament-stats       public: statistics uploaded for a Major Tournament (replace its bundled CSV)
 //   GET  /public/series-results         public: series with a recorded result + formats of earlier series (rankings)
 //   GET  /public/series-stats/lines     public: the statistics of every series line by line, with its format
@@ -37,6 +38,8 @@
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { SERIES_CFG, STADIUMS, activeCount, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { computeAllRankings } from '../../src/data/commandCenter/rankingsCompute.mjs';
+import { movesOf, updateState } from '../../src/data/commandCenter/rankMoves.mjs';
 import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
@@ -93,7 +96,9 @@ const fail = (status, code, message, extra = {}) => json(status, { error: { code
 
 const publicUser = (a) => ({ accountId: a.account_id, role: a.role, username: a.username, board: a.board_slug ?? null, boardName: a.board_name ?? null, chairmanName: a.chairman_name ?? null });
 
-export function createHandler({ store, env = process.env, now = () => Date.now() }) {
+const RANK_REFRESH_MS = 10 * 60 * 1000;
+
+export function createHandler({ store, env = process.env, now = () => Date.now(), rankInput }) {
   const secret = env.COMMAND_CENTER_SESSION_SECRET || randomBytes(32).toString('hex'); // a per-process secret still works for dev/tests
   const production = Boolean(env.COMMAND_CENTER_SESSION_SECRET);
 
@@ -112,6 +117,38 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
     const account = await store.findById(s.aid);
     if (!account || account.status !== 'active' || account.session_version !== s.sv || account.role !== s.role) return null;
     return account;
+  }
+
+  // ---- rank movement: every ranking is re-worked out at most every 10 minutes (when someone asks), and the new ranks are compared with the old
+  let refreshing = null;
+  const loadRankInput = rankInput ?? (async () => (await import('./rankInput.mjs')).loadRankingInput({ store }));
+  function refreshRankings() {
+    refreshing ??= (async () => {
+      try {
+        const t = now();
+        const meta = await store.rankGet('_meta');
+        if (meta && t - meta.state.at < RANK_REFRESH_MS) return;
+        await store.rankPutMany([{ key: '_meta', state: { at: t, entries: {} }, updated_at: t }]); // claim this refresh
+        let ranks;
+        try {
+          ranks = computeAllRankings(await loadRankInput());
+        } catch (e) {
+          // the sheet could not be read: try again in a minute rather than hammering it
+          await store.rankPutMany([{ key: '_meta', state: { at: t - RANK_REFRESH_MS + 60_000, entries: {} }, updated_at: t }]);
+          throw e;
+        }
+        const old = new Map((await store.rankList()).map((r) => [r.key, r.state]));
+        const rows = [];
+        for (const [id, list] of Object.entries(ranks)) {
+          const { state, changed } = updateState(old.get(id), list, t);
+          if (changed) rows.push({ key: id, state, updated_at: t });
+        }
+        await store.rankPutMany(rows);
+      } finally {
+        refreshing = null;
+      }
+    })();
+    return refreshing;
   }
 
   const enabledModules = async (slug) => {
@@ -204,6 +241,14 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         const entries = (await store.statsList()).filter((e) => e.kind !== 'tournament');
         const players = aggregate(entries, BOARDS);
         return json(200, { series: entries.length, players }, { 'cache-control': 'public, max-age=60, s-maxage=60' });
+      }
+
+      // public: how far each entry of a ranking has moved in the last 10 days
+      if (a === 'public' && b === 'rank-moves' && c && !d && method === 'GET') {
+        if (!/^[A-Za-z0-9._-]{1,120}$/.test(c)) return fail(400, 'invalid', 'Invalid ranking.');
+        await refreshRankings().catch((e) => console.error('[command-center] rankings refresh:', e instanceof Error ? e.message : e));
+        const row = await store.rankGet(c);
+        return json(200, { moves: movesOf(row?.state, now()), updatedAt: row?.updated_at ?? null }, { 'cache-control': 'public, max-age=60, s-maxage=60' });
       }
 
       // public: the player statistics the administrator uploaded for a Major Tournament; they replace the bundled CSV of that tournament

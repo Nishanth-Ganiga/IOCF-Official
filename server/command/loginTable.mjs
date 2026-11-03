@@ -217,7 +217,7 @@ export class AutoStore {
     throw Object.assign(new Error('No Command Center tables found.'), { code: 'not_configured' });
   }
 }
-for (const m of ['list', 'findById', 'findByUsername', 'create', 'update', 'moduleOverrides', 'setModuleOverride', 'addAudit', 'listAudit', 'getRate', 'bumpRate', 'clearRate', 'seriesList', 'seriesGet', 'seriesInsert', 'seriesUpdate', 'seriesDelete', 'creditsList', 'creditsInsert', 'creditsUpdate', 'creditsDelete', 'statsList', 'statsGet', 'statsPut', 'statsDelete', 'metaList', 'metaPut', 'metaDelete']) {
+for (const m of ['list', 'findById', 'findByUsername', 'create', 'update', 'moduleOverrides', 'setModuleOverride', 'addAudit', 'listAudit', 'getRate', 'bumpRate', 'clearRate', 'seriesList', 'seriesGet', 'seriesInsert', 'seriesUpdate', 'seriesDelete', 'creditsList', 'creditsInsert', 'creditsUpdate', 'creditsDelete', 'statsList', 'statsGet', 'statsPut', 'statsDelete', 'metaList', 'metaPut', 'metaDelete', 'rankList', 'rankGet', 'rankPutMany']) {
   AutoStore.prototype[m] = async function (...a) {
     return (await this.impl())[m](...a);
   };

@@ -327,7 +327,7 @@ check('admin table: the imported admin can sign in, and an e-mail style user id 
 const sqlAccounts = [...(await store.list())];
 sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x; --" };
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
-check('setup SQL: creates the 8 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 8 && (setupSql.match(/enable row level security/g) ?? []).length === 8);
+check('setup SQL: creates the 9 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 9 && (setupSql.match(/enable row level security/g) ?? []).length === 9);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
 check('setup SQL: has all 27 accounts and 26 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 27 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 26);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
@@ -1027,6 +1027,99 @@ console.log('\n— Data modules that copy the dataset when first loaded —');
   walk('src/components');
   walk('src/hooks');
   check('no component loads leagues / boards / players / umpires at start-up (they are imported dynamically, after the data)', offenders.length === 0, offenders.join(' | '));
+}
+
+
+console.log('\n— Rank movement (10-day moves) —');
+{
+  const { updateState, movesOf, MOVE_DAYS, DAY_MS } = await import('../../src/data/commandCenter/rankMoves.mjs');
+  const { computeAllRankings, rankingId } = await import('../../src/data/commandCenter/rankingsCompute.mjs');
+  const T0 = Date.UTC(2026, 10, 1);
+  const r = (...keys) => keys.map((key, i) => ({ key, rank: i + 1 }));
+  const base = updateState(null, r('a', 'b', 'c'), T0);
+  check('the first time a ranking is seen is a baseline: nothing has moved, and a baseline is stored', base.changed && Object.keys(movesOf(base.state, T0 + 1000)).length === 0 && base.state.entries.a.t === 0);
+  const same = updateState(base.state, r('a', 'b', 'c'), T0 + DAY_MS);
+  check('unchanged ranks change nothing (no write needed)', !same.changed && same.state.entries.b.r === 2);
+  const moved = updateState(base.state, r('b', 'a', 'c'), T0 + DAY_MS);
+  const mv = movesOf(moved.state, T0 + 2 * DAY_MS);
+  check('a rank change is a move: b went up 1, a down 1, c did not move', moved.changed && mv.b.by === 1 && mv.a.by === -1 && !('c' in mv));
+  check('a move shows for 10 days and then disappears (the entry keeps its rank)', Object.keys(movesOf(moved.state, T0 + DAY_MS + 9 * DAY_MS + 1000)).length === 2 && Object.keys(movesOf(moved.state, T0 + DAY_MS + MOVE_DAYS * DAY_MS)).length === 0 && moved.state.entries.b.r === 1);
+  const later = updateState(moved.state, r('b', 'c', 'a'), T0 + 5 * DAY_MS);
+  const mv2 = movesOf(later.state, T0 + 6 * DAY_MS);
+  check('a second move replaces the first one for that entry (a: 2→3 down 1, c: 3→2 up 1, each for 10 days from now); an entry that did not change (b) keeps its older move until that one expires', mv2.a.by === -1 && mv2.c.by === 1 && mv2.b.by === 1 && movesOf(later.state, T0 + DAY_MS + 11 * DAY_MS).b === undefined && movesOf(later.state, T0 + 5 * DAY_MS + 9 * DAY_MS).a.by === -1);
+  const joined = updateState(moved.state, r('b', 'a', 'c', 'd'), T0 + 2 * DAY_MS);
+  const mv3 = movesOf(joined.state, T0 + 3 * DAY_MS);
+  check('an entry that joins the ranking later is marked new for 10 days', mv3.d.isNew === true && mv3.d.by === 0 && movesOf(joined.state, T0 + 13 * DAY_MS).d === undefined);
+  const dropped = updateState(moved.state, r('b', 'a'), T0 + 2 * DAY_MS);
+  check('an entry that drops out of the list is forgotten (and is new again if it returns)', dropped.changed && !('c' in dropped.state.entries) && movesOf(updateState(dropped.state, r('b', 'a', 'c'), T0 + 3 * DAY_MS).state, T0 + 4 * DAY_MS).c.isNew === true);
+
+  // every ranking of the profile, computed from the dataset
+  const snap = JSON.parse(fs.readFileSync('src/data/snapshot.json', 'utf8'));
+  const input = { dataset: snap, tournamentStats: JSON.parse(fs.readFileSync('src/data/tournamentStats.json', 'utf8')), leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), aliases: JSON.parse(fs.readFileSync('src/data/commandCenter/playerAliases.json', 'utf8')), seriesStats: [], seriesResults: [], meta: {} };
+  const all = computeAllRankings(input);
+  const ids = Object.keys(all);
+  check('every ranking is worked out: boards (each format), credits, series, players (board and franchise, every category), umpires, league tables, titles', ids.includes('boards.Overall') && ids.includes('credits') && ids.includes('series.all') && ids.includes(rankingId.players('board', 'batting', 'runs')) && ids.includes(rankingId.players('franchise', 'bowling', 'wickets')) && ids.includes('umpires') && ids.includes('majors') && ids.some((i) => i.startsWith('league.')) && ids.length > 100);
+  check('each ranking lists at most 100 entries, ranked from 1, with unique keys', ids.every((i) => all[i].length <= 100 && all[i].every((x, k) => x.rank >= 1 && x.key && (k === 0 || x.rank >= all[i][k - 1].rank)) && new Set(all[i].map((x) => x.key)).size === all[i].length));
+  const again = computeAllRankings(input);
+  check('the same data gives the same ranks, so nothing counts as a move', JSON.stringify(again) === JSON.stringify(all));
+  // a rise in someone's runs moves him up
+  const sunaif = all[rankingId.players('board', 'batting', 'runs')][0];
+  const bumped = JSON.parse(JSON.stringify(input));
+  const runsIdx = bumped.tournamentStats.fields.indexOf('runs');
+  const nameIdx = bumped.tournamentStats.fields.indexOf('name');
+  const second = all[rankingId.players('board', 'batting', 'runs')][1];
+  for (const t of Object.values(bumped.tournamentStats.tournaments)) for (const row of t.rows) if (String(row[nameIdx]).toLowerCase().replace(/[^a-z0-9]/g, '') === second.key.split('|')[0]) row[runsIdx] = (row[runsIdx] ?? 0) + 5000;
+  const after = computeAllRankings(bumped)[rankingId.players('board', 'batting', 'runs')];
+  const st1 = updateState(null, all[rankingId.players('board', 'batting', 'runs')], T0).state;
+  const st2 = updateState(st1, after, T0 + DAY_MS).state;
+  const m = movesOf(st2, T0 + 2 * DAY_MS);
+  check('new statistics that put a player ahead show as a move for him (up) and for the player he passed (down)', sunaif.key !== second.key && after[0].key === second.key && m[second.key].by > 0 && m[sunaif.key].by < 0);
+}
+
+
+console.log('\n— Rank movement through the API —');
+{
+  const { rankingId } = await import('../../src/data/commandCenter/rankingsCompute.mjs');
+  const snap0 = JSON.parse(fs.readFileSync('src/data/snapshot.json', 'utf8'));
+  const base0 = { dataset: snap0, tournamentStats: JSON.parse(fs.readFileSync('src/data/tournamentStats.json', 'utf8')), leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), aliases: JSON.parse(fs.readFileSync('src/data/commandCenter/playerAliases.json', 'utf8')), seriesStats: [], seriesResults: [], meta: {} };
+  let current = base0;
+  let loads = 0;
+  let clock2 = Date.UTC(2026, 10, 3, 6, 0, 0);
+  const mStore = new MemoryStore();
+  const hMoves = createHandler({ store: mStore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock2, rankInput: async () => { loads++; return current; } });
+  const get = (id) => hMoves({ method: 'GET', path: ['public', 'rank-moves', id], headers: H, body: null, ip: '8.8.8.8' });
+  const id = rankingId.players('board', 'batting', 'runs');
+
+  const first = await get(id);
+  check('the first request works the ranks out and stores them as a baseline: no moves yet (public, no sign-in)', first.status === 200 && Object.keys(first.body.moves).length === 0 && loads === 1 && first.body.updatedAt === clock2);
+  clock2 += 5 * 60_000;
+  await get(id);
+  check('within 10 minutes the ranks are not worked out again', loads === 1);
+
+  // new statistics put the second player ahead
+  const bumped = JSON.parse(JSON.stringify(base0));
+  const fi = bumped.tournamentStats.fields;
+  const board = (await mStore.rankGet(id)).state.entries;
+  const ordered = Object.entries(board).sort((a, b) => a[1].r - b[1].r).map(([k]) => k);
+  const [leader, runnerUp] = ordered;
+  for (const t of Object.values(bumped.tournamentStats.tournaments)) for (const row of t.rows) if (String(row[fi.indexOf('name')]).toLowerCase().replace(/[^a-z0-9]/g, '') === runnerUp.split('|')[0]) row[fi.indexOf('runs')] = (row[fi.indexOf('runs')] ?? 0) + 5000;
+  current = bumped;
+  clock2 += 6 * 60_000; // 11 minutes since the first run
+  const second = await get(id);
+  check('after 10 minutes the ranks are worked out again, and the player who passed the leader shows a move up (the leader a move down)', loads === 2 && second.body.moves[runnerUp].by > 0 && second.body.moves[leader].by < 0);
+  clock2 += 9 * 86_400_000;
+  check('the move is still shown after 9 days…', Object.keys((await get(id)).body.moves).length > 0);
+  clock2 += 2 * 86_400_000;
+  check('…and gone after 10 days (the rank stays, the arrow goes)', Object.keys((await get(id)).body.moves).length === 0 && (await mStore.rankGet(id)).state.entries[runnerUp].r === 1);
+  check('other rankings are stored too, and an unknown or odd ranking id gives no moves / an error', Object.keys(await (async () => Object.fromEntries((await mStore.rankList()).map((r) => [r.key, 1])))()).length > 100 && (await get('nope')).body.moves && Object.keys((await get('nope')).body.moves).length === 0 && (await get('bad id!')).status === 400);
+  // the sheet cannot be read: the old moves stay, and it is retried soon
+  const failing = createHandler({ store: mStore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock2, rankInput: async () => { throw new Error('sheet down'); } });
+  clock2 += 3600_000;
+  const quiet = console.error;
+  console.error = () => {};
+  const down = await failing({ method: 'GET', path: ['public', 'rank-moves', id], headers: H, body: null, ip: '8.8.8.8' });
+  console.error = quiet;
+  check('if the sheet cannot be read the request still answers (with the stored moves)', down.status === 200);
 }
 
 console.log('\n— 11. the register stays private —');
