@@ -1,4 +1,5 @@
 // Turns the IOCF workbook (an ExcelJS workbook) into the JSON dataset the site reads.
+import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { Book } from './helpers.mjs';
 import { buildInfo } from './info.mjs';
@@ -32,7 +33,17 @@ export function buildDataset(book, meta = {}) {
     info: buildInfo(ledger.fed),
   };
   validate(dataset);
-  return { dataset, report: { boards: dataset.boards.length, players: dataset.players.length, umpires: dataset.umpires.length, leagues: leagues.length, majorTournaments: dataset.majorTournaments.length, seriesRecords: dataset.seriesRecords ? `${dataset.seriesRecords.completed.length} completed, ${dataset.seriesRecords.upcoming.length} upcoming` : 'no Series Matches tab', tournamentsWithoutATab: missingTournaments.join(', ') || 'none', leaguePlayers: leagues.reduce((n, l) => n + l.teams.reduce((m, t) => m + t.players.length, 0), 0), matches: leagues.reduce((n, l) => n + l.matches.length, 0), unmatchedNames: ledger.unmatched + unmatched } };
+  // a spelling link (playerAliases.json) names the player as he is on his board's roster; if the sheet has changed that name the link no
+  // longer fits, and — worse — would hide his statistics, so say so
+  let staleAliases = 'none';
+  try {
+    const links = JSON.parse(fs.readFileSync(new URL('../../src/data/commandCenter/playerAliases.json', import.meta.url), 'utf8'));
+    const stale = links.filter((a) => !dataset.players.some((p) => p.boardId === a.board && p.name === a.name)).map((a) => `${a.name} (${a.board})`);
+    if (stale.length) staleAliases = `FIX playerAliases.json: ${stale.join(', ')}`;
+  } catch {
+    /* no link file: nothing to check */
+  }
+  return { dataset, report: { staleAliases, boards: dataset.boards.length, players: dataset.players.length, umpires: dataset.umpires.length, leagues: leagues.length, majorTournaments: dataset.majorTournaments.length, seriesRecords: dataset.seriesRecords ? `${dataset.seriesRecords.completed.length} completed, ${dataset.seriesRecords.upcoming.length} upcoming` : 'no Series Matches tab', tournamentsWithoutATab: missingTournaments.join(', ') || 'none', leaguePlayers: leagues.reduce((n, l) => n + l.teams.reduce((m, t) => m + t.players.length, 0), 0), matches: leagues.reduce((n, l) => n + l.matches.length, 0), unmatchedNames: ledger.unmatched + unmatched } };
 }
 
 /** Refuse to publish a dataset that is obviously broken (e.g. someone renamed a sheet or deleted a tab). */
