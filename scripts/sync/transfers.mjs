@@ -10,6 +10,7 @@ export const TRANSFERS = [
   { name: 'Adithya Mahajan', from: 'South Africa', to: 'USA' },
   { name: 'Siddharth V Jain', from: 'South Africa', to: 'Bangladesh', into: 'Sidd V Jain' },
   { name: 'Karthik Varma', from: 'Ireland', to: 'England', into: 'Karthik Verma' },
+  { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
 ];
 
 // The same person listed twice on one board under different spellings: the entries are merged into `keep` (with their awards).
