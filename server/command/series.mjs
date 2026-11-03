@@ -27,9 +27,32 @@ export const declinedVisibleTo = (s, slug, t) => s.status === 'declined' && s.ho
 export const isLive = (s, t) => s.status === 'accepted' || (s.status === 'pending' && t <= s.deadline_at);
 const involves = (s, slug) => s.host === slug || s.opponents.includes(slug);
 
-/** How many series this board is in: accepted ones, ones it hosts that are still open, and ones it has accepted. */
+/** The series this board is in: accepted ones, ones it hosts that are still open, and ones it has accepted; not the finished ones. */
+const counts = (s, slug, t, exceptId) => s.id !== exceptId && isLive(s, t) && involves(s, slug) && !s.result_winner && (s.status === 'accepted' || s.host === slug || s.accepted.includes(slug));
+
+/** First and last match date of a series ({ from, to }, as YYYY-MM-DD), or null for an old series without dates. */
+export function rangeOf(dates) {
+  const d = (dates ?? []).filter(Boolean).sort();
+  return d.length ? { from: d[0], to: d[d.length - 1] } : null;
+}
+
+/** How many series this board is in that have not ended yet (shown to the chairman). A series ends after its last match date. */
 export function activeCount(all, slug, t, exceptId) {
-  return all.filter((s) => s.id !== exceptId && isLive(s, t) && involves(s, slug) && !s.result_winner && (s.status === 'accepted' || s.host === slug || s.accepted.includes(slug))).length;
+  const today = istDay(t);
+  return all.filter((s) => counts(s, slug, t, exceptId) && !(rangeOf(s.dates) && rangeOf(s.dates).to < today)).length;
+}
+
+/**
+ * How many of this board's series are on at the same time as `range` (a series of its dates). A board can be in 2 series at a time, so a new
+ * series is refused only when 2 others overlap it: one can be accepted on the LAST DAY of a current series, if it starts the next day or later.
+ * A series without dates (announced before dates existed) is counted as overlapping.
+ */
+export function busyOn(all, slug, t, range, exceptId) {
+  return all.filter((s) => {
+    if (!counts(s, slug, t, exceptId)) return false;
+    const r = rangeOf(s.dates);
+    return !r || !range || (r.from <= range.to && range.from <= r.to);
+  }).length;
 }
 
 const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();

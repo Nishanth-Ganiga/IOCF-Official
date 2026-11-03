@@ -87,7 +87,7 @@ export function Hub({ theme, data, go, extras = NO_EXTRAS }: { theme: BoardTheme
   return (
     <>
       <p className="mb-4 text-xs tracking-[0.12em] text-mist">
-        SERIES IN PROGRESS: <span className="font-semibold text-bone">{data.active}</span> OF {data.limit} ALLOWED
+        SERIES RUNNING OR UPCOMING: <span className="font-semibold text-bone">{data.active}</span> · UP TO {data.limit} CAN BE ON AT THE SAME TIME
       </p>
       <p className="mb-4 max-w-3xl text-sm leading-relaxed text-mist">
         <b className="text-bone">How it works:</b> use <b>Announce a Series</b> to propose a series to another board; the opponent confirms it under <b>Accept the Series</b> before 11:59 PM IST the same day; confirmed series are listed in <b>Upcoming Series</b>. Open each tile for step-by-step instructions.
@@ -282,7 +282,7 @@ export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data
           <>You must accept before <b>11:59 PM IST on the day the series was announced</b>. After that it can no longer be accepted.</>,
           <>Once you accept, the hosting board can no longer edit the series, and you can no longer decline it. Check the details first — accepting is final.</>,
           <>Declining a trilateral or quadrilateral series cancels it for everyone.</>,
-          <>A board can be in at most <b>{data.limit} series at a time</b> (you are in {data.active}). You cannot accept a new one while you are in {data.limit}.</>,
+          <>A board can be in at most <b>{data.limit} series at the same time</b> (you have {data.active} running or upcoming). You can accept a new series if fewer than {data.limit} of your series are on during its dates — so on the <b>last day</b> of a current series you can already accept one that <b>starts the next day or later</b>.</>,
           <>In a trilateral or quadrilateral series it is confirmed only when every invited board has accepted.</>,
         ]}
       />
@@ -416,7 +416,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
     <div style={{ ['--hl' as string]: pal.highlight }}>
       <Heading>ANNOUNCE A SERIES</Heading>
       <p className="mt-1 text-sm text-mist">
-        You are in {data.active} of {data.limit} allowed series. Once sent, the series waits in your opponent’s Accept tile until 11:59 PM IST today; if it is not accepted by then it is declined. You can edit it until it is accepted.
+        You have {data.active} series running or upcoming; up to {data.limit} can be on at the same time. Once sent, the series waits in your opponent’s Accept tile until 11:59 PM IST today; if it is not accepted by then it is declined. You can edit it until it is accepted.
       </p>
       <p role="status" aria-live="polite" className={`mt-3 min-h-[1.2rem] text-sm ${msg ? (msg.ok ? 'text-[#6fcf8e]' : 'text-crimson-2') : ''}`}>
         {msg?.text}
@@ -438,7 +438,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
         rules={[
           <>Your opponent must accept before <b>11:59 PM IST on the day you announce</b>. If it is not accepted by then, the series is declined and disappears — nothing stays visible, and you can announce it again.</>,
           <>You can <b>edit</b> a series (button under “Your announced series”) until an opponent accepts it. Once accepted it is locked and cannot be changed. Editing does not extend the deadline.</>,
-          <>A board can be in at most <b>{data.limit} series at a time</b>. You are in {data.active} now. A board that is already in {data.limit} series cannot be invited.</>,
+          <>A board can be in at most <b>{data.limit} series at the same time</b>. You have {data.active} running or upcoming. A new series is refused only if {data.limit} of your series (or of your opponent’s) are on during its dates, so you can announce one on the last day of a current series if it starts the next day or later. An opponent that already has {data.limit} series on those dates cannot be invited.</>,
           <>In a trilateral or quadrilateral series every opponent must accept before the series is confirmed.</>,
           <>Confirmed series appear in <b>Upcoming Series</b> for every board.</>,
         ]}

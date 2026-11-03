@@ -524,6 +524,35 @@ console.log('\n— Series Announcement —');
   check('…and an opponent already in 2 cannot be invited', await (async () => { await post(cPak, 'pakistan', good({ name: 'Pak One', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); await post(cPak, 'pakistan', good({ name: 'Pak Two', opponents: ['new-zealand'], stadiums: [STADIUMS.pakistan[0]] })); const r = await post(cEng, 'england', good({ name: 'Eng One', opponents: ['pakistan'], stadiums: [STADIUMS.england[0]] })); return r.status === 409 && /Pakistan is already in 2/.test(r.body.error.message); })());
   check('…and a board with 2 open series cannot accept a third', (await sCall('POST', `boards/new-zealand/series/${(await view(cNz, 'new-zealand')).invitations[0].id}/accept`, { cookie: cNz })).status === 200 && (await sCall('POST', `boards/new-zealand/series/${(await view(cNz, 'new-zealand')).invitations[0].id}/accept`, { cookie: cNz })).status === 200 && (await post(cNz, 'new-zealand', good({ name: 'Nz One', opponents: ['england'], stadiums: [STADIUMS['new-zealand'][0]] }))).status === 409);
 
+  // the 2-series limit is about series that are on at the same time: a new one can start the day after one of them ends
+  {
+    const cJp = await sLogin('board', sc('Japan'));
+    const cKe = await sLogin('board', sc('Kenya'));
+    const cSp = await sLogin('board', sc('Spain'));
+    const cIt = await sLogin('board', sc('Italy'));
+    const jp = (name, opp, dates) => post(cJp, 'japan', good({ name, opponents: [opp], matches: dates.length, stadiums: Array(dates.length).fill(STADIUMS.japan[0]), dates }));
+    const s1 = await jp('Japan One', 'nepal', ['2026-06-20', '2026-06-21', '2026-06-22']);
+    const s2 = await jp('Japan Two', 'kenya', ['2026-06-20', '2026-06-25', '2026-06-30']);
+    check('a board announces two overlapping series', s1.status === 201 && s2.status === 201);
+    const on = await jp('Japan Three', 'uganda', ['2026-06-22']);
+    check('on the LAST day of one series a third cannot be on the same day (two others are on)', on.status === 409 && /those dates/.test(on.body.error.message));
+    const next = await jp('Japan Four', 'uganda', ['2026-06-23']);
+    check('but it can start the day after the first one ends (only the long one is still on)', next.status === 201);
+    check('…and a fifth on that same day is refused again (two are on)', (await jp('Japan Five', 'uganda', ['2026-06-23'])).status === 409);
+    check('a series after both have ended is fine', (await jp('Japan Six', 'uganda', ['2026-07-02'])).status === 201);
+    // the invited board: it accepts on the last day of one of its series if the new one starts the next day
+    const acc2 = await sCall('POST', `boards/kenya/series/${s2.body.series.id}/accept`, { cookie: cKe });
+    const early = await post(cSp, 'spain', good({ name: 'Spain Kenya', opponents: ['kenya'], stadiums: [STADIUMS.spain[0], STADIUMS.spain[1]].slice(0, 1), dates: ['2026-06-21'] }));
+    const accE = await sCall('POST', `boards/kenya/series/${early.body.series?.id}/accept`, { cookie: cKe });
+    check('Kenya has two series on (one ends 21 June, one runs to 30 June)', acc2.status === 200 && early.status === 201 && accE.status === 200);
+    const clash = await post(cIt, 'italy', good({ name: 'Italy Kenya A', opponents: ['kenya'], stadiums: [STADIUMS.italy[0]], dates: ['2026-06-21'] }));
+    check('a series on 21 June cannot be sent to Kenya (two of its series are on that day)', clash.status === 409 && /Kenya is already in 2/.test(clash.body.error.message));
+    const after = await post(cIt, 'italy', good({ name: 'Italy Kenya B', opponents: ['kenya'], stadiums: [STADIUMS.italy[0]], dates: ['2026-06-22'] }));
+    const accAfter = await sCall('POST', `boards/kenya/series/${after.body.series?.id}/accept`, { cookie: cKe });
+    check('one starting on 22 June, the day after the short series ends, can be sent and accepted', after.status === 201 && accAfter.status === 200);
+    check('editing a series is checked against the dates too', (await sCall('PUT', `boards/japan/series/${s1.body.series.id}`, { cookie: cJp, body: good({ name: 'Japan One', opponents: ['nepal'], matches: 1, stadiums: [STADIUMS.japan[0]], dates: ['2026-06-24'] }) })).status === 200);
+  }
+
   // editing before acceptance
   const ed = await sCall('PUT', `boards/india/series/${sid}`, { cookie: cIndia, body: good({ name: 'Spring Cup Edited', matches: 3, stadiums: STADIUMS.india, bet: 10000, format: 'ODI' }) });
   check('the host can edit before the opponent accepts', ed.status === 200 && ed.body.series.name === 'Spring Cup Edited' && ed.body.series.matches === 3 && ed.body.series.bet === 10000);
