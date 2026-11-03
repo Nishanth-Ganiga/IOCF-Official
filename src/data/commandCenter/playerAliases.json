@@ -615,5 +615,18 @@
     ]
    }
   ]
+ },
+ {
+  "name": "Aniket Gavit",
+  "board": "new-zealand",
+  "aliases": [
+   {
+    "name": "Aniket",
+    "boards": [
+     "new-zealand",
+     "england"
+    ]
+   }
+  ]
  }
 ]
