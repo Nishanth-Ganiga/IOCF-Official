@@ -135,3 +135,13 @@ android/, ios/               Capacitor projects
 - `prefers-reduced-motion` is respected: smooth scrolling, the custom cursor, tilt and other effects turn off.
 - Hover effects only run on devices with a precise pointer; touch devices get tap interactions.
 - Overlays and the profile picker close with Esc; the opening sequence can be skipped with Enter or Esc.
+
+### Keeping the sign-in off the public website (optional)
+
+Browsers' phishing checks can flag a public site that contains a username and password form. To avoid that, run two deployments of this repository: the public site built **without** the Command Center, and a separate staff site with it.
+
+- **Public project:** set `VITE_COMMAND_CENTER` = `off` and `COMMAND_CENTER_SIGNIN` = `off` (Vercel → Settings → Environment Variables), then redeploy. The Command Center profile, its login page and the login endpoint do not exist there.
+- **Staff project** (a second Vercel project from the same repository, e.g. `iocf-staff`): leave both unset, and give it the same `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `COMMAND_CENTER_SESSION_SECRET`. Chairmen and administrators sign in there.
+
+With nothing set, everything works as before (one site, Command Center included).
+

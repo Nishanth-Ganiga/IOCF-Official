@@ -189,6 +189,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       // with a real database a shared session secret is required: a per-process one would log people out between server instances
       if (env.SUPABASE_URL && String(env.COMMAND_CENTER_SESSION_SECRET ?? '').length < 32) return fail(503, 'not_configured', 'The Command Center is not fully configured yet (session secret).');
 
+      // a deployment can have sign-in switched off (COMMAND_CENTER_SIGNIN=off): staff sign in at the other address
+      if (env.COMMAND_CENTER_SIGNIN === 'off' && a === 'login') return fail(404, 'not_found', 'Not found.');
       if (a === 'login' && method === 'POST' && !b) return await login(req);
 
       if (a === 'logout' && method === 'POST' && !b) {

@@ -988,6 +988,17 @@ console.log('\n— Rankings profile: how players and boards are ranked —');
   check('board names are found in champion texts, even inside "Player (Board)" or a shared title', boardsIn('England & Scotland', ['England', 'Scotland', 'India']).join() === 'England,Scotland' && boardsIn('Diljith Das (England)', ['England', 'New England']).join() === 'England' && boardsIn('Newzealand', ['New Zealand']).length === 0);
 }
 
+
+console.log('\n— A deployment can switch sign-in off —');
+{
+  const offStore = new MemoryStore();
+  await provision({ store: offStore, home: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-off-')) });
+  const hOff = createHandler({ store: offStore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234', COMMAND_CENTER_SIGNIN: 'off' }, now: () => Date.now() });
+  const r1 = await hOff({ method: 'POST', path: ['login'], headers: H, body: { role: 'admin', username: 'iocf.admin', password: 'whatever1' }, ip: '3.3.3.3' });
+  const r2 = await hOff({ method: 'GET', path: ['public', 'series-stats'], headers: H, body: null, ip: '3.3.3.3' });
+  check('with COMMAND_CENTER_SIGNIN=off the login does not exist (404), while the public data still works', r1.status === 404 && r2.status === 200);
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

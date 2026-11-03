@@ -566,7 +566,9 @@ export const introSlides: IntroSlide[] = [
 export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'tournaments' | 'command-center' | 'board' | 'rankings';
 export type SectionId = 'about' | 'journey' | 'originals' | 'picks' | 'skills' | 'moments' | 'story';
 
-export const viewerProfiles: {
+import { COMMAND_CENTER_ENABLED } from './features';
+
+const allProfiles: {
   id: ProfileId;
   name: string;
   blurb: string;
@@ -637,6 +639,9 @@ export const viewerProfiles: {
     order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
   },
 ];
+
+/** The profiles offered on this deployment (the Command Center only where it is enabled). */
+export const viewerProfiles = allProfiles.filter((p) => p.id !== 'command-center' || COMMAND_CENTER_ENABLED);
 
 export const sectionMeta: Record<SectionId, { nav: string; card: string; meta: string; palette: Palette }> = {
   about: { nav: 'About', card: 'About Me', meta: 'The Pilot • Education & training', palette: violet },

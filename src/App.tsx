@@ -14,7 +14,10 @@ import IocfUmpires from './components/IocfUmpires';
 import IocfLeagues from './components/IocfLeagues';
 import IocfTournaments from './components/IocfTournaments';
 import IocfRankings from './components/IocfRankings';
-import IocfCommandCenter from './components/IocfCommandCenter';
+import { COMMAND_CENTER_ENABLED } from './data/features';
+
+// the Command Center (sign-in) is its own chunk, and is left out of the build completely when VITE_COMMAND_CENTER=off
+const IocfCommandCenter = COMMAND_CENTER_ENABLED ? lazy(() => import('./components/IocfCommandCenter')) : null;
 import Hero from './components/Hero';
 import ContinueWatching from './components/ContinueWatching';
 import Scene from './components/Scene';
@@ -138,8 +141,10 @@ function Series() {
             <IocfTournaments profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'rankings' ? (
             <IocfRankings profileId={profileId} onSwitch={pickProfile} />
-          ) : profileId === 'command-center' ? (
-            <IocfCommandCenter profileId={profileId} onSwitch={pickProfile} />
+          ) : profileId === 'command-center' && IocfCommandCenter ? (
+            <Suspense fallback={null}>
+              <IocfCommandCenter profileId={profileId} onSwitch={pickProfile} />
+            </Suspense>
           ) : profileId === 'umpire' ? (
             <IocfUmpires profileId={profileId} onSwitch={pickProfile} />
           ) : (
