@@ -1,5 +1,5 @@
 // Parses the board sheets and federation-wide sheets of the IOCF workbook into boards, players, umpires and info.
-import { TRANSFERS } from './transfers.mjs';
+import { MERGES, TRANSFERS } from './transfers.mjs';
 import { BOARD_SHEETS, boardName, cleanName, fmtn, isNum, norm, s, slug, stripEmoji, titleCase, trimChars } from './helpers.mjs';
 
 /* ---------------- extraction (raw rows) ---------------- */
@@ -380,18 +380,34 @@ export function buildLedger(book) {
     }
   }
 
-  // players who moved to another board (scripts/sync/transfers.mjs): their entry and its awards go to the new board
-  for (const t of TRANSFERS) {
-    const src = (players[t.from] ?? []).find((p) => norm(p.name) === norm(t.name));
-    if (!src) continue;
-    const dst = match(t.to, t.name, false) ?? addPlayer(t.to, t.name);
+  // one player's entry (with its awards) folded into another entry of the same person
+  const fold = (src, dst, srcBoard) => {
     const key = (e) => `${e.title.toLowerCase()}|${(e.detail ?? '').toLowerCase()}`;
     for (const e of src.ach) if (!dst.ach.some((x) => key(x) === key(e))) dst.ach.push(e);
     for (const e of src.hl) if (!dst.hl.some((x) => key(x) === key(e))) dst.hl.push(e);
     for (const [title, n] of src.tour) dst.tour.set(title, (dst.tour.get(title) ?? 0) + n);
     for (const [f, v] of Object.entries(src.formats)) dst.formats[f] ??= v;
-    players[t.from] = players[t.from].filter((p) => p !== src);
-    index[t.from]?.delete(norm(src.name));
+    players[srcBoard] = players[srcBoard].filter((p) => p !== src);
+    index[srcBoard]?.delete(norm(src.name));
+  };
+
+  // the same person listed twice on a board under different spellings (scripts/sync/transfers.mjs): merged into one entry
+  for (const m of MERGES) {
+    const keep = (players[m.board] ?? []).find((p) => norm(p.name) === norm(m.keep));
+    if (!keep) continue;
+    for (const name of m.drop) {
+      const src = (players[m.board] ?? []).find((p) => p !== keep && norm(p.name) === norm(name));
+      if (src) fold(src, keep, m.board);
+    }
+  }
+
+  // players who moved to another board (scripts/sync/transfers.mjs): their entry and its awards go to the new board
+  for (const t of TRANSFERS) {
+    const src = (players[t.from] ?? []).find((p) => norm(p.name) === norm(t.name));
+    if (!src) continue;
+    const target = t.into ?? t.name;
+    const dst = (players[t.to] ?? []).find((p) => norm(p.name) === norm(target)) ?? match(t.to, target, false) ?? addPlayer(t.to, target);
+    fold(src, dst, t.from);
   }
 
   // chairmen and CEOs are players too: one that is not on the roster gets a player entry (a roster spelling that clearly fits is used
