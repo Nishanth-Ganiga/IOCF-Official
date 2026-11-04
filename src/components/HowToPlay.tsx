@@ -109,7 +109,7 @@ function useTimers() {
   return (fn: () => void, ms: number) => void timers.current.push(window.setTimeout(fn, ms));
 }
 
-function Batting({ onBack }: { onBack: () => void }) {
+export function Batting({ onBack }: { onBack: () => void }) {
   const [names, setNames] = useState(drawNames);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [typing, setTyping] = useState(false);
@@ -170,7 +170,7 @@ function Batting({ onBack }: { onBack: () => void }) {
   );
 }
 
-function Bowling({ onBack }: { onBack: () => void }) {
+export function Bowling({ onBack }: { onBack: () => void }) {
   const [names, setNames] = useState(drawNames);
   const [umpMsgs, setUmpMsgs] = useState<Msg[]>([]);
   const [batMsgs, setBatMsgs] = useState<Msg[]>([]);

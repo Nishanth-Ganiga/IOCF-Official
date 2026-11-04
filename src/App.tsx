@@ -14,6 +14,7 @@ import IocfUmpires from './components/IocfUmpires';
 import IocfLeagues from './components/IocfLeagues';
 import IocfTournaments from './components/IocfTournaments';
 import IocfRankings from './components/IocfRankings';
+import IocfFun from './components/IocfFun';
 import { COMMAND_CENTER_ENABLED } from './data/features';
 
 // the Command Center (sign-in) is its own chunk, and is left out of the build completely when VITE_COMMAND_CENTER=off
@@ -141,6 +142,8 @@ function Series() {
             <IocfTournaments profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'rankings' ? (
             <IocfRankings profileId={profileId} onSwitch={pickProfile} />
+          ) : profileId === 'fun' ? (
+            <IocfFun profileId={profileId} onSwitch={pickProfile} />
           ) : profileId === 'command-center' && IocfCommandCenter ? (
             <Suspense fallback={null}>
               <IocfCommandCenter profileId={profileId} onSwitch={pickProfile} />

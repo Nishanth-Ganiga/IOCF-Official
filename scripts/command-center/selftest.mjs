@@ -1151,6 +1151,40 @@ console.log('\n— Rank movement through the API —');
   check('if the sheet cannot be read the request still answers (with the stored moves)', down.status === 200);
 }
 
+
+console.log('\n— Unlimited Fun: the games —');
+{
+  const { makeQuiz, cluesFor, guessPoints, isGuess, pairFor, higherLowerRight, superOverStep, dayKey, mulberry32, seedFrom } = await import('../../src/data/funLogic.mjs');
+  const boards = ['India', 'Australia', 'England', 'Pakistan', 'Qatar', 'Spain', 'Japan', 'Nepal'].map((name, i) => ({ name, overallRank: i + 1, credits: 1000 - i * 10, chairman: `Chair ${name}` }));
+  const data = { boards, runs: ['A One', 'B Two', 'C Three', 'D Four', 'E Five'], wickets: ['F One', 'G Two', 'H Three', 'I Four', 'J Five'], titles: ['England', 'India'], series: [{ name: 'Spring Cup', host: 'India', opponents: ['Australia'], winner: 'Australia' }, { name: 'Tri Cup', host: 'Qatar', opponents: ['Spain', 'Japan'], winner: 'Qatar' }] };
+  const q1 = makeQuiz('2026-11-05', data);
+  check('the daily quiz has 5 questions of different kinds, each with 4 different options and the right one among them', q1.length === 5 && new Set(q1.map((q) => q.kind)).size === 5 && q1.every((q) => q.options.length === 4 && new Set(q.options).size === 4 && q.answer >= 0 && q.answer < 4 && q.why));
+  check('the same day gives the same quiz for everyone, a different day a different one', JSON.stringify(makeQuiz('2026-11-05', data)) === JSON.stringify(q1) && JSON.stringify(makeQuiz('2026-11-06', data)) !== JSON.stringify(q1));
+  check('the answers are right: #1 board, most credits, top scorer, a chairman, a series winner', q1.every((q) => {
+    const right = q.options[q.answer];
+    if (q.kind === 'rankOne' || q.kind === 'credits') return right === 'India';
+    if (q.kind === 'mostRuns') return right === 'A One';
+    if (q.kind === 'mostWickets') return right === 'F One';
+    if (q.kind === 'titles') return right === 'England';
+    if (q.kind === 'chairman') return right === `Chair ${/of the (.+) board/.exec(q.q)[1]}`;
+    if (q.kind === 'seriesWinner') return /Spring Cup/.test(q.q) ? right === 'Australia' : false;
+    return false;
+  }));
+  check('with too little data the quiz is shorter instead of broken', makeQuiz('2026-11-05', { boards: boards.slice(0, 3), runs: [], wickets: [], titles: [], series: [] }).length < 5);
+  check('the day changes at midnight India time', dayKey(Date.UTC(2026, 10, 4, 18, 29)) === '2026-11-04' && dayKey(Date.UTC(2026, 10, 4, 18, 31)) === '2026-11-05');
+  const clues = cluesFor({ name: 'Sai Naveen', boardName: 'Bangladesh', matches: 12, runs: 450, wickets: 9, hs: '71*', best: '3-20', pom: 2, fifties: 3, hundreds: 0, formats: ['ODI', 'T20'] });
+  check('guess-the-player clues go from vague to specific and end by naming the board and the initial; fewer clues mean more points', clues.length === 7 && /12 matches/.test(clues[0]) && /Bangladesh/.test(clues[clues.length - 2]) && /“S”/.test(clues[clues.length - 1]) && !/Bangladesh/.test(clues.slice(0, 4).join(' ')) && guessPoints(1, 7) === 7 && guessPoints(7, 7) === 1 && guessPoints(20, 7) === 1);
+  check('a guess is right whatever the capitals, spaces or punctuation', isGuess('  sai   naveen ', 'Sai Naveen') && isGuess('SAINAVEEN', 'Sai Naveen') && !isGuess('Sai', 'Sai Naveen') && !isGuess('', 'Sai Naveen'));
+  const people = [{ n: 'a', runs: 10 }, { n: 'b', runs: 50 }, { n: 'c', runs: 50 }, { n: 'd', runs: 0 }];
+  let ok = true;
+  for (let i = 0; i < 200; i++) { const p = pairFor(people, 'runs', mulberry32(seedFrom(String(i)))); if (!p || p.a === p.b || p.a.runs === p.b.runs || p.a.runs === 0 || p.b.runs === 0) ok = false; }
+  check('higher-or-lower always pairs two different players with different, non-zero values; ties are never asked', ok && pairFor([{ runs: 5 }, { runs: 5 }], 'runs', Math.random) === null && higherLowerRight(10, 50, true) && !higherLowerRight(10, 50, false) && higherLowerRight(50, 10, false));
+  let st = { runs: 0, wickets: 0, over: 0 };
+  st = superOverStep(st, { outOn: null, runs: 20 });
+  const s2 = superOverStep(st, { outOn: 3, runs: 7 });
+  check('super over: 3 overs and 2 wickets — a wicket ends that over, the second wicket ends the innings, three overs end it too', !st.done && s2.runs === 27 && s2.wickets === 1 && !s2.done && superOverStep(s2, { outOn: 1, runs: 0 }).done && superOverStep(superOverStep(superOverStep({ runs: 0, wickets: 0, over: 0 }, { outOn: null, runs: 1 }), { outOn: null, runs: 1 }), { outOn: null, runs: 1 }).done);
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

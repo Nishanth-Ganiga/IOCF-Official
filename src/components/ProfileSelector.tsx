@@ -47,6 +47,17 @@ const EMBLEMS: Record<Exclude<ProfileId, 'main'>, ReactNode> = {
       <path d="m12 3 1 2.2 2.4.3-1.8 1.6.5 2.4-2.1-1.2-2.1 1.2.5-2.4L8.6 5.5 11 5.2z" opacity="0.8" />
     </>
   ),
+  // game die with a ball
+  fun: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3.5" />
+      <circle cx="9" cy="9" r="1.1" />
+      <circle cx="15" cy="9" r="1.1" />
+      <circle cx="12" cy="12" r="1.1" />
+      <circle cx="9" cy="15" r="1.1" />
+      <circle cx="15" cy="15" r="1.1" />
+    </>
+  ),
   // padlock
   'command-center': (
     <>

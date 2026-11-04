@@ -563,7 +563,7 @@ export const introSlides: IntroSlide[] = [
   },
 ];
 
-export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'tournaments' | 'command-center' | 'board' | 'rankings';
+export type ProfileId = 'main' | 'chairman' | 'player' | 'umpire' | 'leagues' | 'tournaments' | 'command-center' | 'board' | 'rankings' | 'fun';
 export type SectionId = 'about' | 'journey' | 'originals' | 'picks' | 'skills' | 'moments' | 'story';
 
 import { COMMAND_CENTER_ENABLED } from './features';
@@ -629,6 +629,13 @@ const allProfiles: {
     name: 'Rankings',
     blurb: 'Every IOCF ranking: boards, players, umpires & leagues',
     color: '#7a1f3d',
+    order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
+  },
+  {
+    id: 'fun',
+    name: 'Unlimited Fun',
+    blurb: 'Games, quizzes & duels made from real IOCF data',
+    color: '#0f5c6e',
     order: ['about', 'journey', 'originals', 'picks', 'skills', 'moments', 'story'],
   },
   {

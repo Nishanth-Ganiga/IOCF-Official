@@ -1,0 +1,14 @@
+export function mulberry32(seed: number): () => number;
+export function seedFrom(text: string): number;
+export const dayKey: (t?: number) => string;
+export const norm: (s: string) => string;
+export function shuffle<T>(arr: T[], rng: () => number): T[];
+export type QuizQuestion = { kind: string; q: string; options: string[]; answer: number; why: string };
+export function makeQuiz(day: string, data: { boards: { name: string; overallRank?: number; credits?: number; chairman?: string }[]; runs: string[]; wickets: string[]; titles?: string[]; series: { name: string; host: string; opponents: string[]; winner: string | null }[] }): QuizQuestion[];
+export type GuessPlayer = { name: string; boardName: string; matches: number; runs: number; wickets: number; hs?: string | number | null; best?: string | null; pom: number; fifties: number; hundreds: number; formats?: string[] };
+export function cluesFor(p: GuessPlayer): string[];
+export const guessPoints: (shown: number, total: number) => number;
+export const isGuess: (guess: string, name: string) => boolean;
+export function pairFor<T extends Record<string, any>>(players: T[], stat: string, rng: () => number): { a: T; b: T } | null;
+export const higherLowerRight: (a: number, b: number, higher: boolean) => boolean;
+export function superOverStep(state: { runs: number; wickets: number; over: number }, over: { outOn: number | null; runs: number }): { runs: number; wickets: number; over: number; done: boolean };
