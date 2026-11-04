@@ -129,7 +129,8 @@ export default function ProfileSelector({ onPick }: { onPick: (id: ProfileId) =>
 
   return (
     <motion.div
-      className="fixed inset-0 z-[110] flex flex-col items-center justify-center overflow-y-auto bg-ink px-4 py-16"
+      data-lenis-prevent
+      className="fixed inset-0 z-[110] overflow-y-auto overscroll-contain bg-ink [-webkit-overflow-scrolling:touch] [touch-action:pan-y]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.08, filter: 'blur(10px)' }}
@@ -137,9 +138,11 @@ export default function ProfileSelector({ onPick }: { onPick: (id: ProfileId) =>
       role="dialog"
       aria-label="Choose your IOCF identity"
     >
-      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(229,19,43,0.14),transparent_70%)]" />
+      <div aria-hidden className="pointer-events-none fixed inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(229,19,43,0.14),transparent_70%)]" />
+      {/* centred when it fits, scrolls from the top when it does not (centring an overflowing column would cut off its top) */}
+      <div className="relative mx-auto flex min-h-full w-full flex-col items-center justify-center px-4 py-12 pb-[max(3rem,env(safe-area-inset-bottom))] sm:py-16">
       <motion.h2
-        className="relative mb-10 text-center font-sans text-3xl font-medium tracking-tight text-bone sm:text-5xl"
+        className="relative mb-8 text-center font-sans text-3xl font-medium tracking-tight text-bone sm:text-5xl"
         initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         transition={{ duration: 0.8, ease: EASE }}
@@ -173,6 +176,7 @@ export default function ProfileSelector({ onPick }: { onPick: (id: ProfileId) =>
       <p className="relative mt-12 max-w-md text-center text-xs leading-relaxed text-smoke">
         One Federation. Many Roles. One Cricketing Vision.
       </p>
+      </div>
     </motion.div>
   );
 }

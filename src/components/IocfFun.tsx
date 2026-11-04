@@ -144,7 +144,7 @@ function useData() {
     Promise.all([import('../data/boards'), import('../data/boardInsights'), loadBoardPeople()]).then(
       ([b, i, people]) => {
         const stats = people.map((p) => {
-          const t = sumLines(p.lines) as Record<string, any>;
+          const t = sumLines(p.lines.map((l: { line: unknown }) => l.line) as never[]) as Record<string, any>;
           return {
             name: p.name,
             boardName: p.boardName,
