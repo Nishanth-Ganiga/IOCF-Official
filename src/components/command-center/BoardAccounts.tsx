@@ -1,3 +1,4 @@
+import { isHiddenBoard } from '../../data/hiddenBoards.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError, type AccountsInfo, type BoardAccount } from '../../data/commandApi';
 import { themeOf } from '../../data/commandCenter/boardConfig';
@@ -59,7 +60,7 @@ export default function BoardAccounts({ focus, nav }: { focus?: string; nav: Nav
         !error && <p className="mt-8 text-sm text-smoke">Loading boards…</p>
       ) : (
         <ul className="mt-8 grid grid-cols-1 gap-3">
-          {data.boards.map((b) => (
+          {data.boards.filter((b) => !isHiddenBoard(b.slug)).map((b) => (
             <li key={b.slug}>
               <Row b={b} focused={focus === b.slug} onSaved={load} />
             </li>

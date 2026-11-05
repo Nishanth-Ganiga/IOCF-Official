@@ -1,3 +1,4 @@
+import { isHiddenBoard } from '../../data/hiddenBoards.mjs';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, type AccountsInfo, type BoardAccount, type CcUser, type Overview } from '../../data/commandApi';
 import { MODULES, themeOf } from '../../data/commandCenter/boardConfig';
@@ -49,7 +50,7 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (accounts?.boards ?? []).filter((b) => (filter === 'all' || b.status === filter) && (!q || b.name.toLowerCase().includes(q) || b.username?.includes(q) || b.chairmanName?.toLowerCase().includes(q)));
+    return (accounts?.boards ?? []).filter((b) => !isHiddenBoard(b.slug) && (filter === 'all' || b.status === filter) && (!q || b.name.toLowerCase().includes(q) || b.username?.includes(q) || b.chairmanName?.toLowerCase().includes(q)));
   }, [accounts, filter, query]);
 
   const card = 'rounded-2xl border border-white/10 bg-ink-2';

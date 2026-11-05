@@ -1,3 +1,4 @@
+import { isHiddenBoard } from '../../data/hiddenBoards.mjs';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, type AdminCredits as Data, type CreditsInfo } from '../../data/commandApi';
 import { themeOf } from '../../data/commandCenter/boardConfig';
@@ -88,7 +89,7 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
   };
   const waiting = (data?.settlements ?? []).filter((x) => !x.entered);
 
-  const rows = useMemo(() => (data?.boards ?? []).filter((b) => !query.trim() || b.name.toLowerCase().includes(query.trim().toLowerCase())), [data, query]);
+  const rows = useMemo(() => (data?.boards ?? []).filter((b) => !isHiddenBoard(b.slug)).filter((b) => !query.trim() || b.name.toLowerCase().includes(query.trim().toLowerCase())), [data, query]);
   const field = 'mt-1 w-full rounded-lg border border-white/15 bg-ink px-3 py-2.5 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b]';
 
   return (
@@ -165,7 +166,7 @@ export default function AdminCredits({ nav }: { nav: Nav }) {
           <label className="block text-[11px] font-semibold tracking-[0.18em] text-mist">
             BOARD
             <select value={form.board} onChange={(e) => setForm({ ...form, board: e.target.value })} className={field}>
-              {data.boards.map((b) => (
+              {data.boards.filter((b) => !isHiddenBoard(b.slug)).map((b) => (
                 <option key={b.slug} value={b.slug}>
                   {b.name}
                 </option>

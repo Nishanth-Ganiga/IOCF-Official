@@ -24,8 +24,10 @@ export type BoardTheme = {
 };
 
 // (a dismantled board is left out of the choices the staff see; the server still knows it)
-export const BOARD_THEMES = (boardsJson as BoardTheme[]).filter((b) => !isHiddenBoard(b.slug));
-export const themeOf = (slug: string | null | undefined) => BOARD_THEMES.find((b) => b.slug === slug);
+const ALL_THEMES = boardsJson as BoardTheme[];
+export const BOARD_THEMES = ALL_THEMES.filter((b) => !isHiddenBoard(b.slug));
+/** A board's theme (any board, even a dismantled one the server still lists). */
+export const themeOf = (slug: string | null | undefined) => ALL_THEMES.find((b) => b.slug === slug);
 
 export type ModuleDef = { id: string; title: string; description: string; status: 'active' | 'coming-soon'; icon: string };
 export const MODULES = modulesJson as ModuleDef[];
