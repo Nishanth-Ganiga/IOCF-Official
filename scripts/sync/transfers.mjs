@@ -11,6 +11,11 @@ export const TRANSFERS = [
   { name: 'Siddharth V Jain', from: 'South Africa', to: 'Bangladesh', into: 'Sidd V Jain' },
   { name: 'Karthik Varma', from: 'Ireland', to: 'England', into: 'Karthik Verma' },
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
+  { name: 'Mudasir Ali', from: 'Qatar', to: 'Pakistan' },
+  { name: 'Waqas Mughal', from: 'Bangladesh', to: 'Nepal' },
+  { name: 'Waqas Mughal', from: 'Australia', to: 'Nepal' }, // his Australia entry is an earlier board
+  { name: 'Rima Naskar Sona', from: 'Pakistan', to: 'Australia' },
+  { name: 'Rima Roy', from: 'Pakistan', to: 'Australia', into: 'Rima Naskar Sona' },
 ];
 
 // The same person listed twice on one board under different spellings: the entries are merged into `keep` (with their awards).

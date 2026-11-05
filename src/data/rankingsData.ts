@@ -17,10 +17,12 @@ function rosterBoard(name: string) {
   return store.players.find((p) => norm(p.name) === k)?.boardId;
 }
 
+const boardNameOf = (boardSlug: string) => store.boards.find((b) => slug(b.name) === boardSlug)?.name;
+
 /** Players with their major-tournament and series lines, each with its format. */
 export async function loadBoardPeople(): Promise<Person[]> {
   const lines = await loadCareerLines();
-  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard });
+  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf });
 }
 
 /** Players with their franchise league lines (no formats: the franchise leagues are ranked on their own). */
@@ -34,7 +36,7 @@ export async function loadFranchisePeople(): Promise<Person[]> {
       }),
     ),
   );
-  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard });
+  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf });
 }
 
 export type SeriesResult = { boards: (string | null)[]; winner: string | null; format: string | null };

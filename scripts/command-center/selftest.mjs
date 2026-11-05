@@ -1185,6 +1185,14 @@ console.log('\n— Unlimited Fun: the games —');
   check('super over: 3 overs and 2 wickets — a wicket ends that over, the second wicket ends the innings, three overs end it too', !st.done && s2.runs === 27 && s2.wickets === 1 && !s2.done && superOverStep(s2, { outOn: 1, runs: 0 }).done && superOverStep(superOverStep(superOverStep({ runs: 0, wickets: 0, over: 0 }, { outOn: null, runs: 1 }), { outOn: null, runs: 1 }), { outOn: null, runs: 1 }).done);
 }
 
+
+{
+  const { groupPlayers } = await import('../../src/data/rankingsCore.mjs');
+  const lines = [{ name: 'Waqas Mughal', boardSlug: 'australia', boardName: 'Australia', line: { matches: 5 } }];
+  const [p] = groupPlayers(lines, { rosterBoard: () => 'nepal', boardNameOf: (s) => (s === 'nepal' ? 'Nepal' : undefined) });
+  check('a player who moved to a board he has no statistics for is shown on his new board (stats stay linked)', p.boardSlug === 'nepal' && p.boardName === 'Nepal' && p.lines.length === 1);
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

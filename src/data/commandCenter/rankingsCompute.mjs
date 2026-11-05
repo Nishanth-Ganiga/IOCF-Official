@@ -115,7 +115,7 @@ export function computeAllRankings(input) {
     }
   }
   const rosterBoard = (name) => dataset.players.find((p) => norm(p.name) === norm(name))?.boardId;
-  const boardPeople = groupPlayers(lines, { aliases: aliasIndex, rosterBoard });
+  const boardPeople = groupPlayers(lines, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name });
   const boardFormats = FORMAT_ORDER.filter((f) => boardPeople.some((p) => p.lines.some((l) => l.format === f)));
 
   // ---- players, franchise leagues: the scorer's rows linked to their squad entry (which names the player's national board)
@@ -134,7 +134,7 @@ export function computeAllRankings(input) {
       });
     }
   }
-  const franchisePeople = groupPlayers(franchise, { aliases: aliasIndex, rosterBoard });
+  const franchisePeople = groupPlayers(franchise, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name });
 
   for (const [scope, people, fmts] of [['board', boardPeople, ['all', ...boardFormats]], ['franchise', franchisePeople, ['all']]]) {
     for (const kind of Object.keys(CATEGORIES)) {

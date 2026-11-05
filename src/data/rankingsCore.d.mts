@@ -1,6 +1,6 @@
 import type { AliasIndex } from './commandCenter/aliases.mjs';
 export type Person = { key: string; name: string; boardSlug: string; boardName: string; lines: any[] };
-export function groupPlayers(lines: any[], opts?: { aliases?: AliasIndex; rosterBoard?: (name: string) => string | undefined }): Person[];
+export function groupPlayers(lines: any[], opts?: { aliases?: AliasIndex; rosterBoard?: (name: string) => string | undefined; boardNameOf?: (slug: string) => string | undefined }): Person[];
 export type Category = { id: string; label: string; get: (t: any) => number; show?: (t: any) => string; low?: boolean; ok: (t: any) => boolean; note?: string };
 export const CATEGORIES: { batting: Category[]; bowling: Category[]; fielding: Category[]; awards: Category[] };
 export type RankedPlayer = { key: string; rank: number; name: string; boardName: string; boardSlug: string; totals: any; display: string; value: number };

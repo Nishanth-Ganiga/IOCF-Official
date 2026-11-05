@@ -8,10 +8,11 @@ const words = (s) => (String(s ?? '').toLowerCase().match(/[a-z0-9]+/g) ?? []).l
 /**
  * Groups statistics lines into players. A name of two or more words is one person on every board (as on the profiles); a single
  * name only on its own board; a known alias ("Mohammad Noor") goes to the roster name. `rosterBoard(name)` gives the board of a
- * player's roster entry, which becomes his board; otherwise the board he played most matches for.
+ * player's roster entry, which becomes his board (`boardNameOf(slug)` names it when none of his statistics were played for it, e.g. after a
+ * transfer); otherwise the board he played most matches for.
  * lines: [{ name, boardSlug, boardName, line, ... }]. Returns [{ key, name, boardSlug, boardName, lines }].
  */
-export function groupPlayers(lines, { aliases, rosterBoard } = {}) {
+export function groupPlayers(lines, { aliases, rosterBoard, boardNameOf } = {}) {
   const people = new Map();
   for (const l of lines) {
     const hit = aliases ? resolveAlias(aliases, l.name, l.boardSlug) : null;
@@ -27,7 +28,7 @@ export function groupPlayers(lines, { aliases, rosterBoard } = {}) {
     const rosterSlug = rosterBoard?.(p.name) ?? p.fixedBoard;
     const best = [...p.boards.entries()].sort((a, b) => b[1].matches - a[1].matches)[0];
     const boardSlug = rosterSlug ?? best[0];
-    const boardName = p.boards.get(boardSlug)?.name ?? lines.find((l) => l.boardSlug === boardSlug)?.boardName ?? best[1].name;
+    const boardName = p.boards.get(boardSlug)?.name ?? lines.find((l) => l.boardSlug === boardSlug)?.boardName ?? boardNameOf?.(boardSlug) ?? best[1].name;
     return { key: p.key, name: p.name, boardSlug, boardName, lines: p.lines };
   });
 }
