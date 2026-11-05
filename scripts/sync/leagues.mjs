@@ -242,21 +242,29 @@ function parseChampionsLeague(book) {
     if (!t || norm(t) === 'noboard') return null;
     return BN[norm(t)] ?? t;
   };
-  let end = ws.maxRow + 1;
-  for (let r = 2; r <= ws.maxRow; r++) {
+  // The sheet keeps the earlier squads ("Champions League All Squads") above the final ones ("Champions League All Confirmed Squads"):
+  // only the confirmed block is used. The schedule sits to the right of the squads (its header row says "Schedule").
+  let top = 0;
+  for (let r = 1; r <= ws.maxRow; r++) {
     if ((s(ws.get(r, 1)) ?? '').toLowerCase().startsWith('champions league all conf')) {
-      end = r;
+      top = r;
       break;
     }
   }
-  const CL = { id: 'champions-league', title: 'Champions League', teams: [], matches: [], awards: [], status: 'Squads announced' };
-  for (let c = 1; c <= ws.maxCol; c++) {
-    const head = s(ws.get(2, c));
-    const tn0 = s(ws.get(3, c));
+  if (!top) throw new Error('Champions league: could not find the "Champions League All Confirmed Squads" block');
+  let sched = ws.maxCol + 1;
+  for (let c = 1; c <= ws.maxCol; c++) if (norm(s(ws.get(1, c)) ?? '') === 'schedule') {
+    sched = c;
+    break;
+  }
+  const CL = { id: 'champions-league', title: 'Champions League', teams: [], matches: [], awards: [], status: 'Upcoming' };
+  for (let c = 1; c < sched; c++) {
+    const head = s(ws.get(top + 1, c));
+    const tn0 = s(ws.get(top + 2, c));
     if (!tn0) continue;
     const tn = stripEmoji(tn0);
     const T = { name: tn === tn.toUpperCase() && /[A-Z]/.test(tn) ? titleCase(tn) : tn, players: [], notes: head ? [head] : [] };
-    for (let r = 4; r < end; r++) {
+    for (let r = top + 3; r <= ws.maxRow; r++) {
       let v = s(ws.get(r, c));
       if (!v || !/^\d+\s*[.)]/.test(v)) continue;
       v = v.replace(/^\d+\s*[.)]\s*/, '');
@@ -275,6 +283,37 @@ function parseChampionsLeague(book) {
       T.players.push(P);
     }
     CL.teams.push(T);
+  }
+
+  // schedule: Match no | Home | Away | Stadium | Country | Date. A play-off row names its stage in both team cells and the
+  // qualifying places ("1st Place in Points Table") in the stadium and country cells.
+  if (sched <= ws.maxCol) {
+    const heads = {};
+    for (let c = sched; c <= ws.maxCol; c++) {
+      const h = norm(s(ws.get(2, c)) ?? '');
+      if (h) heads[h] = c;
+    }
+    const resolve = teamResolver(CL.teams.map((t) => t.name));
+    const cell = (r, k) => (heads[k] ? s(ws.get(r, heads[k])) : null);
+    for (let r = 3; r <= ws.maxRow; r++) {
+      const home = cell(r, 'home');
+      const away = cell(r, 'away');
+      if (!home) continue;
+      if (!away && !cell(r, 'stadium')) continue;
+      const M = {};
+      const date = cell(r, 'date');
+      // (the stage name is a merged cell over Home and Away, so Away reads as empty)
+      if (!away || norm(home) === norm(away)) {
+        M.teams = [cell(r, 'stadium') ?? home, cell(r, 'country') ?? home];
+        M.stage = home;
+      } else {
+        M.teams = [resolve(home) ?? home, resolve(away) ?? away];
+        const venue = [cell(r, 'stadium'), cell(r, 'country')].filter(Boolean).join(', ');
+        if (venue) M.venue = venue;
+      }
+      if (date) M.date = date;
+      CL.matches.push(M);
+    }
   }
   return CL;
 }
