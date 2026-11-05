@@ -637,12 +637,13 @@
  },
  {
   "name": "Achu Achu",
-  "board": "australia",
+  "board": "qatar",
   "aliases": [
    {
     "name": "Achu",
     "boards": [
-     "australia"
+     "australia",
+     "qatar"
     ]
    }
   ]
