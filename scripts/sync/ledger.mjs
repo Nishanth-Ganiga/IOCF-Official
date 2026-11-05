@@ -410,6 +410,41 @@ export function buildLedger(book) {
     fold(src, dst, t.from);
   }
 
+  // the umpire list follows the player: an umpire who moved board (same transfers) is listed on his present board. If he already has an
+  // entry there the two are one person: careers, credits, points, assignments and awards are added together.
+  const sumDetail = (a, b) => {
+    const pick = (d, re) => Number(re.exec(d ?? '')?.[1] ?? NaN);
+    const parts = [];
+    for (const [re, one, many] of [[/([\d.]+) match/, 'match', 'matches'], [/([\d.]+) credits/, 'credits', 'credits'], [/([\d.]+) points/, 'points', 'points']]) {
+      const x = pick(a, re);
+      const y = pick(b, re);
+      if (Number.isNaN(x) && Number.isNaN(y)) continue;
+      const n = numFix((Number.isNaN(x) ? 0 : x) + (Number.isNaN(y) ? 0 : y));
+      parts.push(`${n} ${n === 1 ? one : many}`);
+    }
+    return parts.join(' · ');
+  };
+  for (const t of TRANSFERS) {
+    const src = (umps[t.from] ?? []).find((u) => norm(u.name) === norm(t.name));
+    if (!src) continue;
+    umps[t.from] = umps[t.from].filter((u) => u !== src);
+    const target = t.into ?? t.name;
+    const dst = (umps[t.to] ??= []).find((u) => norm(u.name) === norm(target));
+    if (!dst) {
+      src.name = target;
+      umps[t.to].push(src);
+      continue;
+    }
+    for (const [k, v] of Object.entries(src.career)) dst.career[k] = numFix((dst.career[k] ?? 0) + v);
+    for (const [k, v] of Object.entries(src.performance)) dst.performance[k] = numFix((dst.performance[k] ?? 0) + v);
+    for (const a of src.assignments) {
+      const same = dst.assignments.find((x) => x.title === a.title);
+      if (same) same.detail = sumDetail(same.detail, a.detail);
+      else dst.assignments.push(a);
+    }
+    dst.awards.push(...src.awards.filter((x) => !dst.awards.some((y) => y.title === x.title && y.detail === x.detail)));
+  }
+
   // chairmen and CEOs are players too: one that is not on the roster gets a player entry (a roster spelling that clearly fits is used
   // instead), and each is marked with his role. A chairman cell can name two people ("A & B").
   for (const [board, b] of Object.entries(B)) {
