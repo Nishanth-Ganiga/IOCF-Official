@@ -1,3 +1,4 @@
+import { isHiddenBoard } from './hiddenBoards.mjs';
 import { store } from './store';
 
 /**
@@ -28,7 +29,14 @@ export type SeriesRecord = {
 };
 export type SeriesRecords = { completed: SeriesRecord[]; upcoming: SeriesRecord[] };
 
-export const seriesRecords = (): SeriesRecords => store.seriesRecords ?? { completed: [], upcoming: [] };
+/** Every record, including those of a dismantled board: for the statistics and the series rankings, which they still count in. */
+export const allSeriesRecords = (): SeriesRecords => store.seriesRecords ?? { completed: [], upcoming: [] };
+/** The records to show: those of a dismantled board (src/data/hiddenBoards.mjs) are left out. */
+export const seriesRecords = (): SeriesRecords => {
+  const all = allSeriesRecords();
+  const shown = (r: SeriesRecord) => ![r.host, ...r.opponents, r.winner, r.runnerUp].some((b) => b && (isHiddenBoard(b.name) || (b.slug && isHiddenBoard(b.slug))));
+  return { completed: all.completed.filter(shown), upcoming: all.upcoming.filter(shown) };
+};
 
 export const boardsOf = (r: SeriesRecord) => [r.host, ...r.opponents];
 export const involves = (r: SeriesRecord, slug: string) => boardsOf(r).some((b) => b.slug === slug);

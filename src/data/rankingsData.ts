@@ -5,7 +5,8 @@ import { formatKey, norm } from './careerStats.mjs';
 import { loadLeagueStats, playersOf } from './leagueStats';
 import { loadCareerLines } from './playerCareer';
 import { groupPlayers, type Person } from './rankingsCore.mjs';
-import { keyOf, seriesRecords } from './seriesRecords';
+import { isHiddenBoard } from './hiddenBoards.mjs';
+import { allSeriesRecords, keyOf } from './seriesRecords';
 import { store } from './store';
 
 const ALIASES = buildAliasIndex(aliasList as never);
@@ -22,7 +23,7 @@ const boardNameOf = (boardSlug: string) => store.boards.find((b) => slug(b.name)
 /** Players with their major-tournament and series lines, each with its format. */
 export async function loadBoardPeople(): Promise<Person[]> {
   const lines = await loadCareerLines();
-  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf });
+  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf }).filter((p) => !isHiddenBoard(p.boardSlug));
 }
 
 /** Players with their franchise league lines (no formats: the franchise leagues are ranked on their own). */
@@ -49,7 +50,7 @@ export async function loadSeriesResults(): Promise<SeriesResult[]> {
   } catch {
     /* the Command Center service is not reachable here (for example in the apps): the records alone are used */
   }
-  const out: SeriesResult[] = seriesRecords().completed.map((r) => ({
+  const out: SeriesResult[] = allSeriesRecords().completed.map((r) => ({
     boards: [r.host.slug, ...r.opponents.map((o) => o.slug)],
     winner: r.winner?.slug ?? null,
     format: site.meta[keyOf(r)] ?? r.format,

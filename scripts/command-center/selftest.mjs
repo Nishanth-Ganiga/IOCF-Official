@@ -1193,6 +1193,15 @@ console.log('\n— Unlimited Fun: the games —');
   check('a player who moved to a board he has no statistics for is shown on his new board (stats stay linked)', p.boardSlug === 'nepal' && p.boardName === 'Nepal' && p.lines.length === 1);
 }
 
+
+{
+  const { isHiddenBoard, mentionsHiddenBoard, closeUpRanks } = await import('../../src/data/hiddenBoards.mjs');
+  check('a dismantled board is recognised by name, slug and squad name, other boards are not', isHiddenBoard('Kenya') && isHiddenBoard('kenya') && isHiddenBoard('KENYA EMERGING') && isHiddenBoard('KENYA W') && !isHiddenBoard('Nepal') && !isHiddenBoard('South Africa') && !isHiddenBoard(null));
+  check('a table that names the board is found, but a longer word is not', mentionsHiddenBoard({ columns: ['Kenya Squad'] }) && !mentionsHiddenBoard({ x: 'Mount Kenyatta' }) && !mentionsHiddenBoard({ x: 'Nepal' }));
+  const r = closeUpRanks({ A: { Overall: 1, T20: 2 }, Kenya: { Overall: 2 }, B: { Overall: 3, T20: 1 }, C: { Overall: 4 } });
+  check('removing the board closes the ranks up, only in the formats it was ranked in', !r.Kenya && r.A.Overall === 1 && r.B.Overall === 2 && r.C.Overall === 3 && r.A.T20 === 2 && r.B.T20 === 1);
+}
+
 console.log('\n— 11. the register stays private —');
 const root = process.cwd();
 const files = walk(root);

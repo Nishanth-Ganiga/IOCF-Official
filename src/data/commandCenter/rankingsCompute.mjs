@@ -10,6 +10,7 @@
 //     aliases,                      // playerAliases.json
 //   }
 //   → { <ranking id>: [{ key, rank }] }   (the first TOP entries of each)
+import { isHiddenBoard } from '../hiddenBoards.mjs';
 import { FORMAT_ORDER, TOURNAMENT_FORMAT, formatKey, norm } from '../careerStats.mjs';
 import { CATEGORIES, boardsIn, groupPlayers, rankPlayers, rankRows, seriesTable } from '../rankingsCore.mjs';
 import { buildAliasIndex } from './aliases.mjs';
@@ -115,7 +116,8 @@ export function computeAllRankings(input) {
     }
   }
   const rosterBoard = (name) => dataset.players.find((p) => norm(p.name) === norm(name))?.boardId;
-  const boardPeople = groupPlayers(lines, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name });
+  // (a dismantled board's players are not ranked; their statistics still count in the totals of the players they were played against)
+  const boardPeople = groupPlayers(lines, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name }).filter((p) => !isHiddenBoard(p.boardSlug));
   const boardFormats = FORMAT_ORDER.filter((f) => boardPeople.some((p) => p.lines.some((l) => l.format === f)));
 
   // ---- players, franchise leagues: the scorer's rows linked to their squad entry (which names the player's national board)

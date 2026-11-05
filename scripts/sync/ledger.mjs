@@ -1,4 +1,5 @@
 // Parses the board sheets and federation-wide sheets of the IOCF workbook into boards, players, umpires and info.
+import { isHiddenBoard } from '../../src/data/hiddenBoards.mjs';
 import { MERGES, TRANSFERS } from './transfers.mjs';
 import { BOARD_SHEETS, boardName, cleanName, fmtn, isNum, norm, s, slug, stripEmoji, titleCase, trimChars } from './helpers.mjs';
 
@@ -465,7 +466,7 @@ export function buildLedger(book) {
     if (fed.council[board]) facts.push({ label: 'Council', value: fed.council[board].replace('Council of ', '') });
     const rks = [];
     for (const [f, rows] of Object.entries(fed.rankings)) {
-      const valid = rows.filter((r) => r.points && r.points > 0).sort((x, y) => y.points - x.points);
+      const valid = rows.filter((r) => r.points && r.points > 0 && !isHiddenBoard(r.board)).sort((x, y) => y.points - x.points);
       valid.forEach((r, i) => {
         if (r.board === board) rks.push({ format: f.replace('Overall Board', 'Overall'), rank: i + 1, points: r.points, played: r.played, won: r.won });
       });

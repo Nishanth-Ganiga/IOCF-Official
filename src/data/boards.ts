@@ -1,4 +1,5 @@
 import { visions } from './chairmanContent';
+import { isHiddenBoard } from './hiddenBoards.mjs';
 import { store } from './store';
 
 /** The 26 IOCF boards, in directory order. Chairman details are filled in here once confirmed. */
@@ -69,6 +70,7 @@ const baseBoards: Board[] = [
 
 /** Base list merged with data imported from the live dataset (see store.ts). Manual edits can go in the base list. */
 export const boards: Board[] = baseBoards
+  .filter((b) => !isHiddenBoard(b.name))
   .map((b) => {
     const i = store.boards.find((x) => x.name === b.name);
     return i ? { ...b, chairman: b.chairman ?? i.chairman, ceo: i.ceo, sponsors: i.sponsors, facts: i.facts, rankings: i.rankings, achievements: b.achievements ?? i.achievements } : b;

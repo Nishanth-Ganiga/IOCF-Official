@@ -1,5 +1,6 @@
 import { api } from './commandApi';
 import { decodePlayers, type PlayerStats } from './leagueStats';
+import { isHiddenBoard } from './hiddenBoards.mjs';
 import { store } from './store';
 import type { TournamentEdition } from './tournaments';
 
@@ -101,7 +102,7 @@ export function groupsOf(stats: TournamentStats | undefined): BoardGroup[] {
     if (!out.has(key)) out.set(key, { slug: key, name, squad, players: [] });
     out.get(key)!.players.push(p);
   }
-  return [...out.values()];
+  return [...out.values()].filter((g) => !isHiddenBoard(g.slug));
 }
 
 export const groupTotals = (players: PlayerStats[]) => ({

@@ -1,3 +1,4 @@
+import { isHiddenBoard } from '../hiddenBoards.mjs';
 import boardsJson from './boards.json';
 import modulesJson from './modules.json';
 
@@ -22,7 +23,8 @@ export type BoardTheme = {
   mascot: { name: string; emoji?: string; image?: string };
 };
 
-export const BOARD_THEMES = boardsJson as BoardTheme[];
+// (a dismantled board is left out of the choices the staff see; the server still knows it)
+export const BOARD_THEMES = (boardsJson as BoardTheme[]).filter((b) => !isHiddenBoard(b.slug));
 export const themeOf = (slug: string | null | undefined) => BOARD_THEMES.find((b) => b.slug === slug);
 
 export type ModuleDef = { id: string; title: string; description: string; status: 'active' | 'coming-soon'; icon: string };

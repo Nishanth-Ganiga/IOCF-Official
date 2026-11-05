@@ -1,9 +1,10 @@
 // Keeps a short history of board rankings so the site can show rank movement (▲ / ▼).
 import fs from 'node:fs';
+import { closeUpRanks } from '../../src/data/hiddenBoards.mjs';
 
 const MAX_SNAPSHOTS = 12;
 
-const ranksOf = (boards) => Object.fromEntries((boards ?? []).map((b) => [b.name, Object.fromEntries((b.rankings ?? []).map((r) => [r.format, r.rank]))]));
+const ranksOf = (boards) => closeUpRanks(Object.fromEntries((boards ?? []).map((b) => [b.name, Object.fromEntries((b.rankings ?? []).map((r) => [r.format, r.rank]))])));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
@@ -20,7 +21,8 @@ export function readPrior(file) {
 }
 
 export function withRankHistory(dataset, prior) {
-  const history = Array.isArray(prior?.rankHistory) ? [...prior.rankHistory] : [];
+  // (a hidden board is taken out of the older states too, and the ranks below it close up, so its removal is not shown as movement)
+  const history = Array.isArray(prior?.rankHistory) ? prior.rankHistory.map((h) => ({ ...h, ranks: closeUpRanks(h.ranks) })) : [];
   if (prior?.boards?.length) {
     const priorRanks = ranksOf(prior.boards);
     const last = history[history.length - 1];

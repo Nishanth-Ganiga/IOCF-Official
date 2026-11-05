@@ -1,7 +1,7 @@
 import { api } from './commandApi';
 import { decodePlayers, type PlayerStats } from './leagueStats';
 import { FORMAT_ORDER, TOURNAMENT_FORMAT, formatKey } from './careerStats.mjs';
-import { WARMUP_KEY, keyOf, seriesRecords } from './seriesRecords';
+import { WARMUP_KEY, allSeriesRecords, keyOf } from './seriesRecords';
 import { boardOf, boardSlug, loadTournamentStats } from './tournamentStats';
 import { majorTournaments } from './tournaments';
 
@@ -34,7 +34,7 @@ async function build(): Promise<CareerLine[]> {
   }
   // series: the statistics the administrator uploaded (the sheet's own format is used for an earlier series without one set)
   try {
-    const sheetFormat = new Map([...seriesRecords().completed, ...seriesRecords().upcoming].map((r) => [keyOf(r), r.format]));
+    const sheetFormat = new Map([...allSeriesRecords().completed, ...allSeriesRecords().upcoming].map((r) => [keyOf(r), r.format]));
     const { series } = await api.seriesLines();
     for (const s of series) {
       const format = formatKey(s.format) ?? formatKey(sheetFormat.get(s.key)) ?? (s.key === WARMUP_KEY ? 'odi' : null);

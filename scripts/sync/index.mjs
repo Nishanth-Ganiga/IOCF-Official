@@ -7,6 +7,7 @@ import { buildLeagues } from './leagues.mjs';
 import { buildLedger } from './ledger.mjs';
 import { buildSeriesRecords } from './series.mjs';
 import { buildMajorTournaments } from './tournaments.mjs';
+import { isHiddenBoard, mentionsHiddenBoard } from '../../src/data/hiddenBoards.mjs';
 
 export async function readWorkbook(source) {
   const wb = new ExcelJS.Workbook();
@@ -33,6 +34,7 @@ export function buildDataset(book, meta = {}) {
     info: buildInfo(ledger.fed),
   };
   validate(dataset);
+  hideDismantledBoards(dataset);
   // a spelling link (playerAliases.json) names the player as he is on his board's roster; if the sheet has changed that name the link no
   // longer fits, and — worse — would hide his statistics, so say so
   let staleAliases = 'none';
@@ -44,6 +46,23 @@ export function buildDataset(book, meta = {}) {
     /* no link file: nothing to check */
   }
   return { dataset, report: { staleAliases, boards: dataset.boards.length, players: dataset.players.length, umpires: dataset.umpires.length, leagues: leagues.length, majorTournaments: dataset.majorTournaments.length, seriesRecords: dataset.seriesRecords ? `${dataset.seriesRecords.completed.length} completed, ${dataset.seriesRecords.upcoming.length} upcoming` : 'no Series Matches tab', tournamentsWithoutATab: missingTournaments.join(', ') || 'none', leaguePlayers: leagues.reduce((n, l) => n + l.teams.reduce((m, t) => m + t.players.length, 0), 0), matches: leagues.reduce((n, l) => n + l.matches.length, 0), unmatchedNames: ledger.unmatched + unmatched } };
+}
+
+/**
+ * Dismantled boards (src/data/hiddenBoards.mjs) are taken out of what the site shows: the board, its roster and umpires, and the tables of a
+ * tournament that mention it. The series records stay (the series are still part of the other boards' record and their statistics are
+ * filed under them); the site hides them where they are listed.
+ */
+function hideDismantledBoards(d) {
+  const slug = (n) => String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const gone = new Set(d.boards.filter((b) => isHiddenBoard(b.name)).map((b) => slug(b.name)));
+  d.boards = d.boards.filter((b) => !isHiddenBoard(b.name));
+  d.players = d.players.filter((p) => !gone.has(p.boardId));
+  d.umpires = d.umpires.filter((u) => !gone.has(u.boardId));
+  const ids = new Set(d.umpires.map((u) => u.id));
+  d.umpireOrder = d.umpireOrder.filter((id) => ids.has(id));
+  for (const l of d.leagues) for (const t of l.teams) t.players = t.players.map((p) => (p.board && isHiddenBoard(p.board) ? { ...p, board: undefined } : p));
+  for (const t of d.majorTournaments) for (const e of t.editions ?? []) e.sections = e.sections.filter((s) => !mentionsHiddenBoard(s));
 }
 
 /** Refuse to publish a dataset that is obviously broken (e.g. someone renamed a sheet or deleted a tab). */
