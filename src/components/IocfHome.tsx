@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Capacitor } from '@capacitor/core';
 import { viewerProfiles, type ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
+import FoundersMessage from './FoundersMessage';
 import HowToPlay from './HowToPlay';
 import { ProfileAvatar } from './ProfileSelector';
 import { EASE } from './fx';
@@ -113,7 +114,7 @@ export default function IocfHome({ profileId, onSwitch }: { profileId: ProfileId
 
   return (
     <>
-      <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={[{ id: 'top', label: 'Home' }, { id: 'how-to-play', label: 'How to play' }, ...SECTIONS.map((s) => ({ id: s.id as string, label: s.label as string })), { id: 'my', label: 'My IOCF' }]} />
+      <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={[{ id: 'top', label: 'Home' }, { id: 'founder', label: 'Founder’s message' }, { id: 'how-to-play', label: 'How to play' }, ...SECTIONS.map((s) => ({ id: s.id as string, label: s.label as string })), { id: 'my', label: 'My IOCF' }]} />
       {mine ? (
         <main className="min-h-[100svh]">
           <MyIocf onSwitch={onSwitch} />
@@ -218,6 +219,7 @@ export default function IocfHome({ profileId, onSwitch }: { profileId: ProfileId
         </section>
 
         <RecentResults onSwitch={onSwitch} />
+        <FoundersMessage />
         <HowToPlay />
         <AboutIocf />
         {SECTIONS.map((s) => (
