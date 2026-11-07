@@ -116,8 +116,8 @@ export function computeAllRankings(input) {
     }
   }
   const rosterBoard = (name) => dataset.players.find((p) => norm(p.name) === norm(name))?.boardId;
-  // (a dismantled board's players are not ranked; their statistics still count in the totals of the players they were played against)
-  const boardPeople = groupPlayers(lines, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name }).filter((p) => !isHiddenBoard(p.boardSlug));
+  // (a player still listed under a dismantled board stays ranked; only the board's name is not shown)
+  const boardPeople = groupPlayers(lines, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name }).map((p) => (isHiddenBoard(p.boardSlug) ? { ...p, boardSlug: '', boardName: '—' } : p));
   const boardFormats = FORMAT_ORDER.filter((f) => boardPeople.some((p) => p.lines.some((l) => l.format === f)));
 
   // ---- players, franchise leagues: the scorer's rows linked to their squad entry (which names the player's national board)

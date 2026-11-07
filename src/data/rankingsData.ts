@@ -23,7 +23,7 @@ const boardNameOf = (boardSlug: string) => store.boards.find((b) => slug(b.name)
 /** Players with their major-tournament and series lines, each with its format. */
 export async function loadBoardPeople(): Promise<Person[]> {
   const lines = await loadCareerLines();
-  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf }).filter((p) => !isHiddenBoard(p.boardSlug));
+  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf }).map((p) => (isHiddenBoard(p.boardSlug) ? { ...p, boardSlug: '', boardName: '—' } : p));
 }
 
 /** Players with their franchise league lines (no formats: the franchise leagues are ranked on their own). */

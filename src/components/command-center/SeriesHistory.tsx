@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { api, ApiError, type Series, type SeriesOverview, type SeriesStatsDetail, type SeriesStatsSummary } from '../../data/commandApi';
 import { paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
 import { boardLabel, boardsOf, isWarmup, keyOf, resultText, statsKeyOf, seriesRecords, withoutSiteDuplicates, type SeriesRecord } from '../../data/seriesRecords';
+import { withPresentBoard } from '../../data/presentBoard';
 import StatsTable from './StatsTable';
 
 const money = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -104,7 +105,7 @@ function SeriesStatsPanel({ statsKey, hl, combined = false }: { statsKey: string
   const toggle = () => {
     if (state.open) return setState({ ...state, open: false });
     setState({ ...state, open: true });
-    if (!state.data) api.seriesStats(statsKey).then((data) => setState({ open: true, data }), (e: unknown) => setState({ open: true, error: e instanceof ApiError ? e.message : 'Something went wrong.' }));
+    if (!state.data) api.seriesStats(statsKey).then((data) => setState({ open: true, data: { ...data, players: withPresentBoard(data.players) } }), (e: unknown) => setState({ open: true, error: e instanceof ApiError ? e.message : 'Something went wrong.' }));
   };
   const groups = useMemo(() => {
     const m = new Map<string, SeriesStatsDetail['players']>();

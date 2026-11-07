@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError, type TotalsResponse } from '../../data/commandApi';
 import { paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
+import { withPresentBoard } from '../../data/presentBoard';
 import StatsTable from './StatsTable';
 
 /** Every player's totals over all the series whose statistics the administrator has uploaded. */
@@ -11,7 +12,7 @@ export default function SeriesPlayerStats({ theme }: { theme: BoardTheme }) {
   const [query, setQuery] = useState('');
   const [board, setBoard] = useState<'mine' | 'all'>('mine');
   useEffect(() => {
-    api.seriesTotals().then(setData, (e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.'));
+    api.seriesTotals().then((d) => setData({ ...d, players: withPresentBoard(d.players) }), (e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.'));
   }, []);
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();

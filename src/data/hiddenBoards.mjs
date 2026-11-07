@@ -12,6 +12,12 @@ export const isHiddenBoard = (nameOrSlug) => {
   return hiddenKeys.has(k) || hiddenKeys.has(k.replace(/(emerging|w)$/, ''));
 };
 
+/** What is shown where a dismantled board's name would have been (for example as an opponent in an old series). */
+export const DISMANTLED_LABEL = 'A dismantled board';
+
+/** A text with the dismantled boards' names replaced. */
+export const scrubText = (text) => HIDDEN_BOARDS.reduce((t, b) => t.replace(new RegExp(`\\b${b}\\b`, 'gi'), DISMANTLED_LABEL), String(text ?? ''));
+
 /** Does any text of this value (a table section, a row…) mention a hidden board? */
 export const mentionsHiddenBoard = (value) => {
   const text = JSON.stringify(value) ?? '';

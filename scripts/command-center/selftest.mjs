@@ -1195,7 +1195,8 @@ console.log('\n— Unlimited Fun: the games —');
 
 
 {
-  const { isHiddenBoard, mentionsHiddenBoard, closeUpRanks } = await import('../../src/data/hiddenBoards.mjs');
+  const { isHiddenBoard, mentionsHiddenBoard, closeUpRanks, scrubText, DISMANTLED_LABEL } = await import('../../src/data/hiddenBoards.mjs');
+  check('a dismantled board’s name is replaced in a text, other names are kept', scrubText('Canada 2 - 1 Kenya') === `Canada 2 - 1 ${DISMANTLED_LABEL}` && scrubText('Nepal beat Spain') === 'Nepal beat Spain');
   check('a dismantled board is recognised by name, slug and squad name, other boards are not', isHiddenBoard('Kenya') && isHiddenBoard('kenya') && isHiddenBoard('KENYA EMERGING') && isHiddenBoard('KENYA W') && !isHiddenBoard('Nepal') && !isHiddenBoard('South Africa') && !isHiddenBoard(null));
   check('a table that names the board is found, but a longer word is not', mentionsHiddenBoard({ columns: ['Kenya Squad'] }) && !mentionsHiddenBoard({ x: 'Mount Kenyatta' }) && !mentionsHiddenBoard({ x: 'Nepal' }));
   const r = closeUpRanks({ A: { Overall: 1, T20: 2 }, Kenya: { Overall: 2 }, B: { Overall: 3, T20: 1 }, C: { Overall: 4 } });

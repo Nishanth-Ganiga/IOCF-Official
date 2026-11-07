@@ -1,4 +1,4 @@
-import { isHiddenBoard } from './hiddenBoards.mjs';
+import { DISMANTLED_LABEL, isHiddenBoard, scrubText } from './hiddenBoards.mjs';
 import { store } from './store';
 
 /**
@@ -31,11 +31,18 @@ export type SeriesRecords = { completed: SeriesRecord[]; upcoming: SeriesRecord[
 
 /** Every record, including those of a dismantled board: for the statistics and the series rankings, which they still count in. */
 export const allSeriesRecords = (): SeriesRecords => store.seriesRecords ?? { completed: [], upcoming: [] };
-/** The records to show: those of a dismantled board (src/data/hiddenBoards.mjs) are left out. */
+/**
+ * The records to show. A dismantled board (src/data/hiddenBoards.mjs) is never named: where it took part, the record says "A dismantled
+ * board" (with no board page), so the series and the other boards' statistics in it stay visible.
+ */
+const scrubBoard = (b: RecordBoard): RecordBoard => (isHiddenBoard(b.name) || (b.slug && isHiddenBoard(b.slug)) ? { name: DISMANTLED_LABEL, slug: null } : b);
+const scrubRecord = (r: SeriesRecord): SeriesRecord =>
+  [r.host, ...r.opponents, r.winner, r.runnerUp].some((b) => b && (isHiddenBoard(b.name) || (b.slug && isHiddenBoard(b.slug))))
+    ? { ...r, host: scrubBoard(r.host), opponents: r.opponents.map(scrubBoard), winner: r.winner && scrubBoard(r.winner), runnerUp: r.runnerUp && scrubBoard(r.runnerUp), resultLines: r.resultLines && r.resultLines.map(scrubText) }
+    : r;
 export const seriesRecords = (): SeriesRecords => {
   const all = allSeriesRecords();
-  const shown = (r: SeriesRecord) => ![r.host, ...r.opponents, r.winner, r.runnerUp].some((b) => b && (isHiddenBoard(b.name) || (b.slug && isHiddenBoard(b.slug))));
-  return { completed: all.completed.filter(shown), upcoming: all.upcoming.filter(shown) };
+  return { completed: all.completed.map(scrubRecord), upcoming: all.upcoming.map(scrubRecord) };
 };
 
 export const boardsOf = (r: SeriesRecord) => [r.host, ...r.opponents];
