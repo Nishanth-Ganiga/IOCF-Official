@@ -61,7 +61,7 @@
   "functions": {
     "api/iocf-data.mjs": {
       "maxDuration": 30,
-      "includeFiles": "iocf.config.json"
+      "includeFiles": "{src/data/hiddenBoards.mjs,iocf.config.json}"
     },
     "api/command-center.mjs": {
       "maxDuration": 30,
