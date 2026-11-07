@@ -263,7 +263,16 @@ export function buildLedger(book) {
   };
   for (const [board, b] of Object.entries(B)) for (const n of b.roster) addPlayer(board, n);
 
-  const match = (board, name, create = true) => {
+  // a one- or two-letter typo ("Midhun Manial" for "Midhun Manilal")
+  const closeSpelling = (a, b) => {
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return 1 - d[a.length][b.length] / Math.max(a.length, b.length) >= 0.85;
+  };
+  // `strict` (used for chairmen and CEOs): another spelling of the same name only counts when each word is the start of the other's
+  // ("Anand Ajk" / "Anand Ajikumar"); "Muhammad Talha" is not "Muhammad Touqeer" just because both second words start with T.
+  const match = (board, name, create = true, strict = false) => {
     const ix = (index[board] ??= new Map());
     const k = norm(name);
     if (!k) return null;
@@ -272,7 +281,10 @@ export function buildLedger(book) {
     const cands = [];
     for (const p of players[board] ?? []) {
       const pt = p.name.trim().toLowerCase().split(/\s+/).filter(Boolean);
-      if (pt.length && toks.length && pt[0] === toks[0] && (pt.length === 1 || toks.length === 1 || pt[1][0] === toks[1][0])) cands.push(p);
+      const fits = strict
+        ? pt.length && toks.length && (pt.slice(0, Math.min(pt.length, toks.length)).every((w, i) => w.startsWith(toks[i]) || toks[i].startsWith(w)) || closeSpelling(norm(p.name), k))
+        : pt.length && toks.length && pt[0] === toks[0] && (pt.length === 1 || toks.length === 1 || pt[1][0] === toks[1][0]);
+      if (fits) cands.push(p);
     }
     if (cands.length === 1) {
       ix.set(k, cands[0]);
@@ -451,7 +463,7 @@ export function buildLedger(book) {
   for (const [board, b] of Object.entries(B)) {
     for (const [role, cell] of [['Chairman', b.chairman], ['CEO', b.ceo]]) {
       for (const name of String(cell ?? '').split(/\s*(?:&|\band\b|,)\s*/).map((x) => x.trim()).filter(Boolean)) {
-        const p = match(board, name, false) ?? addPlayer(board, name);
+        const p = match(board, name, false, true) ?? addPlayer(board, name);
         (p.official ??= []).includes(role) || p.official.push(role);
       }
     }
@@ -474,7 +486,7 @@ export function buildLedger(book) {
     const ch = b.chairman;
     let ach = [];
     if (ch) {
-      const p = match(board, ch, false);
+      const p = match(board, ch, false, true);
       if (p) ach = [...p.ach];
     }
     const ob = { name: board, chairman: ch, ceo: b.ceo, sponsors: b.sponsors, facts, rankings: rks, achievements: ach };
