@@ -61,7 +61,11 @@ const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').repl
 const istDay = (t) => new Date(t + IST_MS).toISOString().slice(0, 10);
 const validDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
 
-export function validateSeries(input, host, boards, t = Date.now()) {
+/**
+ * `keepClubFormat`: the club format a series being edited already has. A retired format (series.json: "retired") is kept on the series that
+ * were announced with it, but it can no longer be chosen for a new one.
+ */
+export function validateSeries(input, host, boards, t = Date.now(), keepClubFormat = null) {
   const i = input && typeof input === 'object' ? input : {};
   const name = clean(i.name);
   if (name.length < 3 || name.length > 60) return { error: 'Enter the name of the series (3 to 60 characters).' };
@@ -98,7 +102,7 @@ export function validateSeries(input, host, boards, t = Date.now()) {
   if (!SERIES_CFG.formats.includes(i.format)) return { error: 'Choose the format.' };
   let clubFormat = null;
   if (i.format === 'Club') {
-    clubFormat = SERIES_CFG.clubFormats.find((c) => c.id === i.clubFormat)?.id;
+    clubFormat = SERIES_CFG.clubFormats.find((c) => c.id === i.clubFormat && (!c.retired || c.id === keepClubFormat))?.id;
     if (!clubFormat) return { error: 'Choose the club format (overs and wickets).' };
   }
   return { value: { name, series_type: type.id, opponents, matches, stadiums, dates, bet, format: i.format, club_format: clubFormat } };

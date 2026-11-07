@@ -11,7 +11,7 @@ import { createHandler, BOARDS, MODULES } from '../../server/command/handler.mjs
 import { commandCenterRequestListener } from '../../server/command/http.mjs';
 import { MemoryStore, SupabaseStore } from '../../server/command/store.mjs';
 import { buildFixtures } from '../../src/data/commandCenter/fixtures.mjs';
-import { newSeries, STADIUMS, SERIES_CFG, deadlineFor } from '../../server/command/series.mjs';
+import { newSeries, STADIUMS, SERIES_CFG, deadlineFor, validateSeries } from '../../server/command/series.mjs';
 import { AutoStore, LoginTableStore } from '../../server/command/loginTable.mjs';
 import { provision, resetCredentials, reveal, verifyRegister, readRegister, syncStatuses, REGISTER_FILE, PLAIN_FILE, backup, writePlain, importPlain, pushAccounts, applyCredentials, parseCredentialSheet, recordPassword, inspectSupabase, hostingValues, SUPABASE_URL_FOR, describeKey, adminFromRows, readTable, buildSetupSql, buildOverviewCsv, writeLoginsCsv, LOGINS_COLUMNS, LOGINS_CSV_FILE, shortPassword } from './lib.mjs';
 
@@ -511,6 +511,8 @@ console.log('\n— Series Announcement —');
   check('bet must be from the list', (await bad({ bet: 750 }, /bet/)) && (await bad({ bet: '5000; drop' }, /bet/)));
   check('format must be from the list', await bad({ format: 'T50' }, /format/i));
   check('Club needs one of the six club formats; other formats need none', (await bad({ format: 'Club' }, /club format/)) && (await bad({ format: 'Club', clubFormat: '3-3' }, /club format/)) && (await post(cIndia, 'india', good({ name: 'Club Cup', format: 'Club', clubFormat: '7-7', opponents: ['england'] }))).status === 201);
+  const vs9 = (keep) => validateSeries(good({ format: 'Club', clubFormat: '9-9', opponents: ['england'] }), 'india', BOARDS, t0, keep);
+  check('9 overs 9 wickets can no longer be chosen for a new series, but a series already announced with it keeps it', /club format/.test(vs9(null).error) && vs9('9-9').value.club_format === '9-9' && vs9('8-8').error && validateSeries(good({ format: 'Club', clubFormat: '8-8', opponents: ['england'] }), 'india', BOARDS, t0).value.club_format === '8-8' && SERIES_CFG.clubFormats.find((c) => c.id === '9-9').label === '9 overs 9 wickets');
   check('a board with no registered stadium cannot announce', (await post(cKenya, 'kenya', good({ stadiums: ['x'] }))).status === 400);
 
   // permissions

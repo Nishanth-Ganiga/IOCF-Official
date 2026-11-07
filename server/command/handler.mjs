@@ -396,7 +396,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (cur.status === 'declined') return fail(409, 'declined', 'This series was declined and can no longer be edited. Announce it again instead.');
           if (cur.status !== 'pending' || cur.accepted.length > 0) return fail(409, 'locked', 'This series has been accepted and can no longer be edited.');
           if (t > cur.deadline_at) return fail(409, 'expired', 'The deadline for this series has passed.');
-          const v = validateSeries(req.body, board.slug, BOARDS, t);
+          const v = validateSeries(req.body, board.slug, BOARDS, t, cur.club_format);
           if (v.error) return fail(400, 'invalid', v.error);
           const all = await store.seriesList();
           const range = rangeOf(v.value.dates);

@@ -524,7 +524,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
 
           <Pills hl={pal.highlight} label="BET AMOUNT" value={form.bet || undefined} options={cfg.bets} onPick={(v) => set({ bet: v })} show={money} />
           <Pills hl={pal.highlight} label="FORMAT" value={form.format || undefined} options={cfg.formats} onPick={(v) => set({ format: v, ...(v === 'Club' ? {} : { clubFormat: undefined }) })} />
-          {form.format === 'Club' && <Pills hl={pal.highlight} label="CLUB FORMAT" value={form.clubFormat} options={cfg.clubFormats.map((c) => c.id)} onPick={(v) => set({ clubFormat: v })} show={(id) => cfg.clubFormats.find((c) => c.id === id)!.label} />}
+          {form.format === 'Club' && <Pills hl={pal.highlight} label="CLUB FORMAT" value={form.clubFormat} options={cfg.clubFormats.filter((c) => !(c as { retired?: boolean }).retired || c.id === form.clubFormat).map((c) => c.id)} onPick={(v) => set({ clubFormat: v })} show={(id) => cfg.clubFormats.find((c) => c.id === id)!.label} />}
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <button type="submit" disabled={!ready || busy} className="rounded-lg px-8 py-3 text-sm font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" style={{ background: pal.highlight }}>

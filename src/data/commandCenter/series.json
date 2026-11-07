@@ -71,7 +71,8 @@
   },
   {
    "id": "9-9",
-   "label": "9 overs 9 wickets"
+   "label": "9 overs 9 wickets",
+   "retired": true
   }
  ],
  "maxSeriesPerBoard": 2
