@@ -13,6 +13,7 @@ export const TRANSFERS = [
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
   { name: 'Aniket Gavit', from: 'England', to: 'New Zealand' },
   { name: 'Mudasir Ali', from: 'Qatar', to: 'Pakistan' },
+  { name: 'Muhammad Touqeer', from: 'Qatar', to: 'Spain' },
   { name: 'Waqas Mughal', from: 'Bangladesh', to: 'Nepal' },
   { name: 'Waqas Mughal', from: 'Australia', to: 'Nepal' }, // his Australia entry is an earlier board
   { name: 'Rima Naskar Sona', from: 'Pakistan', to: 'Australia' },
