@@ -437,6 +437,16 @@ export function buildLedger(book) {
     }
     return parts.join(' · ');
   };
+  const mergeUmpire = (src, dst) => {
+    for (const [k, v] of Object.entries(src.career)) dst.career[k] = numFix((dst.career[k] ?? 0) + v);
+    for (const [k, v] of Object.entries(src.performance)) dst.performance[k] = numFix((dst.performance[k] ?? 0) + v);
+    for (const a of src.assignments) {
+      const same = dst.assignments.find((x) => x.title === a.title);
+      if (same) same.detail = sumDetail(same.detail, a.detail);
+      else dst.assignments.push(a);
+    }
+    dst.awards.push(...src.awards.filter((x) => !dst.awards.some((y) => y.title === x.title && y.detail === x.detail)));
+  };
   for (const t of TRANSFERS) {
     const src = (umps[t.from] ?? []).find((u) => norm(u.name) === norm(t.name));
     if (!src) continue;
@@ -448,14 +458,22 @@ export function buildLedger(book) {
       umps[t.to].push(src);
       continue;
     }
-    for (const [k, v] of Object.entries(src.career)) dst.career[k] = numFix((dst.career[k] ?? 0) + v);
-    for (const [k, v] of Object.entries(src.performance)) dst.performance[k] = numFix((dst.performance[k] ?? 0) + v);
-    for (const a of src.assignments) {
-      const same = dst.assignments.find((x) => x.title === a.title);
-      if (same) same.detail = sumDetail(same.detail, a.detail);
-      else dst.assignments.push(a);
+    mergeUmpire(src, dst);
+  }
+
+  // an umpire listed under the same name on several boards is one person: the entries are added together and listed on the board
+  // where he officiated most (then the one with more points).
+  const byName = new Map();
+  for (const [board, ul] of Object.entries(umps)) for (const u of ul) byName.set(norm(u.name), [...(byName.get(norm(u.name)) ?? []), { board, u }]);
+  for (const group of byName.values()) {
+    if (group.length < 2) continue;
+    const weight = ({ u }) => [u.career.total ?? 0, u.performance.points ?? 0];
+    group.sort((a, b) => weight(b)[0] - weight(a)[0] || weight(b)[1] - weight(a)[1]);
+    const [main, ...rest] = group;
+    for (const { board, u } of rest) {
+      umps[board] = umps[board].filter((x) => x !== u);
+      mergeUmpire(u, main.u);
     }
-    dst.awards.push(...src.awards.filter((x) => !dst.awards.some((y) => y.title === x.title && y.detail === x.detail)));
   }
 
   // chairmen and CEOs are players too: one that is not on the roster gets a player entry (a roster spelling that clearly fits is used
