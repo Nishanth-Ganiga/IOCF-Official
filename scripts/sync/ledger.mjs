@@ -1,6 +1,6 @@
 // Parses the board sheets and federation-wide sheets of the IOCF workbook into boards, players, umpires and info.
 import { isHiddenBoard } from '../../src/data/hiddenBoards.mjs';
-import { MERGES, TRANSFERS } from './transfers.mjs';
+import { MERGES, TRANSFERS, UMPIRE_BOARDS } from './transfers.mjs';
 import { BOARD_SHEETS, boardName, cleanName, fmtn, isNum, norm, s, slug, stripEmoji, titleCase, trimChars } from './helpers.mjs';
 
 /* ---------------- extraction (raw rows) ---------------- */
@@ -468,7 +468,9 @@ export function buildLedger(book) {
   for (const group of byName.values()) {
     if (group.length < 2) continue;
     const weight = ({ u }) => [u.career.total ?? 0, u.performance.points ?? 0];
-    group.sort((a, b) => weight(b)[0] - weight(a)[0] || weight(b)[1] - weight(a)[1]);
+    const home = UMPIRE_BOARDS[norm(group[0].u.name)];
+    const here = (g) => (g.board === home ? 1 : 0);
+    group.sort((a, b) => here(b) - here(a) || weight(b)[0] - weight(a)[0] || weight(b)[1] - weight(a)[1]);
     const [main, ...rest] = group;
     for (const { board, u } of rest) {
       umps[board] = umps[board].filter((x) => x !== u);
