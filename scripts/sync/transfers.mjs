@@ -46,4 +46,4 @@ export const MERGES = [
 
 // An umpire listed under the same name on several boards is merged into one entry. It sits on the board where he officiated most, unless
 // he is named here: the board he is on now. Applies to the umpire list only.
-export const UMPIRE_BOARDS = { 'yasin iqbal': 'Bangladesh' };
+export const UMPIRE_BOARDS = { yasiniqbal: 'Bangladesh' };
