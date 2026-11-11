@@ -108,30 +108,6 @@ export function RecordsManager({ meta, choices, stats, onChanged, site }: { meta
   });
   const counts = { noFormat: rows.filter((x) => !formatOf(x)).length, noStats: rows.filter(needsStats).length };
 
-  // starting again: removes the uploaded player statistics of every series (earlier series and series announced on the site)
-  const clearAll = async () => {
-    if (!window.confirm(`Remove the uploaded statistics of ALL ${stats.length} series? Players' series numbers disappear from the whole site until you upload the files again.`)) return;
-    setBusy('all');
-    setFlash(null);
-    let removed = 0;
-    try {
-      for (const s of stats) {
-        try {
-          await api.removeSeriesStats(s.key);
-          removed += 1;
-        } catch (e) {
-          if (!(e instanceof ApiError && e.status === 404)) throw e;
-        }
-      }
-      await onChanged();
-      setFlash({ ok: true, text: `Removed the statistics of ${removed} $series.` });
-    } catch (e) {
-      await onChanged();
-      setFlash({ ok: false, text: `${e instanceof ApiError ? e.message : 'Something went wrong.'} ${removed} removed before it stopped.` });
-    }
-    setBusy('');
-  };
-
   const setFormat = async (x: Row, format: string) => {
     setBusy(x.key);
     setFlash(null);
@@ -160,9 +136,6 @@ export function RecordsManager({ meta, choices, stats, onChanged, site }: { meta
         </button>
         <button type="button" aria-pressed={only === 'all'} onClick={() => setOnly('all')} className={chip(only === 'all')}>
           ALL · {rows.length}
-        </button>
-        <button type="button" onClick={() => void clearAll()} disabled={busy !== '' || !stats.length} className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold tracking-[0.14em] text-mist transition hover:border-crimson-2 hover:text-crimson-2 disabled:opacity-40">
-          {busy === 'all' ? 'REMOVING…' : `REMOVE ALL SERIES STATISTICS · ${stats.length}`}
         </button>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search a series or board" aria-label="Search a series or board" className="ml-auto w-full rounded-lg border border-white/15 bg-ink px-3 py-2 text-sm text-bone outline-none placeholder:text-smoke focus:border-[#c9a24b] sm:w-64" />
       </div>

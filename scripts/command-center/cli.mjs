@@ -250,12 +250,16 @@ try {
     else {
       if (!remote()) throw new Error('Supabase is not configured: put SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in ' + path.join(home, 'env') + ' first.');
       const db = store();
+      // statistics already on the site are never touched by this command (they are only replaced by an upload in the Command Center,
+      // or here with --replace), so running it again cannot undo a correction
+      const have = flag('--replace') ? new Set() : new Set((await db.statsList({ summary: true })).map((x) => x.key));
+      const skipped = ready.filter((it) => have.has(it.key));
       let done = 0;
-      for (const it of ready) {
+      for (const it of ready.filter((i) => !have.has(i.key))) {
         await db.statsPut({ key: it.key, kind: 'record', name: it.name, title: it.upload.title, tour: it.upload.tour, players: it.upload.players, fields: it.upload.fields, rows: it.upload.rows, uploaded_at: Date.now(), uploaded_by: 'local-cli' });
         done++;
       }
-      console.log(`Uploaded the statistics of ${done} series to Supabase. Run it again any time: a series that already has statistics is replaced, not doubled.`);
+      console.log(`Uploaded the statistics of ${done} series to Supabase.${skipped.length ? ` ${skipped.length} series already have statistics and were left as they are (add --replace to overwrite them).` : ''}`);
     }
   } else if (cmd === 'backup') {
     const out = opt('--out');
