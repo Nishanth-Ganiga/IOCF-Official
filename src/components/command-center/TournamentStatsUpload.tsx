@@ -6,7 +6,7 @@ const GOLD = '#c9a24b';
 const when = (ms: number) => new Date(ms).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /**
- * Replace a Major Tournament's player statistics with the scorer's latest export. The new file replaces the bundled CSV of that
+ * Replace a Major Tournament's player statistics with the scorer's latest export. The new file replaces the previous upload of that
  * tournament everywhere (its statistics page, player profiles, rankings), so it can be repeated as often as the tournament goes on.
  * With `adminOnly` the control is invisible to everyone but a signed-in administrator (it sits on the public tournament page).
  */
@@ -48,7 +48,7 @@ export default function TournamentStatsUpload({ id, name, adminOnly = false }: {
     setMsg(null);
     try {
       await api.removeSeriesStats(`tour-${id}`);
-      done('Back to the bundled statistics.');
+      done('The uploaded statistics were removed.');
     } catch (e) {
       setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong.' });
       setBusy(false);
@@ -63,7 +63,7 @@ export default function TournamentStatsUpload({ id, name, adminOnly = false }: {
       <p className="mt-1 text-sm text-mist">
         Upload the scorer&apos;s latest player-statistics CSV for <b className="text-bone">{name}</b>. It replaces the current statistics everywhere — this page, player profiles and the rankings. Upload a newer file whenever the tournament moves on.
       </p>
-      <p className="mt-2 text-xs text-smoke">{uploadedAt ? `Last uploaded ${when(uploadedAt)}.` : 'Showing the statistics bundled with the site.'}</p>
+      <p className="mt-2 text-xs text-smoke">{uploadedAt ? `Last uploaded ${when(uploadedAt)}.` : 'No statistics uploaded yet.'}</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <input ref={input} type="file" accept=".csv,text/csv" aria-label={`Statistics CSV for ${name}`} className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
         <button type="button" onClick={() => input.current?.click()} disabled={busy} className="rounded-lg px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: GOLD }}>
@@ -71,7 +71,7 @@ export default function TournamentStatsUpload({ id, name, adminOnly = false }: {
         </button>
         {uploadedAt && (
           <button type="button" onClick={() => void remove()} disabled={busy} className="text-xs font-semibold tracking-[0.18em] text-mist hover:text-bone disabled:opacity-50">
-            USE THE BUNDLED STATISTICS AGAIN
+            REMOVE THE UPLOADED STATISTICS
           </button>
         )}
       </div>

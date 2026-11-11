@@ -44,6 +44,13 @@ const login = async (role, c, ip) => {
   return { r, cookie: r.status === 200 ? `iocf_cc=${cookieOf(r)}` : null };
 };
 
+// the bundled tournament statistics are empty (the administrator uploads them), so the ranking tests bring their own small tournament
+function fixtureTournamentStats() {
+  const { fields } = JSON.parse(fs.readFileSync('src/data/tournamentStats.json', 'utf8'));
+  const row = (name, team, runs, wickets) => fields.map((f) => ({ name, team, matches: 5, batInn: 5, runs, balls: runs, wickets, bowlInn: 5, ballsBowled: 60, runsConceded: 50 })[f] ?? null);
+  return { fields, tournaments: { 'asia-cup': { title: 'Asia Cup', tour: 'x', rows: [row('Alpha One', 'INDIA', 300, 2), row('Bravo Two', 'PAKISTAN', 200, 9), row('Charlie Three', 'ENGLAND', 100, 5)] } } };
+}
+
 console.log('— setup —');
 check('27 accounts created (1 admin + 26 boards)', created.length === 27 && created.filter((c) => c.type === 'Board Chairman').length === 26);
 check('every username and password is unique', new Set(created.map((c) => c.username)).size === 27 && new Set(created.map((c) => c.password)).size === 27);
@@ -1086,11 +1093,14 @@ console.log('\n— Rank movement (10-day moves) —');
 
   // every ranking of the profile, computed from the dataset
   const snap = JSON.parse(fs.readFileSync('src/data/snapshot.json', 'utf8'));
-  const input = { dataset: snap, tournamentStats: JSON.parse(fs.readFileSync('src/data/tournamentStats.json', 'utf8')), leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), aliases: JSON.parse(fs.readFileSync('src/data/commandCenter/playerAliases.json', 'utf8')), seriesStats: [], seriesResults: [], meta: {} };
+  const input = { dataset: snap, tournamentStats: fixtureTournamentStats(), leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), aliases: JSON.parse(fs.readFileSync('src/data/commandCenter/playerAliases.json', 'utf8')), seriesStats: [], seriesResults: [], meta: {} };
   const all = computeAllRankings(input);
   const ids = Object.keys(all);
   check('every ranking is worked out: boards (each format), credits, series, players (board and franchise, every category), umpires, league tables, titles', ids.includes('boards.Overall') && ids.includes('credits') && ids.includes('series.all') && ids.includes(rankingId.players('board', 'batting', 'runs')) && ids.includes(rankingId.players('franchise', 'bowling', 'wickets')) && ids.includes('umpires') && ids.includes('majors') && ids.some((i) => i.startsWith('league.')) && ids.length > 100);
   check('each ranking lists at most 100 entries, ranked from 1, with unique keys', ids.every((i) => all[i].length <= 100 && all[i].every((x, k) => x.rank >= 1 && x.key && (k === 0 || x.rank >= all[i][k - 1].rank)) && new Set(all[i].map((x) => x.key)).size === all[i].length));
+  const scoped = (sc) => all[rankingId.players(sc, 'batting', 'runs')] ?? null;
+  check('player rankings come in five scopes: overall, board cricket, major tournaments, series, franchise leagues; the series one is empty without series statistics, the tournament one only has tournament players',
+    ['overall', 'board', 'tournament', 'series', 'franchise'].every((sc) => scoped(sc)) && scoped('series').length === 0 && scoped('tournament').length === 3 && scoped('board').length === 3 && scoped('overall').length >= scoped('franchise').length && scoped('overall').length > scoped('board').length);
   const again = computeAllRankings(input);
   check('the same data gives the same ranks, so nothing counts as a move', JSON.stringify(again) === JSON.stringify(all));
   // a rise in someone's runs moves him up
@@ -1112,7 +1122,7 @@ console.log('\n— Rank movement through the API —');
 {
   const { rankingId } = await import('../../src/data/commandCenter/rankingsCompute.mjs');
   const snap0 = JSON.parse(fs.readFileSync('src/data/snapshot.json', 'utf8'));
-  const base0 = { dataset: snap0, tournamentStats: JSON.parse(fs.readFileSync('src/data/tournamentStats.json', 'utf8')), leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), aliases: JSON.parse(fs.readFileSync('src/data/commandCenter/playerAliases.json', 'utf8')), seriesStats: [], seriesResults: [], meta: {} };
+  const base0 = { dataset: snap0, tournamentStats: fixtureTournamentStats(), leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), aliases: JSON.parse(fs.readFileSync('src/data/commandCenter/playerAliases.json', 'utf8')), seriesStats: [], seriesResults: [], meta: {} };
   let current = base0;
   let loads = 0;
   let clock2 = Date.UTC(2026, 10, 3, 6, 0, 0);

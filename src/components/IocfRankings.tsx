@@ -5,7 +5,7 @@ import type { ProfileId } from '../data/portfolio';
 import { CATEGORIES, boardsIn, rankPlayers, rankRows, seriesTable, type Category, type Person, type RankedPlayer } from '../data/rankingsCore.mjs';
 import { api } from '../data/commandApi';
 import { rankingId } from '../data/commandCenter/rankingIds.mjs';
-import { loadBoardPeople, loadFranchisePeople, loadSeriesResults, type SeriesResult } from '../data/rankingsData';
+import { loadPeople, loadSeriesResults, PLAYER_SCOPES, type PlayerScope, type SeriesResult } from '../data/rankingsData';
 import { store } from '../data/store';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import { Flag } from './IocfChairmen';
@@ -359,7 +359,7 @@ const KIND_COLS: Record<string, { label: string; get: (t: Record<string, number 
 
 function PlayerRankings({ kind }: { kind: 'batting' | 'bowling' | 'fielding' | 'awards' }) {
   const cats = CATEGORIES[kind] as Category[];
-  const [scope, setScope] = useState<'board' | 'franchise'>('board');
+  const [scope, setScope] = useState<PlayerScope>('overall');
   const [cat, setCat] = useState(cats[0].id);
   const [format, setFormat] = useState('all');
   const [query, setQuery] = useState('');
@@ -368,28 +368,29 @@ function PlayerRankings({ kind }: { kind: 'batting' | 'bowling' | 'fielding' | '
   const [error, setError] = useState(false);
   useEffect(() => {
     if (people[scope]) return;
-    (scope === 'board' ? loadBoardPeople() : loadFranchisePeople()).then((p) => setPeople((s) => ({ ...s, [scope]: p })), () => setError(true));
+    loadPeople(scope).then((p) => setPeople((s) => ({ ...s, [scope]: p })), () => setError(true));
   }, [scope, people]);
   const list = people[scope];
   const category = cats.find((c) => c.id === cat) ?? cats[0];
+  const withFormats = scope !== 'overall' && scope !== 'franchise';
   const present = useMemo(() => (list ? FORMAT_ORDER.filter((f) => list.some((p) => p.lines.some((l: { format: string | null }) => l.format === f))) : []), [list]);
-  const rows: RankedPlayer[] = useMemo(() => (list ? rankPlayers(list, category, scope === 'board' ? format : 'all') : []), [list, category, format, scope]);
+  const rows: RankedPlayer[] = useMemo(() => (list ? rankPlayers(list, category, withFormats ? format : 'all') : []), [list, category, format, withFormats]);
   const q = query.trim().toLowerCase();
   const shown = q ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.boardName.toLowerCase().includes(q)) : rows;
   const cols = KIND_COLS[kind];
-  const moves = useMoves(rankingId.players(scope, kind, category.id, scope === 'board' ? format : 'all'));
+  const moves = useMoves(rankingId.players(scope, kind, category.id, withFormats ? format : 'all'));
 
   if (error) return <Notice tone="error">The statistics could not be loaded. Please refresh the page to try again.</Notice>;
   return (
     <>
       <div className="space-y-3">
-        <Pills value={scope} options={[{ id: 'board', label: 'Board cricket (tournaments + series)' }, { id: 'franchise', label: 'Franchise leagues' }]} onPick={(v) => { setScope(v); setFormat('all'); setLimit(50); }} label="Statistics from" />
+        <Pills value={scope} options={PLAYER_SCOPES.map((o) => ({ id: o.id, label: o.label }))} onPick={(v) => { setScope(v as PlayerScope); setFormat('all'); setLimit(50); }} label="Statistics from" />
         <Pills value={category.id} options={cats.map((c) => ({ id: c.id, label: c.label }))} onPick={(v) => { setCat(v); setLimit(50); }} label="Ranked by" />
-        {scope === 'board' && present.length > 0 && <Pills value={format} options={[{ id: 'all', label: 'All formats' }, ...present.map((f) => ({ id: f, label: FORMAT_LABEL[f] as string }))]} onPick={(v) => { setFormat(v); setLimit(50); }} label="Format" />}
+        {withFormats && present.length > 0 && <Pills value={format} options={[{ id: 'all', label: 'All formats' }, ...present.map((f) => ({ id: f, label: FORMAT_LABEL[f] as string }))]} onPick={(v) => { setFormat(v); setLimit(50); }} label="Format" />}
         <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(50); }} placeholder="Search a player or board" aria-label="Search a player or board" className={searchInput} />
       </div>
       <p className="mt-3 text-xs text-smoke">
-        {scope === 'board' ? 'Major tournaments and series together' : 'Franchise leagues only, kept apart from board cricket'}
+        {PLAYER_SCOPES.find((o) => o.id === scope)?.note}
         {category.note ? ` · ${category.note}` : ''} · {rows.length} ranked.
       </p>
       <div className="mt-4">

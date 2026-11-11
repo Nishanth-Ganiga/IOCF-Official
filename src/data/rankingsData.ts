@@ -20,16 +20,13 @@ function rosterBoard(name: string) {
 
 const boardNameOf = (boardSlug: string) => store.boards.find((b) => slug(b.name) === boardSlug)?.name;
 
-/** Players with their major-tournament and series lines, each with its format. */
-export async function loadBoardPeople(): Promise<Person[]> {
-  const lines = await loadCareerLines();
-  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf }).map((p) => (isHiddenBoard(p.boardSlug) ? { ...p, boardSlug: '', boardName: '—' } : p));
-}
+const group = (lines: unknown[]): Person[] =>
+  groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf }).map((p: Person) => (isHiddenBoard(p.boardSlug) ? { ...p, boardSlug: '', boardName: '—' } : p));
 
-/** Players with their franchise league lines (no formats: the franchise leagues are ranked on their own). */
-export async function loadFranchisePeople(): Promise<Person[]> {
+/** The franchise league lines (no formats: the franchise leagues are ranked on their own). */
+async function franchiseLines() {
   const all = await loadLeagueStats();
-  const lines = store.leagues.flatMap((league) =>
+  return store.leagues.flatMap((league) =>
     league.teams.flatMap((team) =>
       playersOf(all, league, team).map((p) => {
         const board = p.squad?.board ?? '';
@@ -37,8 +34,29 @@ export async function loadFranchisePeople(): Promise<Person[]> {
       }),
     ),
   );
-  return groupPlayers(lines as never[], { aliases: ALIASES, rosterBoard, boardNameOf });
 }
+
+/** Where a ranking's statistics come from. Kept apart so a wrong number can be traced to its source. */
+export type PlayerScope = 'overall' | 'board' | 'tournament' | 'series' | 'franchise';
+export const PLAYER_SCOPES: { id: PlayerScope; label: string; note: string }[] = [
+  { id: 'overall', label: 'Overall', note: 'Board cricket and franchise leagues together' },
+  { id: 'board', label: 'Board cricket', note: 'Major tournaments and series together' },
+  { id: 'tournament', label: 'Major tournaments', note: 'Major tournaments only' },
+  { id: 'series', label: 'International series', note: 'Series only' },
+  { id: 'franchise', label: 'Franchise leagues', note: 'All franchise leagues combined' },
+];
+
+/** Players with the lines of one scope (tournament and series lines carry their format). */
+export async function loadPeople(scope: PlayerScope): Promise<Person[]> {
+  if (scope === 'franchise') return group(await franchiseLines());
+  const lines = await loadCareerLines();
+  if (scope === 'overall') return group([...lines, ...(await franchiseLines())]);
+  if (scope === 'board') return group(lines);
+  return group(lines.filter((l) => l.source === scope));
+}
+
+/** Players with their major-tournament and series lines, each with its format. */
+export const loadBoardPeople = () => loadPeople('board');
 
 export type SeriesResult = { boards: (string | null)[]; winner: string | null; format: string | null };
 

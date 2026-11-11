@@ -138,7 +138,21 @@ export function computeAllRankings(input) {
   }
   const franchisePeople = groupPlayers(franchise, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name });
 
-  for (const [scope, people, fmts] of [['board', boardPeople, ['all', ...boardFormats]], ['franchise', franchisePeople, ['all']]]) {
+  // the same statistics split by where they were played, so a wrong number can be traced to its source:
+  // overall = board cricket + franchise leagues, board = tournaments + series, tournament = Major Tournaments only, series = series only
+  const group = (ls) => groupPlayers(ls, { aliases: aliasIndex, rosterBoard, boardNameOf: (s) => boards.find((b) => b.slug === s)?.name }).map((p) => (isHiddenBoard(p.boardSlug) ? { ...p, boardSlug: '', boardName: '—' } : p));
+  const tournamentPeople = group(lines.filter((l) => l.source === 'tournament'));
+  const seriesPeople = group(lines.filter((l) => l.source === 'series'));
+  const overallPeople = group([...lines, ...franchise]);
+  const formatsOf = (people) => FORMAT_ORDER.filter((f) => people.some((p) => p.lines.some((l) => l.format === f)));
+
+  for (const [scope, people, fmts] of [
+    ['overall', overallPeople, ['all']],
+    ['board', boardPeople, ['all', ...boardFormats]],
+    ['tournament', tournamentPeople, ['all', ...formatsOf(tournamentPeople)]],
+    ['series', seriesPeople, ['all', ...formatsOf(seriesPeople)]],
+    ['franchise', franchisePeople, ['all']],
+  ]) {
     for (const kind of Object.keys(CATEGORIES)) {
       for (const cat of CATEGORIES[kind]) {
         for (const f of fmts) out[rankingId.players(scope, kind, cat.id, f)] = top(rankPlayers(people, cat, f));

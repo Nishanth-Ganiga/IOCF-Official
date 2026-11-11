@@ -76,7 +76,7 @@ Per-player statistics come from STUMPS scorer exports kept in `All Assests/`:
 | Folder | Command | Writes | Used by |
 | --- | --- | --- | --- |
 | `All  Season 1 Franchise League Stats/` | `npm run league-stats` | `src/data/leagueStats.json` | Franchise Leagues → team → player |
-| `All 2026 Major Tournaments Stats/` | `npm run tournament-stats` | `src/data/tournamentStats.json` | Major Tournaments → 2026 → Player Statistics |
+| `All 2026 Major Tournaments Stats/` (empty: the administrator uploads these CSVs in the Command Center) | `npm run tournament-stats` | `src/data/tournamentStats.json` | Major Tournaments → 2026 → Player Statistics |
 
 Run the command again after replacing or adding a CSV. Related settings:
 - `SQUAD_ALIASES` in `src/data/leagueStats.ts` — pairs a scorer's spelling of a name with the squad sheet's, where the automatic matching cannot.
