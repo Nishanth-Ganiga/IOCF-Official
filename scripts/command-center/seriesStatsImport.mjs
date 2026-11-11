@@ -36,6 +36,12 @@ export function nameScore(a, b) {
 // files that cover several series at once are kept as their own entry (counted in the totals, not shown under one series)
 const COMBINED = [{ re: /warm-?up.*all matches/i, key: 'rec-odi-wc-warmup-games', name: 'ODI World Cup warm-up games (all matches)' }];
 
+// A file whose name is closer to two series than to either alone is pointed at the one it belongs to (by file name → series name in the records).
+const FILE_SERIES = {
+  // the March series is "Dutch Carribbean Cup" (its own file); this one, from April & May, is the May series "Dutch Caribbean"
+  'Dutch Carribbean_.csv': 'Dutch Caribbean',
+};
+
 /**
  * files: [{ file, text }]; records: [{ name, host:{name,slug}, opponents:[{name,slug}] }]; boards: the 26 boards.
  * Returns one item per file: { file, status: 'ok' | 'check' | 'unmatched' | 'invalid' | 'duplicate', key, name, series, note, upload }.
@@ -44,7 +50,8 @@ export function planImport({ files, records, boards }) {
   const used = new Map();
   const items = [];
   for (const { file, text } of files) {
-    const base = file.replace(/\.csv$/i, '');
+    const leaf = file.split('/').pop();
+    const base = leaf.replace(/\.csv$/i, '');
     const parsed = parseUpload(text, boards);
     if (parsed.error) {
       items.push({ file, status: 'invalid', note: parsed.error });
@@ -63,11 +70,13 @@ export function planImport({ files, records, boards }) {
       const ids = [r.host, ...r.opponents].map((b) => b.slug).filter(Boolean);
       return slugs.length > 0 && slugs.every((s) => ids.includes(s));
     };
+    const named = FILE_SERIES[leaf];
     const scored = records
+      .filter((r) => !named || norm(r.name) === norm(named))
       .map((r) => ({ r, score: Math.max(nameScore(base, r.name), nameScore(upload.title, r.name)), fits: fits(r) }))
       .sort((a, b) => b.score - a.score);
     // the same series name can be played twice (e.g. "… I" and "… II"): among exact names prefer the one whose teams fit
-    const exact = scored.filter((x) => x.score === 1);
+    const exact = scored.filter((x) => x.score === 1 || (named && norm(x.r.name) === norm(named)));
     let pick = exact.find((x) => x.fits) ?? null;
     let status = 'ok';
     let note = `${upload.players} players`;

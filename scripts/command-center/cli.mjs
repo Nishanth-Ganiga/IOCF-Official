@@ -232,7 +232,9 @@ try {
     const { planImport } = await import('./seriesStatsImport.mjs');
     const { BOARDS } = await import('../../server/command/handler.mjs');
     const dir = path.resolve(opt('--dir') ?? 'All Assests/IOCF ALL Series Stats');
-    const names = readdirSync(dir).filter((f) => !f.startsWith('.')).sort();
+    // the folder and the month folders inside it (January 2026, MARCH 2026, April & May …)
+    const walk = (d, rel = '') => readdirSync(d, { withFileTypes: true }).filter((e) => !e.name.startsWith('.')).sort((a, b) => a.name.localeCompare(b.name)).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name), `${rel}${e.name}/`) : [`${rel}${e.name}`]));
+    const names = walk(dir);
     const snap = JSON.parse(readFileSync('src/data/snapshot.json', 'utf8'));
     const { applyRenames } = await import('../sync/series.mjs');
     const named = applyRenames({ completed: snap.seriesRecords?.completed ?? [], upcoming: snap.seriesRecords?.upcoming ?? [] }); // Qatar took over the old Afghanistan team
