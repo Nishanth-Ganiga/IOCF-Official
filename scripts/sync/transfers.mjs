@@ -16,6 +16,9 @@ export const TRANSFERS = [
   { name: 'Harsh Dubey', from: 'Bangladesh', to: 'USA' },
   { name: 'Harsh Dubey', from: 'Australia', to: 'USA' },
   { name: 'Muhammad Touqeer', from: 'Qatar', to: 'Spain' },
+  // Marami ("Marami Ahmed" in the scorer exports and in the Netherlands tabs' awards) is now on the USA roster
+  { name: 'Marami', from: 'Netherlands', to: 'USA' },
+  { name: 'Marami Ahmed', from: 'Netherlands', to: 'USA', into: 'Marami' },
   { name: 'Anas Asim', from: 'Qatar', to: 'Spain' }, // already on Spain's list; his Qatar entry is an earlier board
   { name: 'Waqas Mughal', from: 'Bangladesh', to: 'Nepal' },
   { name: 'Waqas Mughal', from: 'Australia', to: 'Nepal' }, // his Australia entry is an earlier board
