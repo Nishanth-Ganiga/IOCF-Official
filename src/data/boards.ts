@@ -66,6 +66,7 @@ const baseBoards: Board[] = [
   { name: 'Kenya', flag: '🇰🇪' },
   { name: 'Afghanistan', flag: '🇦🇫' },
   { name: 'Spain', flag: '🇪🇸' },
+  { name: 'Mexico', flag: '🇲🇽' },
 ];
 
 /** Base list merged with data imported from the live dataset (see store.ts). Manual edits can go in the base list. */

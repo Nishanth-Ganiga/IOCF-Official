@@ -99,7 +99,7 @@ const REGIONS: Record<string, string[]> = {
   Europe: ['England', 'Netherlands', 'Italy', 'Scotland', 'Ireland', 'Portugal', 'Spain'],
   Oceania: ['New Zealand', 'Australia', 'Papua New Guinea'],
   Africa: ['South Africa', 'Zimbabwe', 'Uganda', 'Kenya'],
-  'North America': ['Canada', 'USA'],
+  'North America': ['Canada', 'USA', 'Mexico'],
   Caribbean: ['West Indies'],
 };
 export const REGION_ORDER = Object.keys(REGIONS);

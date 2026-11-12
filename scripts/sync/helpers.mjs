@@ -101,6 +101,7 @@ export const BOARD_SHEETS = {
   Kenya: 'Kenya',
   Afghanistan: 'Afghanistan',
   Spain: 'Spain',
+  Mexico: 'Mexico',
 };
 
 const ALIASES = { newzealand: 'New Zealand', srilanka: 'Sri Lanka', westindies: 'West Indies', southafrica: 'South Africa', sa: 'South Africa', png: 'Papua New Guinea', papuanewguinea: 'Papua New Guinea' };

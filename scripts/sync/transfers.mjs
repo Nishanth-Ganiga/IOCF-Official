@@ -17,6 +17,9 @@ export const TRANSFERS = [
   { name: 'Harsh Dubey', from: 'Australia', to: 'USA' },
   { name: 'Muhammad Touqeer', from: 'Qatar', to: 'Spain' },
   // Marami ("Marami Ahmed" in the scorer exports and in the Netherlands tabs' awards) is now on the USA roster
+  // Mexico's new board: Ali Khan (chairman) came from Bangladesh, Ashfaq Hosain (CEO) from the USA
+  { name: 'Ali Khan', from: 'Bangladesh', to: 'Mexico' },
+  { name: 'Ashfaq Hosain', from: 'USA', to: 'Mexico' },
   { name: 'Marami', from: 'Netherlands', to: 'USA' },
   { name: 'Marami Ahmed', from: 'Netherlands', to: 'USA', into: 'Marami' },
   { name: 'Anas Asim', from: 'Qatar', to: 'Spain' }, // already on Spain's list; his Qatar entry is an earlier board

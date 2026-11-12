@@ -68,7 +68,7 @@ function hideDismantledBoards(d) {
 /** Refuse to publish a dataset that is obviously broken (e.g. someone renamed a sheet or deleted a tab). */
 export function validate(d) {
   const problems = [];
-  if (d.boards.length !== 26) problems.push(`expected 26 boards, found ${d.boards.length}`);
+  if (d.boards.length !== 27) problems.push(`expected 27 boards, found ${d.boards.length}`);
   if (d.boards.some((b) => !b.chairman)) problems.push(`boards without a chairman: ${d.boards.filter((b) => !b.chairman).map((b) => b.name).join(', ')}`);
   if (d.players.length < 100) problems.push(`only ${d.players.length} players found`);
   if (d.leagues.length < 5) problems.push(`only ${d.leagues.length} leagues found`);
