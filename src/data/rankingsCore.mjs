@@ -18,14 +18,15 @@ export function groupPlayers(lines, { aliases, rosterBoard, boardNameOf } = {}) 
     const hit = aliases ? resolveAlias(aliases, l.name, l.boardSlug) : null;
     const name = hit ? hit.name : l.name;
     const board = hit ? hit.board : l.boardSlug;
-    const key = hit || words(name) >= 2 ? norm(name) : `${norm(name)}|${board}`;
+    // a single name is only ever one person per board ("Akshay" of Ireland and "Akshay" of Japan are two players, even when both are known by aliases)
+    const key = words(name) >= 2 ? norm(name) : `${norm(name)}|${board}`;
     if (!people.has(key)) people.set(key, { key, name, lines: [], boards: new Map(), fixedBoard: hit ? hit.board : null });
     const p = people.get(key);
     p.lines.push(l);
     p.boards.set(l.boardSlug, { name: l.boardName, matches: (p.boards.get(l.boardSlug)?.matches ?? 0) + (Number(l.line?.matches) || 0) });
   }
   return [...people.values()].map((p) => {
-    const rosterSlug = rosterBoard?.(p.name) ?? p.fixedBoard;
+    const rosterSlug = (words(p.name) < 2 && p.fixedBoard) || (rosterBoard?.(p.name) ?? p.fixedBoard);
     const best = [...p.boards.entries()].sort((a, b) => b[1].matches - a[1].matches)[0];
     const boardSlug = rosterSlug ?? best[0];
     const boardName = p.boards.get(boardSlug)?.name ?? lines.find((l) => l.boardSlug === boardSlug)?.boardName ?? boardNameOf?.(boardSlug) ?? best[1].name;

@@ -25,6 +25,8 @@ export const TRANSFERS = [
     { name: 'Siddharth V Jain', from, to: 'Mexico', into: 'Sidd V Jain' },
     { name: 'Sidd V Jain', from, to: 'Mexico' },
   ]),
+  // Akshay played for Italy and is now on Japan's roster (his Japan entry is the one kept)
+  { name: 'Akshay', from: 'Italy', to: 'Japan' },
   { name: 'Marami', from: 'Netherlands', to: 'USA' },
   { name: 'Marami Ahmed', from: 'Netherlands', to: 'USA', into: 'Marami' },
   { name: 'Anas Asim', from: 'Qatar', to: 'Spain' }, // already on Spain's list; his Qatar entry is an earlier board

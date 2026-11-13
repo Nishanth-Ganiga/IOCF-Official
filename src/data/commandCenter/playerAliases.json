@@ -961,6 +961,12 @@
   "aliases": [
    {
     "name": "Akshay'z"
+   },
+   {
+    "name": "Akshay",
+    "boards": [
+     "italy"
+    ]
    }
   ]
  },
