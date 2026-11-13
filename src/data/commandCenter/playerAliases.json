@@ -532,6 +532,12 @@
     "boards": [
      "england"
     ]
+   },
+   {
+    "name": "Churami",
+    "boards": [
+     "west-indies"
+    ]
    }
   ]
  },
@@ -1709,7 +1715,7 @@
  },
  {
   "name": "Khair Mohammad",
-  "board": "qatar",
+  "board": "ireland",
   "aliases": [
    {
     "name": "Khair Mohammed"
