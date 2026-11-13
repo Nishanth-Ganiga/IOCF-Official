@@ -20,6 +20,11 @@ export const TRANSFERS = [
   // Mexico's new board: Ali Khan (chairman) came from Bangladesh, Ashfaq Hosain (CEO) from the USA
   { name: 'Ali Khan', from: 'Bangladesh', to: 'Mexico' },
   { name: 'Ashfaq Hosain', from: 'USA', to: 'Mexico' },
+  // Sidd V Jain (Siddharth V Jain in the scorer exports) played for Bangladesh, South Africa and Australia; he is now one player on Mexico
+  ...['Bangladesh', 'South Africa', 'Australia'].flatMap((from) => [
+    { name: 'Siddharth V Jain', from, to: 'Mexico', into: 'Sidd V Jain' },
+    { name: 'Sidd V Jain', from, to: 'Mexico' },
+  ]),
   { name: 'Marami', from: 'Netherlands', to: 'USA' },
   { name: 'Marami Ahmed', from: 'Netherlands', to: 'USA', into: 'Marami' },
   { name: 'Anas Asim', from: 'Qatar', to: 'Spain' }, // already on Spain's list; his Qatar entry is an earlier board
