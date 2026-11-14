@@ -12,7 +12,7 @@ const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 
 const FIXES = { bangaldesh: 'Bangladesh', netherland: 'Netherlands', netherlands: 'Netherlands', uk: 'England' };
 const FORMATS = { odi: 'ODI', t20: 'T20', t10: 'T10', l4i: 'L4I', test: 'TEST', club: 'Club' };
 
-/** A board named in the sheet as { name, slug } (slug is null for a team that is not one of the 27 boards, e.g. Argentina). */
+/** A board named in the sheet as { name, slug } (slug is null for a team that is not one of the 26 boards, e.g. Argentina). */
 export function resolveBoard(x) {
   const t = s(x);
   if (!t) return null;

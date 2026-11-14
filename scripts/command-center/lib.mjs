@@ -302,7 +302,7 @@ export async function applyCredentials({ store, home, entries, minLength = 8, dr
     } else {
       const board = boardBy(e.board);
       if (!board) {
-        problems.push(`${label}: "${e.board}" is not one of the 27 boards.`);
+        problems.push(`${label}: "${e.board}" is not one of the 26 boards.`);
         continue;
       }
       acc = accounts.find((a) => a.board_slug === board.slug);

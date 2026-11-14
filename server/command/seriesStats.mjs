@@ -50,7 +50,7 @@ export function parseUpload(csv, boards) {
   const ni = FIELD_NAMES.indexOf('name');
   const warnings = [];
   const unknown = [...new Set(parsed.rows.map((r) => String(r[ti])).filter((t) => !boardForTeam(t, boards)))];
-  if (unknown.length) warnings.push(`These team names are not one of the 27 boards, so their players are kept but not linked to a board: ${unknown.join(', ')}.`);
+  if (unknown.length) warnings.push(`These team names are not one of the 26 boards, so their players are kept but not linked to a board: ${unknown.join(', ')}.`);
   const seen = new Set();
   const dup = new Set();
   for (const r of parsed.rows) {

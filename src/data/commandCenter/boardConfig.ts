@@ -3,7 +3,7 @@ import boardsJson from './boards.json';
 import modulesJson from './modules.json';
 
 /**
- * One configuration for all 27 boards (boards.json) drives every board dashboard — there is no per-board component.
+ * One configuration for all 26 boards (boards.json) drives every board dashboard — there is no per-board component.
  * To restyle a board, edit its entry: colours, the background scene, the mascot. To use a real photo instead of the drawn
  * scene, add `"backgroundImage": "/command-center/<slug>.jpg"` to its entry and put the file in public/command-center/.
  * The same file is read by the server (server/command/handler.mjs) for the official list of boards.

@@ -345,21 +345,6 @@
   }
  },
  {
-  "slug": "kenya",
-  "name": "Kenya",
-  "flag": "🇰🇪",
-  "colors": {
-   "primary": "#101010",
-   "secondary": "#bb0000",
-   "accent": "#1e8a3c"
-  },
-  "scene": "savanna",
-  "mascot": {
-   "name": "Lion",
-   "emoji": "🦁"
-  }
- },
- {
   "slug": "afghanistan",
   "name": "Afghanistan",
   "flag": "🇦🇫",
