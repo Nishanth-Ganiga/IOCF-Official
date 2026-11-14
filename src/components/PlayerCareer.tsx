@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { FORMAT_LABEL, formatsIn, norm, selectLines, sumLines } from '../data/careerStats.mjs';
-import { aliasNorm, aliasesOf, buildAliasIndex } from '../data/commandCenter/aliases.mjs';
+import { aliasNorm, aliasesOf, buildAliasIndex, squadEntriesOf } from '../data/commandCenter/aliases.mjs';
 import aliasList from '../data/commandCenter/playerAliases.json';
 import { cleanSquadName, franchiseHistory } from '../data/franchise';
 import { loadLeagueStats, playersOf, type AllStats, type PlayerStats } from '../data/leagueStats';
@@ -166,11 +166,14 @@ export function FranchiseStats({ player, boardName }: { player: Player; boardNam
     const multi = (player.name.match(/[A-Za-z0-9]+/g) ?? []).length >= 2;
     // the other names this player is known by (see playerAliases.json): his squad entries in the franchise leagues may use them
     const names = aliasesOf(ALIASES, player.name, player.boardId);
+    // squad entries named in playerAliases.json (a spelling too plain to match on its own, e.g. "Ahmed")
+    const listed = squadEntriesOf(ALIASES, player.name, player.boardId);
+    const isListed = (league: { id: string }, team: { name: string }, entry: { name: string }) => listed.some((l) => l.league === league.id && l.team === team.name && l.name === entry.name);
     const known = (entry: { name: string }) => names.some((a) => aliasNorm(a.name) === aliasNorm(cleanSquadName(entry.name)));
     const extra = store.leagues.flatMap((league) =>
       league.teams.flatMap((team) =>
         team.players
-          .filter((entry) => !own.some((o) => o.entry === entry) && ((multi && norm(cleanSquadName(entry.name)) === norm(player.name)) || known(entry)))
+          .filter((entry) => !own.some((o) => o.entry === entry) && ((multi && norm(cleanSquadName(entry.name)) === norm(player.name)) || known(entry) || isListed(league, team, entry)))
           .map((entry) => ({ league, team, entry, honours: entry.honours ?? [] })),
       ),
     );

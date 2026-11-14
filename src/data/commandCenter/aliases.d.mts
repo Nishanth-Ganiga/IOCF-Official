@@ -1,7 +1,9 @@
-export type AliasPerson = { name: string; board: string; aliases: { name: string; boards?: string[] }[] };
+export type AliasPerson = { name: string; board: string; aliases: { name: string; boards?: string[] }[]; squadEntries?: { league: string; team: string; name: string }[] };
 export type AliasIndex = { byAlias: Map<string, { person: AliasPerson; boards: string[] | null }[]>; list: AliasPerson[] };
 export function buildAliasIndex(list: AliasPerson[]): AliasIndex;
 export function resolveAlias(index: AliasIndex | undefined, name: string, boardSlug: string): { name: string; board: string } | null;
 export function aliasesOf(index: AliasIndex | undefined, name: string, boardSlug: string): { name: string; boards?: string[] }[];
 export const aliasNorm: (s: string) => string;
 export const slugOf: (s: string) => string;
+
+export function squadEntriesOf(index: AliasIndex | undefined, name: string, boardSlug: string): { league: string; team: string; name: string }[];

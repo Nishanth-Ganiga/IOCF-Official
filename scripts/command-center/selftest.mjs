@@ -959,11 +959,13 @@ console.log('\n— Player profile statistics: formats, boards, sources —');
   const sel = selectLines(lines, { name: 'Ans Sheikh', boardSlug: 'qatar' });
   check('a name of two or more words is the same person on other boards (marked as another board); similar names are not', sel.length === 3 && sel.filter((x) => x.own).length === 2 && sel.some((x) => !x.own && x.boardSlug === 'pakistan') && !sel.some((x) => x.name === 'Ans Sheik'));
   {
-    const { buildAliasIndex, resolveAlias, aliasesOf } = await import('../../src/data/commandCenter/aliases.mjs');
+    const { buildAliasIndex, resolveAlias, aliasesOf, squadEntriesOf } = await import('../../src/data/commandCenter/aliases.mjs');
     const idx = buildAliasIndex([{ name: 'Irfan Ali', board: 'spain', aliases: [{ name: 'Irfan Ali Soomro', boards: ['qatar'] }, { name: 'Irfan Soomro', boards: ['spain'] }] }, { name: 'Niyas', board: 'india', aliases: [{ name: 'Niyaz' }] }]);
     const al = [L('Irfan Ali Soomro', 'qatar'), L('Irfan Soomro', 'spain'), L('Irfan Ali', 'spain'), L('Irfan Ali Soomro', 'pakistan'), L('Niyaz', 'canada'), L('Niyas', 'india')];
     const sp = selectLines(al, { name: 'Irfan Ali', boardSlug: 'spain' }, idx);
     check('aliases: another name of a known player is counted for him, on whichever board it was played (own board marked)', sp.length === 3 && sp.find((x) => x.boardSlug === 'qatar').own === false && sp.find((x) => x.boardSlug === 'spain' && x.name === 'Irfan Soomro').own === true && !sp.some((x) => x.boardSlug === 'pakistan'));
+    const idx2 = buildAliasIndex([{ name: 'Ahmed Mahsoof', board: 'japan', aliases: [{ name: 'Machu' }], squadEntries: [{ league: 'bbl', team: 'Melbourne Stars', name: 'Ahmed' }] }]);
+    check('aliases: a name like "Machu" counts on any board, and the franchise squad entries listed for a player are found (a plain "Ahmed" is only his where listed)', resolveAlias(idx2, 'Machu', 'pakistan')?.name === 'Ahmed Mahsoof' && squadEntriesOf(idx2, 'Ahmed Mahsoof', 'japan').length === 1 && squadEntriesOf(idx2, 'Ahmed Mahsoof', 'pakistan').length === 0);
     check('aliases: a one-word alias works too (explicitly given), and the lookup refuses an alias on a board it was not given for', selectLines(al, { name: 'Niyas', boardSlug: 'india' }, idx).length === 2 && resolveAlias(idx, 'Niyaz', 'canada').name === 'Niyas' && resolveAlias(idx, 'Irfan Ali Soomro', 'pakistan') === null && aliasesOf(idx, 'Niyas', 'india').length === 1);
   }
   check('a single name is only matched on his own board', selectLines(lines, { name: 'Abhishek', boardSlug: 'india' }).length === 1 && selectLines(lines, { name: 'Abhishek', boardSlug: 'india' })[0].boardSlug === 'india');

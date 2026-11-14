@@ -28,4 +28,12 @@ export function aliasesOf(index, name, boardSlug) {
   const p = index?.list.find((x) => x.board === boardSlug && norm(x.name) === norm(name));
   return p?.aliases ?? [];
 }
+/**
+ * Franchise squad entries that are this player under a spelling the squads use ("Ahmed" in a Big Bash squad, "Mahsoof -17000" in an IPL one):
+ * [{ league, team, name }]. Listed one by one because such a name alone (a plain "Ahmed") could be anybody.
+ */
+export function squadEntriesOf(index, name, boardSlug) {
+  const p = index?.list.find((x) => x.board === boardSlug && norm(x.name) === norm(name));
+  return p?.squadEntries ?? [];
+}
 export { norm as aliasNorm, slugOf };

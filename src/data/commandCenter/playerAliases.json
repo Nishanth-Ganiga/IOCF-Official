@@ -201,6 +201,28 @@
    {
     "name": "Machu"
    }
+  ],
+  "squadEntries": [
+   {
+    "league": "bbl",
+    "team": "Melbourne Stars",
+    "name": "Ahmed"
+   },
+   {
+    "league": "ipl",
+    "team": "Kolkata Knight Riders",
+    "name": "Mahsoof -17000"
+   },
+   {
+    "league": "spl",
+    "team": "Dundee Warriors",
+    "name": "Mahsoof (DS"
+   },
+   {
+    "league": "cpl",
+    "team": "Guyana Amazon Warriors",
+    "name": "Ahmed M"
+   }
   ]
  },
  {
