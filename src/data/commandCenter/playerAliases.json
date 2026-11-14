@@ -199,10 +199,7 @@
   "board": "japan",
   "aliases": [
    {
-    "name": "Machu",
-    "boards": [
-     "japan"
-    ]
+    "name": "Machu"
    }
   ]
  },
