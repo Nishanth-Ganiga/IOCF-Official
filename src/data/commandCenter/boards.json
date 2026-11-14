@@ -388,5 +388,20 @@
    "name": "Bull",
    "emoji": "🐂"
   }
+ },
+ {
+  "slug": "mexico",
+  "name": "Mexico",
+  "flag": "🇲🇽",
+  "colors": {
+   "primary": "#006847",
+   "secondary": "#ce1126",
+   "accent": "#f4f4f5"
+  },
+  "scene": "historic",
+  "mascot": {
+   "name": "Golden Eagle",
+   "emoji": "🦅"
+  }
  }
 ]

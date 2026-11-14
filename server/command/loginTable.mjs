@@ -151,7 +151,7 @@ export class LoginTableStore {
       const label = acc.account_id || acc.username || '(row)';
       const reject = (reason) => out.rejected.push({ row: label, reason });
       if (!acc.role || (acc.role === 'board' && !acc.board_slug)) {
-        reject('the board name is not one of the 26 boards');
+        reject('the board name is not one of the 27 boards');
         continue;
       }
       if (!/^[a-z0-9._@+-]{3,60}$/.test(acc.username)) {

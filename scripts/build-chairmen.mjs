@@ -15,7 +15,7 @@ const KEYS = {
   'New Zealand': 'new-zealand', Pakistan: 'pakistan', 'Papua New Guinea': 'papua-new-guinea', American: 'usa',
   Ugandan: 'uganda', Portuguese: 'portugal', Indian: 'india', Qatar: 'qatar', Scottish: 'scotland',
   'South Africa': 'south-africa', Spanish: 'spain', 'Sri Lankan': 'sri-lanka', UAE: 'uae', 'West Indies': 'west-indies',
-  Zimbabwe: 'zimbabwe',
+  Zimbabwe: 'zimbabwe', Mexico: 'mexico',
 };
 // Boards with two chairmen keep both people in a 2:1 frame (the UI widens the portrait box for them).
 const WIDE = new Set(['south-africa']);

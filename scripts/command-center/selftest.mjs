@@ -52,12 +52,12 @@ function fixtureTournamentStats() {
 }
 
 console.log('— setup —');
-check('27 accounts created (1 admin + 26 boards)', created.length === 27 && created.filter((c) => c.type === 'Board Chairman').length === 26);
-check('every username and password is unique', new Set(created.map((c) => c.username)).size === 27 && new Set(created.map((c) => c.password)).size === 27);
+check('28 accounts created (1 admin + 27 boards)', created.length === 28 && created.filter((c) => c.type === 'Board Chairman').length === 27);
+check('every username and password is unique', new Set(created.map((c) => c.username)).size === 28 && new Set(created.map((c) => c.password)).size === 28);
 check('passwords are 20 characters', created.every((c) => c.password.length === 20));
 check('no plain password in the store', !JSON.stringify(store.data).includes(admin.password) && store.data.accounts.every((a) => a.password_hash.startsWith('scrypt$')));
 const reg = readRegister(home);
-check('register has the 8 required columns and 27 rows', reg.length === 27 && Object.keys(reg[0]).join('|') === 'Account ID|Account Type|Board Name|Username|Encrypted Password|Account Status|Created Date|Last Updated Date');
+check('register has the 8 required columns and 28 rows', reg.length === 28 && Object.keys(reg[0]).join('|') === 'Account ID|Account Type|Board Name|Username|Encrypted Password|Account Status|Created Date|Last Updated Date');
 check('register passwords are encrypted (not readable in the file)', !fs.readFileSync(path.join(home, REGISTER_FILE), 'utf8').includes(admin.password));
 check('register and key files are private (mode 600)', (fs.statSync(path.join(home, REGISTER_FILE)).mode & 0o077) === 0 && (fs.statSync(path.join(home, 'register.key')).mode & 0o077) === 0);
 check('register agrees with the database', (await verifyRegister({ store, home })).problems.length === 0);
@@ -73,7 +73,7 @@ check('New Zealand login identifies the New Zealand board', nz.r.status === 200 
 const india = await login('board', cred('India'));
 check('India login identifies the India board', india.r.body.user.board === 'india');
 
-console.log('\n— 4. all 26 boards —');
+console.log('\n— 4. all 27 boards —');
 let allOk = true;
 for (const b of BOARDS) {
   const s = await login('board', cred(b.name));
@@ -81,7 +81,7 @@ for (const b of BOARDS) {
   const dash = await call('GET', `boards/${b.slug}/dashboard`, { cookie: s.cookie });
   if (s.r.status !== 200 || me.body.user.board !== b.slug || dash.status !== 200 || dash.body.board !== b.slug || dash.body.preview) allOk = false;
 }
-check('each of the 26 boards signs in and loads its own dashboard data', allOk);
+check('each of the 27 boards signs in and loads its own dashboard data', allOk);
 
 console.log('\n— 5/6. permissions —');
 check('a board user cannot open another board', (await call('GET', 'boards/india/dashboard', { cookie: nz.cookie })).status === 403);
@@ -90,8 +90,8 @@ check('a board user cannot change accounts or modules', (await call('PATCH', `ad
 check('no session means no access', (await call('GET', 'me')).status === 401 && (await call('GET', 'boards/india/dashboard')).status === 401 && (await call('GET', 'admin/accounts')).status === 401);
 let previews = 0;
 for (const b of BOARDS) if ((await call('GET', `boards/${b.slug}/dashboard`, { cookie: a.cookie })).body?.preview === true) previews++;
-check('admin can preview all 26 dashboards (marked as preview)', previews === 26);
-check('previews are written to the audit log', (await store.listAudit(100)).filter((e) => e.action === 'board_preview').length >= 26);
+check('admin can preview all 27 dashboards (marked as preview)', previews === 27);
+check('previews are written to the audit log', (await store.listAudit(100)).filter((e) => e.action === 'board_preview').length >= 27);
 check('unknown board is a 404', (await call('GET', 'boards/atlantis/dashboard', { cookie: a.cookie })).status === 404);
 
 console.log('\n— errors on login —');
@@ -138,11 +138,11 @@ check('a wrong password on an inactive account does NOT reveal it is inactive', 
 check('the administrator account cannot be deactivated', (await call('PATCH', `admin/accounts/${admin.accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } })).status === 400);
 check('admin reactivates India', (await call('PATCH', `admin/accounts/${cred('India').accountId}`, { cookie: adm.cookie, body: { status: 'active' } })).status === 200 && (await login('board', cred('India'))).r.status === 200);
 const ov = (await call('GET', 'admin/overview', { cookie: adm.cookie })).body;
-check('overview counts are right', ov.totalBoards === 26 && ov.totalAccounts === 27 && ov.activeBoardAccounts === 26 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 3);
+check('overview counts are right', ov.totalBoards === 27 && ov.totalAccounts === 28 && ov.activeBoardAccounts === 27 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 3);
 await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } });
 check('overview counts inactive boards', (await call('GET', 'admin/overview', { cookie: adm.cookie })).body.inactiveBoardAccounts === 1);
 const list = (await call('GET', 'admin/accounts', { cookie: adm.cookie })).body;
-check('account list covers 26 boards and exposes no secrets', list.boards.length === 26 && !/password|hash|scrypt/i.test(JSON.stringify(list)));
+check('account list covers 27 boards and exposes no secrets', list.boards.length === 27 && !/password|hash|scrypt/i.test(JSON.stringify(list)));
 check('chairman information can be updated', (await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { chairmanName: 'New Name' } })).body.chairmanName === 'New Name');
 
 console.log('\n— the administrator sets board logins in the browser —');
@@ -183,7 +183,7 @@ const made = await put3('japan', { username: 'japan.chairman', password: 'Japan-
 check('a board with no login gets one created (ID follows the board order)', made.status === 200 && made.body.created === true && made.body.accountId === 'IOCF-BRD-023');
 check('and the chairman can sign in to the Japan board', (await h3({ method: 'POST', path: ['login'], headers: H, body: { role: 'board', username: 'japan.chairman', password: 'Japan-First-Pass-1' }, ip: '3.3.3.4' })).body.user.board === 'japan');
 const lst = (await h3({ method: 'GET', path: ['admin', 'accounts'], headers: { ...H, cookie: c3 }, body: null, ip: '3.3.3.3' })).body;
-check('the account list now shows Japan as active and the others as having no login', lst.boards.find((b) => b.slug === 'japan').status === 'active' && lst.boards.filter((b) => b.status === 'none').length === 25 && lst.boards.find((b) => b.slug === 'japan').chairmanName === 'A. Chairman');
+check('the account list now shows Japan as active and the others as having no login', lst.boards.find((b) => b.slug === 'japan').status === 'active' && lst.boards.filter((b) => b.status === 'none').length === 26 && lst.boards.find((b) => b.slug === 'japan').chairmanName === 'A. Chairman');
 
 console.log('\n— 7/8. modules —');
 const nz2 = await login('board', cred('New Zealand'));
@@ -212,7 +212,7 @@ check('encrypted backup contains no readable password', !fs.readFileSync(bk, 'ut
 console.log('\n— the readable credentials file: export, edit, import —');
 const plainFile = await writePlain({ store, home });
 const plainRows = fs.readFileSync(plainFile, 'utf8').trim().split('\n');
-check('plain CSV has 27 rows and readable passwords', plainRows.length === 28 && plainRows[0] === 'Account ID,Account Type,Board Name,Username,Password,Account Status' && plainRows.some((l) => l.includes(admin.password) || l.includes('iocf.admin')));
+check('plain CSV has 28 rows and readable passwords', plainRows.length === 29 && plainRows[0] === 'Account ID,Account Type,Board Name,Username,Password,Account Status' && plainRows.some((l) => l.includes(admin.password) || l.includes('iocf.admin')));
 check('plain CSV is private (mode 600) and outside the project', (fs.statSync(plainFile).mode & 0o077) === 0 && !path.resolve(plainFile).startsWith(process.cwd()));
 const before2 = await store.findByUsername('japan.chairman');
 const edited = fs.readFileSync(plainFile, 'utf8').split('\n').map((l) => (l.includes(',japan.chairman,') ? l.replace(/,japan\.chairman,[^,]*,/, ',japan.board,MyNewPassword#2026,') : l.includes(',kenya.chairman,') ? l.replace(/,active$/, ',inactive') : l)).join('\n');
@@ -231,7 +231,7 @@ check('a username used twice is refused', await importPlain({ store, home }).the
 await writePlain({ store, home });
 const remoteLike = new MemoryStore();
 const pushed = await pushAccounts({ from: store, to: remoteLike });
-check('push copies all 27 accounts to another store', pushed.created === 27 && (await remoteLike.list()).length === 27);
+check('push copies all 28 accounts to another store', pushed.created === 28 && (await remoteLike.list()).length === 28);
 check('after push the same passwords work against the new store', await (async () => {
   const h2 = createHandler({ store: remoteLike, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock });
   const r = await h2({ method: 'POST', path: ['login'], headers: H, body: { role: 'board', username: 'japan.board', password: 'MyNewPassword#2026' }, ip: '5.5.5.5' });
@@ -281,7 +281,7 @@ check('sheet: --dry-run reports the changes but applies none', dry.changes.lengt
 const r3 = await applyCredentials({ store: store2, home: home2, entries: edited2 });
 check('sheet: an edited password and an activated account are applied', r3.changes.length === 2 && (await ok2('nz.chair', 'Kiwi-New-Pass-2026')).status === 200 && (await ok2('nz.chair', 'Kiwi-Pass-2026-x')).status === 401 && (await ok2('wi.chair', 'Windies-Pass-2026-x')).status === 200);
 const bad = (rows) => applyCredentials({ store: store2, home: home2, entries: parseCredentialSheet(book(rows)).entries }).then(() => null, (e) => e.message);
-check('sheet: an unknown board refuses the whole sheet', /not one of the 26 boards/.test(await bad([sheetRows[0], ['Atlantis', 'a.chair', 'Long-Enough-Pass-1', 'Active']])));
+check('sheet: an unknown board refuses the whole sheet', /not one of the 27 boards/.test(await bad([sheetRows[0], ['Atlantis', 'a.chair', 'Long-Enough-Pass-1', 'Active']])));
 check('sheet: a username used twice refuses the whole sheet', /used twice/.test(await bad([sheetRows[0], ['India', 'same.user', 'Long-Enough-Pass-1'], ['Italy', 'same.user', 'Long-Enough-Pass-2']])));
 check('sheet: a very short password is refused', /at least 8/.test(await bad([sheetRows[0], ['India', 'in.chair', 'abc12']])));
 check('sheet: a refused sheet changes nothing', (await store2.list()).length === 4);
@@ -336,11 +336,11 @@ sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x;
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
 check('setup SQL: creates the 9 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 9 && (setupSql.match(/enable row level security/g) ?? []).length === 9);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
-check('setup SQL: has all 27 accounts and 26 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 27 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 26);
+check('setup SQL: has all 28 accounts and 27 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 28 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 27);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
-check('setup SQL: holds hashes only, never a password', created.every((c) => !setupSql.includes(c.password)) && (setupSql.match(/'scrypt\$16384\$8\$1\$/g) ?? []).length === 27);
+check('setup SQL: holds hashes only, never a password', created.every((c) => !setupSql.includes(c.password)) && (setupSql.match(/'scrypt\$16384\$8\$1\$/g) ?? []).length === 28);
 check('setup SQL: can be run again (upserts, and re-running ends open sessions)', /on conflict \(account_id\) do update/.test(setupSql) && /session_version \+ 1/.test(setupSql));
-check('accounts overview CSV lists 27 accounts with no password or hash', (() => { const o = buildOverviewCsv(await_free(sqlAccounts)); return o.trim().split('\n').length === 28 && !/scrypt|password/i.test(o); })());
+check('accounts overview CSV lists 28 accounts with no password or hash', (() => { const o = buildOverviewCsv(await_free(sqlAccounts)); return o.trim().split('\n').length === 29 && !/scrypt|password/i.test(o); })());
 const jwt = (payload) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`;
 check('key type: a secret key (sb_secret_…) is accepted', describeKey('sb_secret_abc123', 'p').kind === 'secret' && describeKey('sb_secret_abc123', 'p').usable);
 check('key type: the publishable key is recognised and explained', describeKey('sb_publishable_abc', 'p').kind === 'publishable' && /SECRET key/.test(describeKey('sb_publishable_abc', 'p').message));
@@ -392,8 +392,8 @@ await provision({ store: ot_local3, home: ot_home3, chairmen: { 'New Zealand': '
 const ot_csvFile = await writeLoginsCsv({ store: ot_local3, home: ot_home3 });
 const ot_csvText = fs.readFileSync(ot_csvFile, 'utf8');
 const ot_csvRows = ot_csvToRows(ot_csvText);
-check('the logins CSV has the table columns and 27 rows', ot_csvText.split('\n')[0] === LOGINS_COLUMNS.join(',') && ot_csvRows.length === 27 && path.basename(ot_csvFile) === LOGINS_CSV_FILE);
-check('every password is short (8 characters) with a letter and a digit, and all are different', ot_csvRows.every((r) => r.password.length === 8 && /[A-Za-z]/.test(r.password) && /\d/.test(r.password)) && new Set(ot_csvRows.map((r) => r.password)).size === 27);
+check('the logins CSV has the table columns and 28 rows', ot_csvText.split('\n')[0] === LOGINS_COLUMNS.join(',') && ot_csvRows.length === 28 && path.basename(ot_csvFile) === LOGINS_CSV_FILE);
+check('every password is short (8 characters) with a letter and a digit, and all are different', ot_csvRows.every((r) => r.password.length === 8 && /[A-Za-z]/.test(r.password) && /\d/.test(r.password)) && new Set(ot_csvRows.map((r) => r.password)).size === 28);
 check('the CSV file is private and outside the project', (fs.statSync(ot_csvFile).mode & 0o077) === 0 && !path.resolve(ot_csvFile).startsWith(process.cwd()));
 check('your local records were updated to the same short passwords', (await verifyRegister({ store: ot_local3, home: ot_home3 })).problems.length === 0 && reveal({ home: ot_home3, ref: 'india' })[0].password === ot_csvRows.find((r) => r.board === 'India').password);
 
@@ -407,7 +407,7 @@ const ot_adminRow = ot_csvRows.find((r) => r.account_type === 'Master Administra
 
 check('the site finds the single logins table when the four command_* tables are absent', (await ot_auto.impl()) instanceof LoginTableStore);
 check('the first admin login works with the short password from the CSV', (await ot_tlogin('admin', ot_adminRow.username, ot_adminRow.password)).r.status === 200);
-check('the readable passwords are gone from the table, replaced by hashes', tables.iocf_logins.filter((r) => r.password === null && r.password_hash?.startsWith('scrypt$')).length === 27 && !ot_csvRows.some((r) => JSON.stringify(tables.iocf_logins).includes(`"${r.password}"`)));
+check('the readable passwords are gone from the table, replaced by hashes', tables.iocf_logins.filter((r) => r.password === null && r.password_hash?.startsWith('scrypt$')).length === 28 && !ot_csvRows.some((r) => JSON.stringify(tables.iocf_logins).includes(`"${r.password}"`)));
 let ot_all26 = true;
 for (const b of BOARDS) {
   const row = ot_csvRows.find((r) => r.board === b.name);
@@ -415,7 +415,7 @@ for (const b of BOARDS) {
   const me = t.cookie ? await ot_tcall('GET', 'me', { cookie: t.cookie }) : null;
   if (t.r.status !== 200 || me.body.user.board !== b.slug) ot_all26 = false;
 }
-check('all 26 board chairmen sign in with their short passwords and land on their own board', ot_all26);
+check('all 27 board chairmen sign in with their short passwords and land on their own board', ot_all26);
 check('a wrong password is refused', (await ot_tlogin('admin', ot_adminRow.username, 'wrongpass1')).r.status === 401);
 check('board credentials on Admin Login are not authorized (403)', (await ot_tlogin('admin', ot_csvRows.find((r) => r.board === 'India').username, ot_csvRows.find((r) => r.board === 'India').password)).r.status === 403);
 
@@ -454,7 +454,7 @@ check('a row typed by hand (no account id, "Newzealand") is completed and secure
 // admin tile on the table store
 const ot_adm4 = await ot_tlogin('admin', ot_adminRow.username, ot_adminRow.password);
 const ot_ov = (await ot_tcall('GET', 'admin/overview', { cookie: ot_adm4.cookie })).body;
-check('the admin overview works on the single table', ot_ov.totalBoards === 26 && ot_ov.totalAccounts >= 27 && Array.isArray(ot_ov.recentActivity));
+check('the admin overview works on the single table', ot_ov.totalBoards === 27 && ot_ov.totalAccounts >= 28 && Array.isArray(ot_ov.recentActivity));
 const ot_setT = await ot_tcall('PUT', 'admin/boards/portugal/account', { cookie: ot_adm4.cookie, body: { username: 'portugal.boss', password: 'Admin-Set-1' } });
 check('Board Accounts (admin tile) can set a login in the table', ot_setT.status === 200 && (await ot_tlogin('board', 'portugal.boss', 'Admin-Set-1')).r.status === 200);
 check('module switches say they need the full setup instead of failing silently', (await ot_tcall('PUT', 'admin/boards/portugal/modules', { cookie: ot_adm4.cookie, body: { moduleId: 'series-announcement', enabled: false } })).status === 501);
@@ -492,7 +492,7 @@ console.log('\n— Series Announcement —');
   const post = (cookie, slug, body) => sCall('POST', `boards/${slug}/series`, { cookie, body });
   const view = async (cookie, slug) => (await sCall('GET', `boards/${slug}/series`, { cookie })).body;
 
-  check('the stadium list covers the boards (India has its own, Kenya none)', STADIUMS.india.length === 3 && STADIUMS.kenya.length === 0 && Object.keys(STADIUMS).length === 26 && STADIUMS.india.every((x) => !/^\d/.test(x)));
+  check('the stadium list covers the boards (India has its own, Kenya none)', STADIUMS.india.length === 3 && STADIUMS.kenya.length === 0 && Object.keys(STADIUMS).length === 27 && STADIUMS.india.every((x) => !/^\d/.test(x)));
   check('series options are as specified', SERIES_CFG.types.map((t) => t.matchOptions.join('/')).join() === '1/3/5/7,4/7,7/13' && SERIES_CFG.bets.join() === '1000,2000,3000,4000,5000,10000,20000,50000' && SERIES_CFG.formats.join() === 'Club,T10,T20,TEST,ODI,L4I' && SERIES_CFG.clubFormats.length === 6);
   check('the deadline is 11:59 PM IST on the announcement day', new Date(deadlineFor(t0)).toISOString() === '2026-06-10T18:29:59.999Z' && new Date(deadlineFor(Date.UTC(2026, 5, 10, 19, 0))).toISOString() === '2026-06-11T18:29:59.999Z');
 
@@ -666,7 +666,7 @@ console.log('\n— Series Announcement —');
     check('a series that is not finished (no result) or not accepted never moves credits', await (async () => { await sStore.seriesInsert({ ...newSeries({ name: 'Open', series_type: 'bilateral', opponents: ['kenya'], matches: 1, stadiums: ['x'], dates: ['2026-07-01'], bet: 50000, format: 'T20', club_format: null }, 'afghanistan', t0), status: 'accepted', accepted: ['kenya'] }); return (await bal(await sLogin('board', sc('Afghanistan')), 'afghanistan')).pending === 0; })());
     check('a board can read only its own credits; the administrator can read any', (await sCall('GET', 'boards/japan/credits', { cookie: cNepal })).status === 403 && (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).status === 200 && (await sCall('GET', 'boards/japan/credits')).status === 401);
     const table = (await sCall('GET', 'admin/credits', { cookie: cAdm })).body;
-    check('the admin table lists all 26 boards and the balances add up to zero', table.boards.length === 26 && table.boards.reduce((n, b) => n + b.pending, 0) === 0 && table.boards.find((b) => b.slug === 'japan').pending === 15000);
+    check('the admin table lists all 27 boards and the balances add up to zero', table.boards.length === 27 && table.boards.reduce((n, b) => n + b.pending, 0) === 0 && table.boards.find((b) => b.slug === 'japan').pending === 15000);
     check('boards cannot open the admin credits routes', (await sCall('GET', 'admin/credits', { cookie: cJapan })).status === 403 && (await sCall('POST', 'admin/credits/adjustments', { cookie: cJapan, body: { board: 'japan', amount: 99999, reason: 'self' } })).status === 403);
 
     const adj = (body) => sCall('POST', 'admin/credits/adjustments', { cookie: cAdm, body });
@@ -859,7 +859,7 @@ console.log('\n— Series Matches tab (earlier series) —');
   check('Series Matches: the month banner, dates, winner, runners-up and bet are kept', c1.month === 'January' && c1.name === 'Pointing Cup' && c1.dates === '6th - 10th Jan' && c1.winner.name === 'Pakistan' && c1.runnerUp.name === 'Australia' && c1.bet === 5000);
   check('Series Matches: a score the spreadsheet turned into a date is read back (2 Jan → 1-2, 1 Feb → 2-1)', c1.result === '1-2' && c2.result === '2-1');
   check('Series Matches: board spellings are corrected (Srilanka, Newzealand, Bangaldesh, Netherland) and slugs match the boards', c2.host.slug === 'sri-lanka' && c4.host.slug === 'new-zealand' && c4.opponents[0].name === 'Bangladesh' && c4.winner.name === 'Netherlands' && c4.winner.slug === 'netherlands');
-  check('Series Matches: a team that is not one of the 26 boards is kept without a slug', c5.opponents[0].name === 'Argentina' && c5.opponents[0].slug === null);
+  check('Series Matches: a team that is not one of the 27 boards is kept without a slug', c5.opponents[0].name === 'Argentina' && c5.opponents[0].slug === null);
   check('Series Matches: opponents of a multi-board series are split', c3.opponents.map((o) => o.name).join() === 'Australia,Scotland' && rec.upcoming[0].opponents.map((o) => o.name).join() === 'Japan,Canada,USA,Nepal,Portugal');
   check('Series Matches: a match-by-match breakdown is kept as lines; notes such as "1 Match only" stay as text', c3.resultLines.length === 2 && c3.result === null && c4.result === '1 Match only');
   check('Series Matches: formats are tidied and "-" means not yet', normalFormat('7o 7w') === '7 overs 7 wickets' && normalFormat('5overs 5wickets') === '5 overs 5 wickets' && c3.format === 'L4I' && c4.format === 'ODI' && c5.format === 'TEST' && rec.upcoming[0].winner === null && rec.upcoming[0].result === null);
@@ -867,7 +867,7 @@ console.log('\n— Series Matches tab (earlier series) —');
   if (fs.existsSync('IOCF ALL BOARDS .xlsx')) {
     const { readWorkbook } = await import('../sync/index.mjs');
     const real = buildSeriesRecords(await readWorkbook('IOCF ALL BOARDS .xlsx'));
-    check('Series Matches: the real workbook gives its completed series (200+) with winners (only Argentina is not one of the 26 boards)', real.completed.length > 200 && real.completed.every((r) => r.winner) && real.completed.filter((r) => !r.host.slug).every((r) => r.host.name === 'Argentina') && real.upcoming.length >= 1);
+    check('Series Matches: the real workbook gives its completed series (200+) with winners (only Argentina is not one of the 27 boards)', real.completed.length > 200 && real.completed.every((r) => r.winner) && real.completed.filter((r) => !r.host.slug).every((r) => r.host.name === 'Argentina') && real.upcoming.length >= 1);
   }
 }
 

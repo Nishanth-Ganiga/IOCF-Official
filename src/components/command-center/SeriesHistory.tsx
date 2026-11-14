@@ -23,7 +23,7 @@ export type Item = {
   name: string;
   host: string;
   opponents: string[];
-  /** Board slugs in the series (a team that is not one of the 26 boards has none). */
+  /** Board slugs in the series (a team that is not one of the 27 boards has none). */
   boards: string[];
   dates: string | null;
   winner: { name: string; slug: string | null } | null;
