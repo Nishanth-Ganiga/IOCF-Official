@@ -1,7 +1,7 @@
 // Boards that have been dismantled: nothing about them is shown on the site (no board page, roster, ranking, series, tournament table or
 // statistics line). Their statistics are kept in the data files and keep counting for the players and boards they were played against.
 // To bring a board back, remove it here and sync. Used by the sync (scripts/sync), the server and the site.
-export const HIDDEN_BOARDS = ['Kenya'];
+export const HIDDEN_BOARDS = ['Kenya', 'Uganda'];
 
 const key = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const hiddenKeys = new Set(HIDDEN_BOARDS.map(key));

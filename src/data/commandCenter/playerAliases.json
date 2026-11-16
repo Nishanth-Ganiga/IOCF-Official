@@ -1746,5 +1746,29 @@
     "name": "Khair Mohammed"
    }
   ]
+ },
+ {
+  "name": "Anumod",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Anumod",
+    "boards": [
+     "uganda"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Midlaj",
+  "board": "portugal",
+  "aliases": [
+   {
+    "name": "Midlaj",
+    "boards": [
+     "uganda"
+    ]
+   }
+  ]
  }
 ]

@@ -52,12 +52,12 @@ function fixtureTournamentStats() {
 }
 
 console.log('— setup —');
-check('27 accounts created (1 admin + 26 boards)', created.length === 27 && created.filter((c) => c.type === 'Board Chairman').length === 26);
-check('every username and password is unique', new Set(created.map((c) => c.username)).size === 27 && new Set(created.map((c) => c.password)).size === 27);
+check('26 accounts created (1 admin + 25 boards)', created.length === 26 && created.filter((c) => c.type === 'Board Chairman').length === 25);
+check('every username and password is unique', new Set(created.map((c) => c.username)).size === 26 && new Set(created.map((c) => c.password)).size === 26);
 check('passwords are 20 characters', created.every((c) => c.password.length === 20));
 check('no plain password in the store', !JSON.stringify(store.data).includes(admin.password) && store.data.accounts.every((a) => a.password_hash.startsWith('scrypt$')));
 const reg = readRegister(home);
-check('register has the 8 required columns and 27 rows', reg.length === 27 && Object.keys(reg[0]).join('|') === 'Account ID|Account Type|Board Name|Username|Encrypted Password|Account Status|Created Date|Last Updated Date');
+check('register has the 8 required columns and 26 rows', reg.length === 26 && Object.keys(reg[0]).join('|') === 'Account ID|Account Type|Board Name|Username|Encrypted Password|Account Status|Created Date|Last Updated Date');
 check('register passwords are encrypted (not readable in the file)', !fs.readFileSync(path.join(home, REGISTER_FILE), 'utf8').includes(admin.password));
 check('register and key files are private (mode 600)', (fs.statSync(path.join(home, REGISTER_FILE)).mode & 0o077) === 0 && (fs.statSync(path.join(home, 'register.key')).mode & 0o077) === 0);
 check('register agrees with the database', (await verifyRegister({ store, home })).problems.length === 0);
@@ -73,7 +73,7 @@ check('New Zealand login identifies the New Zealand board', nz.r.status === 200 
 const india = await login('board', cred('India'));
 check('India login identifies the India board', india.r.body.user.board === 'india');
 
-console.log('\n— 4. all 26 boards —');
+console.log('\n— 4. all 25 boards —');
 let allOk = true;
 for (const b of BOARDS) {
   const s = await login('board', cred(b.name));
@@ -81,7 +81,7 @@ for (const b of BOARDS) {
   const dash = await call('GET', `boards/${b.slug}/dashboard`, { cookie: s.cookie });
   if (s.r.status !== 200 || me.body.user.board !== b.slug || dash.status !== 200 || dash.body.board !== b.slug || dash.body.preview) allOk = false;
 }
-check('each of the 26 boards signs in and loads its own dashboard data', allOk);
+check('each of the 25 boards signs in and loads its own dashboard data', allOk);
 
 console.log('\n— 5/6. permissions —');
 check('a board user cannot open another board', (await call('GET', 'boards/india/dashboard', { cookie: nz.cookie })).status === 403);
@@ -90,8 +90,8 @@ check('a board user cannot change accounts or modules', (await call('PATCH', `ad
 check('no session means no access', (await call('GET', 'me')).status === 401 && (await call('GET', 'boards/india/dashboard')).status === 401 && (await call('GET', 'admin/accounts')).status === 401);
 let previews = 0;
 for (const b of BOARDS) if ((await call('GET', `boards/${b.slug}/dashboard`, { cookie: a.cookie })).body?.preview === true) previews++;
-check('admin can preview all 26 dashboards (marked as preview)', previews === 26);
-check('previews are written to the audit log', (await store.listAudit(100)).filter((e) => e.action === 'board_preview').length >= 26);
+check('admin can preview all 25 dashboards (marked as preview)', previews === 25);
+check('previews are written to the audit log', (await store.listAudit(100)).filter((e) => e.action === 'board_preview').length >= 25);
 check('unknown board is a 404', (await call('GET', 'boards/atlantis/dashboard', { cookie: a.cookie })).status === 404);
 
 console.log('\n— errors on login —');
@@ -138,38 +138,38 @@ check('a wrong password on an inactive account does NOT reveal it is inactive', 
 check('the administrator account cannot be deactivated', (await call('PATCH', `admin/accounts/${admin.accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } })).status === 400);
 check('admin reactivates India', (await call('PATCH', `admin/accounts/${cred('India').accountId}`, { cookie: adm.cookie, body: { status: 'active' } })).status === 200 && (await login('board', cred('India'))).r.status === 200);
 const ov = (await call('GET', 'admin/overview', { cookie: adm.cookie })).body;
-check('overview counts are right', ov.totalBoards === 26 && ov.totalAccounts === 27 && ov.activeBoardAccounts === 26 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 3);
+check('overview counts are right', ov.totalBoards === 25 && ov.totalAccounts === 26 && ov.activeBoardAccounts === 25 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 3);
 await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } });
 check('overview counts inactive boards', (await call('GET', 'admin/overview', { cookie: adm.cookie })).body.inactiveBoardAccounts === 1);
 const list = (await call('GET', 'admin/accounts', { cookie: adm.cookie })).body;
-check('account list covers 26 boards and exposes no secrets', list.boards.length === 26 && !/password|hash|scrypt/i.test(JSON.stringify(list)));
+check('account list covers 25 boards and exposes no secrets', list.boards.length === 25 && !/password|hash|scrypt/i.test(JSON.stringify(list)));
 check('chairman information can be updated', (await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { chairmanName: 'New Name' } })).body.chairmanName === 'New Name');
 
 console.log('\n— the administrator sets board logins in the browser —');
 const putLogin = (slug, body, cookie = adm.cookie) => call('PUT', `admin/boards/${slug}/account`, { cookie, body });
-const ugSession = await login('board', cred('Uganda'));
-const set1 = await putLogin('uganda', { username: 'Uganda.Boss', password: 'Brand-New-Pass-1' });
-check('admin sets a new username and password for Uganda', set1.status === 200 && set1.body.username === 'uganda.boss' && set1.body.created === false);
+const ugSession = await login('board', cred('Zimbabwe'));
+const set1 = await putLogin('zimbabwe', { username: 'Zimbabwe.Boss', password: 'Brand-New-Pass-1' });
+check('admin sets a new username and password for Zimbabwe', set1.status === 200 && set1.body.username === 'zimbabwe.boss' && set1.body.created === false);
 check('the response contains no password or hash', !/Brand-New|password|hash|scrypt/i.test(JSON.stringify(set1.body)));
-check('the new login works (username is case-insensitive)', (await call('POST', 'login', { body: { role: 'board', username: 'UGANDA.boss', password: 'Brand-New-Pass-1' } })).status === 200);
-check('the old password and old username are dead', (await call('POST', 'login', { body: { role: 'board', username: 'uganda.boss', password: cred('Uganda').password } })).status === 401 && (await call('POST', 'login', { body: { role: 'board', username: cred('Uganda').username, password: 'Brand-New-Pass-1' } })).status === 401);
+check('the new login works (username is case-insensitive)', (await call('POST', 'login', { body: { role: 'board', username: 'ZIMBABWE.boss', password: 'Brand-New-Pass-1' } })).status === 200);
+check('the old password and old username are dead', (await call('POST', 'login', { body: { role: 'board', username: 'zimbabwe.boss', password: cred('Zimbabwe').password } })).status === 401 && (await call('POST', 'login', { body: { role: 'board', username: cred('Zimbabwe').username, password: 'Brand-New-Pass-1' } })).status === 401);
 check('the chairman was signed out everywhere by the change', (await call('GET', 'me', { cookie: ugSession.cookie })).status === 401);
 const logged = JSON.stringify(await store.listAudit(50));
 check('it is in the audit log, with no password in it', /credentials_set/.test(logged) && !/Brand-New/.test(logged) && !/Brand-New/.test(JSON.stringify(store.data)));
-check('a password alone keeps the username', (await putLogin('uganda', { password: 'Second-New-Pass-2' })).body.username === 'uganda.boss' && (await call('POST', 'login', { body: { role: 'board', username: 'uganda.boss', password: 'Second-New-Pass-2' } })).status === 200);
-check('a username alone keeps the password', (await putLogin('uganda', { username: 'uganda.chair' })).status === 200 && (await call('POST', 'login', { body: { role: 'board', username: 'uganda.chair', password: 'Second-New-Pass-2' } })).status === 200);
-check('a password under 6 characters is refused', (await putLogin('uganda', { password: 'short' })).status === 400);
-check('a bad username is refused', (await putLogin('uganda', { username: 'no spaces!' })).status === 400);
-check('a username already used by another board is refused (409)', (await putLogin('uganda', { username: cred('India').username })).status === 409);
-check('an empty change is refused', (await putLogin('uganda', {})).status === 400);
+check('a password alone keeps the username', (await putLogin('zimbabwe', { password: 'Second-New-Pass-2' })).body.username === 'zimbabwe.boss' && (await call('POST', 'login', { body: { role: 'board', username: 'zimbabwe.boss', password: 'Second-New-Pass-2' } })).status === 200);
+check('a username alone keeps the password', (await putLogin('zimbabwe', { username: 'zimbabwe.chair' })).status === 200 && (await call('POST', 'login', { body: { role: 'board', username: 'zimbabwe.chair', password: 'Second-New-Pass-2' } })).status === 200);
+check('a password under 6 characters is refused', (await putLogin('zimbabwe', { password: 'short' })).status === 400);
+check('a bad username is refused', (await putLogin('zimbabwe', { username: 'no spaces!' })).status === 400);
+check('a username already used by another board is refused (409)', (await putLogin('zimbabwe', { username: cred('India').username })).status === 409);
+check('an empty change is refused', (await putLogin('zimbabwe', {})).status === 400);
 check('an unknown board is a 404', (await putLogin('atlantis', { username: 'abc', password: 'long-enough-1' })).status === 404);
 check('a chairman cannot set logins (403), not even their own', (await putLogin('india', { password: 'Hijack-Attempt-1' }, (await login('board', cred('India'))).cookie)).status === 403);
 check('no session cannot set logins (401)', (await putLogin('india', { password: 'Hijack-Attempt-1' }, '')).status === 401);
 check('India\'s real password was not touched by those attempts', (await login('board', cred('India'))).r.status === 200);
-check('after an online change the register is out of date and verify says so', await verifyRegister({ store, home }).then((v) => v.problems.some((x) => /Uganda|uganda/.test(x) && /record/.test(x))));
-check('a wrong password cannot be recorded', await recordPassword({ store, home, ref: 'uganda', password: 'not-it-at-all' }).then(() => false, (e) => /does not match/.test(e.message)));
-await recordPassword({ store, home, ref: 'uganda', password: 'Second-New-Pass-2' });
-check('recording the real password brings the register back in line', (await verifyRegister({ store, home })).problems.length === 0 && reveal({ home, ref: 'uganda' })[0].username === 'uganda.chair' && reveal({ home, ref: 'uganda' })[0].password === 'Second-New-Pass-2');
+check('after an online change the register is out of date and verify says so', await verifyRegister({ store, home }).then((v) => v.problems.some((x) => /Zimbabwe|zimbabwe/.test(x) && /record/.test(x))));
+check('a wrong password cannot be recorded', await recordPassword({ store, home, ref: 'zimbabwe', password: 'not-it-at-all' }).then(() => false, (e) => /does not match/.test(e.message)));
+await recordPassword({ store, home, ref: 'zimbabwe', password: 'Second-New-Pass-2' });
+check('recording the real password brings the register back in line', (await verifyRegister({ store, home })).problems.length === 0 && reveal({ home, ref: 'zimbabwe' })[0].username === 'zimbabwe.chair' && reveal({ home, ref: 'zimbabwe' })[0].password === 'Second-New-Pass-2');
 // a board with no login yet
 const fresh = new MemoryStore();
 const h3 = createHandler({ store: fresh, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock });
@@ -180,10 +180,10 @@ const c3 = `iocf_cc=${cookieOf(a3)}`;
 const put3 = (slug, body) => h3({ method: 'PUT', path: ['admin', 'boards', slug, 'account'], headers: { ...H, cookie: c3 }, body, ip: '3.3.3.3' });
 check('creating needs a password', (await put3('japan', { username: 'japan.chairman' })).status === 400);
 const made = await put3('japan', { username: 'japan.chairman', password: 'Japan-First-Pass-1', chairmanName: 'A. Chairman' });
-check('a board with no login gets one created (ID follows the board order)', made.status === 200 && made.body.created === true && made.body.accountId === 'IOCF-BRD-023');
+check('a board with no login gets one created (ID follows the board order)', made.status === 200 && made.body.created === true && made.body.accountId === 'IOCF-BRD-022');
 check('and the chairman can sign in to the Japan board', (await h3({ method: 'POST', path: ['login'], headers: H, body: { role: 'board', username: 'japan.chairman', password: 'Japan-First-Pass-1' }, ip: '3.3.3.4' })).body.user.board === 'japan');
 const lst = (await h3({ method: 'GET', path: ['admin', 'accounts'], headers: { ...H, cookie: c3 }, body: null, ip: '3.3.3.3' })).body;
-check('the account list now shows Japan as active and the others as having no login', lst.boards.find((b) => b.slug === 'japan').status === 'active' && lst.boards.filter((b) => b.status === 'none').length === 25 && lst.boards.find((b) => b.slug === 'japan').chairmanName === 'A. Chairman');
+check('the account list now shows Japan as active and the others as having no login', lst.boards.find((b) => b.slug === 'japan').status === 'active' && lst.boards.filter((b) => b.status === 'none').length === 24 && lst.boards.find((b) => b.slug === 'japan').chairmanName === 'A. Chairman');
 
 console.log('\n— 7/8. modules —');
 const nz2 = await login('board', cred('New Zealand'));
@@ -212,7 +212,7 @@ check('encrypted backup contains no readable password', !fs.readFileSync(bk, 'ut
 console.log('\n— the readable credentials file: export, edit, import —');
 const plainFile = await writePlain({ store, home });
 const plainRows = fs.readFileSync(plainFile, 'utf8').trim().split('\n');
-check('plain CSV has 27 rows and readable passwords', plainRows.length === 28 && plainRows[0] === 'Account ID,Account Type,Board Name,Username,Password,Account Status' && plainRows.some((l) => l.includes(admin.password) || l.includes('iocf.admin')));
+check('plain CSV has 26 rows and readable passwords', plainRows.length === 27 && plainRows[0] === 'Account ID,Account Type,Board Name,Username,Password,Account Status' && plainRows.some((l) => l.includes(admin.password) || l.includes('iocf.admin')));
 check('plain CSV is private (mode 600) and outside the project', (fs.statSync(plainFile).mode & 0o077) === 0 && !path.resolve(plainFile).startsWith(process.cwd()));
 const before2 = await store.findByUsername('japan.chairman');
 const edited = fs.readFileSync(plainFile, 'utf8').split('\n').map((l) => (l.includes(',japan.chairman,') ? l.replace(/,japan\.chairman,[^,]*,/, ',japan.board,MyNewPassword#2026,') : l.includes(',mexico.chairman,') ? l.replace(/,active$/, ',inactive') : l)).join('\n');
@@ -231,7 +231,7 @@ check('a username used twice is refused', await importPlain({ store, home }).the
 await writePlain({ store, home });
 const remoteLike = new MemoryStore();
 const pushed = await pushAccounts({ from: store, to: remoteLike });
-check('push copies all 27 accounts to another store', pushed.created === 27 && (await remoteLike.list()).length === 27);
+check('push copies all 26 accounts to another store', pushed.created === 26 && (await remoteLike.list()).length === 26);
 check('after push the same passwords work against the new store', await (async () => {
   const h2 = createHandler({ store: remoteLike, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => clock });
   const r = await h2({ method: 'POST', path: ['login'], headers: H, body: { role: 'board', username: 'japan.board', password: 'MyNewPassword#2026' }, ip: '5.5.5.5' });
@@ -336,11 +336,11 @@ sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x;
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
 check('setup SQL: creates the 9 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 9 && (setupSql.match(/enable row level security/g) ?? []).length === 9);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
-check('setup SQL: has all 27 accounts and 26 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 27 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 26);
+check('setup SQL: has all 26 accounts and 25 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 26 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 25);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
-check('setup SQL: holds hashes only, never a password', created.every((c) => !setupSql.includes(c.password)) && (setupSql.match(/'scrypt\$16384\$8\$1\$/g) ?? []).length === 27);
+check('setup SQL: holds hashes only, never a password', created.every((c) => !setupSql.includes(c.password)) && (setupSql.match(/'scrypt\$16384\$8\$1\$/g) ?? []).length === 26);
 check('setup SQL: can be run again (upserts, and re-running ends open sessions)', /on conflict \(account_id\) do update/.test(setupSql) && /session_version \+ 1/.test(setupSql));
-check('accounts overview CSV lists 27 accounts with no password or hash', (() => { const o = buildOverviewCsv(await_free(sqlAccounts)); return o.trim().split('\n').length === 28 && !/scrypt|password/i.test(o); })());
+check('accounts overview CSV lists 26 accounts with no password or hash', (() => { const o = buildOverviewCsv(await_free(sqlAccounts)); return o.trim().split('\n').length === 27 && !/scrypt|password/i.test(o); })());
 const jwt = (payload) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`;
 check('key type: a secret key (sb_secret_…) is accepted', describeKey('sb_secret_abc123', 'p').kind === 'secret' && describeKey('sb_secret_abc123', 'p').usable);
 check('key type: the publishable key is recognised and explained', describeKey('sb_publishable_abc', 'p').kind === 'publishable' && /SECRET key/.test(describeKey('sb_publishable_abc', 'p').message));
@@ -392,8 +392,8 @@ await provision({ store: ot_local3, home: ot_home3, chairmen: { 'New Zealand': '
 const ot_csvFile = await writeLoginsCsv({ store: ot_local3, home: ot_home3 });
 const ot_csvText = fs.readFileSync(ot_csvFile, 'utf8');
 const ot_csvRows = ot_csvToRows(ot_csvText);
-check('the logins CSV has the table columns and 27 rows', ot_csvText.split('\n')[0] === LOGINS_COLUMNS.join(',') && ot_csvRows.length === 27 && path.basename(ot_csvFile) === LOGINS_CSV_FILE);
-check('every password is short (8 characters) with a letter and a digit, and all are different', ot_csvRows.every((r) => r.password.length === 8 && /[A-Za-z]/.test(r.password) && /\d/.test(r.password)) && new Set(ot_csvRows.map((r) => r.password)).size === 27);
+check('the logins CSV has the table columns and 26 rows', ot_csvText.split('\n')[0] === LOGINS_COLUMNS.join(',') && ot_csvRows.length === 26 && path.basename(ot_csvFile) === LOGINS_CSV_FILE);
+check('every password is short (8 characters) with a letter and a digit, and all are different', ot_csvRows.every((r) => r.password.length === 8 && /[A-Za-z]/.test(r.password) && /\d/.test(r.password)) && new Set(ot_csvRows.map((r) => r.password)).size === 26);
 check('the CSV file is private and outside the project', (fs.statSync(ot_csvFile).mode & 0o077) === 0 && !path.resolve(ot_csvFile).startsWith(process.cwd()));
 check('your local records were updated to the same short passwords', (await verifyRegister({ store: ot_local3, home: ot_home3 })).problems.length === 0 && reveal({ home: ot_home3, ref: 'india' })[0].password === ot_csvRows.find((r) => r.board === 'India').password);
 
@@ -407,7 +407,7 @@ const ot_adminRow = ot_csvRows.find((r) => r.account_type === 'Master Administra
 
 check('the site finds the single logins table when the four command_* tables are absent', (await ot_auto.impl()) instanceof LoginTableStore);
 check('the first admin login works with the short password from the CSV', (await ot_tlogin('admin', ot_adminRow.username, ot_adminRow.password)).r.status === 200);
-check('the readable passwords are gone from the table, replaced by hashes', tables.iocf_logins.filter((r) => r.password === null && r.password_hash?.startsWith('scrypt$')).length === 27 && !ot_csvRows.some((r) => JSON.stringify(tables.iocf_logins).includes(`"${r.password}"`)));
+check('the readable passwords are gone from the table, replaced by hashes', tables.iocf_logins.filter((r) => r.password === null && r.password_hash?.startsWith('scrypt$')).length === 26 && !ot_csvRows.some((r) => JSON.stringify(tables.iocf_logins).includes(`"${r.password}"`)));
 let ot_all26 = true;
 for (const b of BOARDS) {
   const row = ot_csvRows.find((r) => r.board === b.name);
@@ -415,7 +415,7 @@ for (const b of BOARDS) {
   const me = t.cookie ? await ot_tcall('GET', 'me', { cookie: t.cookie }) : null;
   if (t.r.status !== 200 || me.body.user.board !== b.slug) ot_all26 = false;
 }
-check('all 26 board chairmen sign in with their short passwords and land on their own board', ot_all26);
+check('all 25 board chairmen sign in with their short passwords and land on their own board', ot_all26);
 check('a wrong password is refused', (await ot_tlogin('admin', ot_adminRow.username, 'wrongpass1')).r.status === 401);
 check('board credentials on Admin Login are not authorized (403)', (await ot_tlogin('admin', ot_csvRows.find((r) => r.board === 'India').username, ot_csvRows.find((r) => r.board === 'India').password)).r.status === 403);
 
@@ -454,7 +454,7 @@ check('a row typed by hand (no account id, "Newzealand") is completed and secure
 // admin tile on the table store
 const ot_adm4 = await ot_tlogin('admin', ot_adminRow.username, ot_adminRow.password);
 const ot_ov = (await ot_tcall('GET', 'admin/overview', { cookie: ot_adm4.cookie })).body;
-check('the admin overview works on the single table', ot_ov.totalBoards === 26 && ot_ov.totalAccounts >= 27 && Array.isArray(ot_ov.recentActivity));
+check('the admin overview works on the single table', ot_ov.totalBoards === 25 && ot_ov.totalAccounts >= 26 && Array.isArray(ot_ov.recentActivity));
 const ot_setT = await ot_tcall('PUT', 'admin/boards/portugal/account', { cookie: ot_adm4.cookie, body: { username: 'portugal.boss', password: 'Admin-Set-1' } });
 check('Board Accounts (admin tile) can set a login in the table', ot_setT.status === 200 && (await ot_tlogin('board', 'portugal.boss', 'Admin-Set-1')).r.status === 200);
 check('module switches say they need the full setup instead of failing silently', (await ot_tcall('PUT', 'admin/boards/portugal/modules', { cookie: ot_adm4.cookie, body: { moduleId: 'series-announcement', enabled: false } })).status === 501);
@@ -492,7 +492,7 @@ console.log('\n— Series Announcement —');
   const post = (cookie, slug, body) => sCall('POST', `boards/${slug}/series`, { cookie, body });
   const view = async (cookie, slug) => (await sCall('GET', `boards/${slug}/series`, { cookie })).body;
 
-  check('the stadium list covers the boards (India has its own, Mexico none)', STADIUMS.india.length === 3 && STADIUMS.mexico.length === 0 && Object.keys(STADIUMS).length === 26 && STADIUMS.india.every((x) => !/^\d/.test(x)));
+  check('the stadium list covers the boards (India has its own, Mexico none)', STADIUMS.india.length === 3 && STADIUMS.mexico.length === 0 && Object.keys(STADIUMS).length === 25 && STADIUMS.india.every((x) => !/^\d/.test(x)));
   check('series options are as specified', SERIES_CFG.types.map((t) => t.matchOptions.join('/')).join() === '1/3/5/7,4/7,7/13' && SERIES_CFG.bets.join() === '1000,2000,3000,4000,5000,10000,20000,50000' && SERIES_CFG.formats.join() === 'Club,T10,T20,TEST,ODI,L4I' && SERIES_CFG.clubFormats.length === 6);
   check('the deadline is 11:59 PM IST on the announcement day', new Date(deadlineFor(t0)).toISOString() === '2026-06-10T18:29:59.999Z' && new Date(deadlineFor(Date.UTC(2026, 5, 10, 19, 0))).toISOString() === '2026-06-11T18:29:59.999Z');
 
@@ -543,12 +543,12 @@ console.log('\n— Series Announcement —');
     const s1 = await jp('Japan One', 'nepal', ['2026-06-20', '2026-06-21', '2026-06-22']);
     const s2 = await jp('Japan Two', 'mexico', ['2026-06-20', '2026-06-25', '2026-06-30']);
     check('a board announces two overlapping series', s1.status === 201 && s2.status === 201);
-    const on = await jp('Japan Three', 'uganda', ['2026-06-22']);
+    const on = await jp('Japan Three', 'zimbabwe', ['2026-06-22']);
     check('on the LAST day of one series a third cannot be on the same day (two others are on)', on.status === 409 && /those dates/.test(on.body.error.message));
-    const next = await jp('Japan Four', 'uganda', ['2026-06-23']);
+    const next = await jp('Japan Four', 'zimbabwe', ['2026-06-23']);
     check('but it can start the day after the first one ends (only the long one is still on)', next.status === 201);
-    check('…and a fifth on that same day is refused again (two are on)', (await jp('Japan Five', 'uganda', ['2026-06-23'])).status === 409);
-    check('a series after both have ended is fine', (await jp('Japan Six', 'uganda', ['2026-07-02'])).status === 201);
+    check('…and a fifth on that same day is refused again (two are on)', (await jp('Japan Five', 'zimbabwe', ['2026-06-23'])).status === 409);
+    check('a series after both have ended is fine', (await jp('Japan Six', 'zimbabwe', ['2026-07-02'])).status === 201);
     // the invited board: it accepts on the last day of one of its series if the new one starts the next day
     const acc2 = await sCall('POST', `boards/mexico/series/${s2.body.series.id}/accept`, { cookie: cKe });
     const early = await post(cSp, 'spain', good({ name: 'Spain Mexico', opponents: ['mexico'], stadiums: [STADIUMS.spain[0], STADIUMS.spain[1]].slice(0, 1), dates: ['2026-06-21'] }));
@@ -598,9 +598,9 @@ console.log('\n— Series Announcement —');
   check('it stays open until every opponent has accepted — and is locked once one has', (await view(cIndia, 'india')).announced.find((x) => x.id === tid).status === 'pending' && !(await view(cIndia, 'india')).announced.find((x) => x.id === tid).editable && (await view(cEng, 'england')).invitations.every((x) => x.id !== tid));
   await sCall('POST', `boards/australia/series/${tid}/accept`, { cookie: cAus });
   {
-    const q = await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'uganda'], matches: 7, stadiums: [STADIUMS.england[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.uganda[0], STADIUMS.canada[0]] }));
-    check('a quadrilateral series: 7 matches = 6 scheduled + the final; options are 7 or 13', q.status === 201 && q.body.series.fixtures.length === 7 && q.body.series.fixtures[6].final && q.body.series.fixtures.slice(0, 6).map((f) => f.teams.join('-')).join() === 'England-Canada,Ireland-Uganda,England-Ireland,Canada-Uganda,England-Uganda,Canada-Ireland' && (await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'uganda'], matches: 9, stadiums: [] }))).status === 400);
-    check('a stadium must belong to one of the two teams in that match', (await post(cEng, 'england', good({ name: 'Quad Two', type: 'quadrilateral', opponents: ['canada', 'ireland', 'uganda'], matches: 7, stadiums: [STADIUMS.pakistan[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.uganda[0], STADIUMS.canada[0]] }))).status === 400);
+    const q = await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 7, stadiums: [STADIUMS.england[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.zimbabwe[0], STADIUMS.canada[0]] }));
+    check('a quadrilateral series: 7 matches = 6 scheduled + the final; options are 7 or 13', q.status === 201 && q.body.series.fixtures.length === 7 && q.body.series.fixtures[6].final && q.body.series.fixtures.slice(0, 6).map((f) => f.teams.join('-')).join() === 'England-Canada,Ireland-Zimbabwe,England-Ireland,Canada-Zimbabwe,England-Zimbabwe,Canada-Ireland' && (await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 9, stadiums: [] }))).status === 400);
+    check('a stadium must belong to one of the two teams in that match', (await post(cEng, 'england', good({ name: 'Quad Two', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 7, stadiums: [STADIUMS.pakistan[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.zimbabwe[0], STADIUMS.canada[0]] }))).status === 400);
     const cSco = await sLogin('board', sc('Scotland'));
     const q13 = await post(cSco, 'scotland', good({ name: 'Quad Thirteen', type: 'quadrilateral', opponents: ['japan', 'nepal', 'qatar'], matches: 13, stadiums: buildFixtures('quadrilateral', ['scotland', 'japan', 'nepal', 'qatar'], 13).filter((f) => !f.final).map((f) => STADIUMS[f.teams[0]][0]) }));
     check('13 matches = 12 scheduled (each pair twice) + the final', q13.status === 201 && q13.body.series.fixtures.filter((f) => !f.final).length === 12 && q13.body.series.fixtures[12].final);
@@ -658,15 +658,15 @@ console.log('\n— Series Announcement —');
     check('AWAY win: the winner gets the plain bet (+5000), the home board loses it', (await bal(cJapan, 'japan')).pending === 15000 && (await bal(cNepal, 'nepal')).pending === -15000);
     await mk('japan', ['nepal'], 5000, 'draw');
     check('a drawn series changes nothing', (await bal(cJapan, 'japan')).pending === 15000 && (await bal(cJapan, 'japan')).entries.length === 2);
-    await mk('qatar', ['ireland', 'uganda'], 2000, 'ireland');
+    await mk('qatar', ['ireland', 'zimbabwe'], 2000, 'ireland');
     const cIre = await sLogin('board', sc('Ireland'));
-    check('trilateral, away winner: each other board pays the plain bet to the winner', (await bal(cIre, 'ireland')).pending === 4000 && (await bal(await sLogin('board', sc('Qatar')), 'qatar')).pending === -2000 && (await bal(await sLogin('board', sc('Uganda')), 'uganda')).pending === -2000);
+    check('trilateral, away winner: each other board pays the plain bet to the winner', (await bal(cIre, 'ireland')).pending === 4000 && (await bal(await sLogin('board', sc('Qatar')), 'qatar')).pending === -2000 && (await bal(await sLogin('board', sc('Zimbabwe')), 'zimbabwe')).pending === -2000);
     await mk('canada', ['italy', 'portugal', 'spain'], 1000, 'canada');
     check('quadrilateral, home winner: the doubled bet is collected from each of the three others', (await bal(await sLogin('board', sc('Canada')), 'canada')).pending === 6000 && (await bal(await sLogin('board', sc('Italy')), 'italy')).pending === -2000);
     check('a series that is not finished (no result) or not accepted never moves credits', await (async () => { await sStore.seriesInsert({ ...newSeries({ name: 'Open', series_type: 'bilateral', opponents: ['mexico'], matches: 1, stadiums: ['x'], dates: ['2026-07-01'], bet: 50000, format: 'T20', club_format: null }, 'afghanistan', t0), status: 'accepted', accepted: ['mexico'] }); return (await bal(await sLogin('board', sc('Afghanistan')), 'afghanistan')).pending === 0; })());
     check('a board can read only its own credits; the administrator can read any', (await sCall('GET', 'boards/japan/credits', { cookie: cNepal })).status === 403 && (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).status === 200 && (await sCall('GET', 'boards/japan/credits')).status === 401);
     const table = (await sCall('GET', 'admin/credits', { cookie: cAdm })).body;
-    check('the admin table lists all 26 boards and the balances add up to zero', table.boards.length === 26 && table.boards.reduce((n, b) => n + b.pending, 0) === 0 && table.boards.find((b) => b.slug === 'japan').pending === 15000);
+    check('the admin table lists all 25 boards and the balances add up to zero', table.boards.length === 25 && table.boards.reduce((n, b) => n + b.pending, 0) === 0 && table.boards.find((b) => b.slug === 'japan').pending === 15000);
     check('boards cannot open the admin credits routes', (await sCall('GET', 'admin/credits', { cookie: cJapan })).status === 403 && (await sCall('POST', 'admin/credits/adjustments', { cookie: cJapan, body: { board: 'japan', amount: 99999, reason: 'self' } })).status === 403);
 
     const adj = (body) => sCall('POST', 'admin/credits/adjustments', { cookie: cAdm, body });
@@ -698,9 +698,9 @@ console.log('\n— Series Announcement —');
       check('marking is recorded in the audit log', (await sStore.listAudit(600)).some((x) => x.action === 'credit_marked_entered'));
     }
     // balances follow the results: change or clear a result and they correct themselves
-    const mid = (await mk('ireland', ['uganda'], 4000, 'ireland')).id;
+    const mid = (await mk('ireland', ['zimbabwe'], 4000, 'ireland')).id;
     const irBefore = (await bal(cIre, 'ireland')).pending;
-    await sCall('PUT', `admin/series/${mid}/result`, { cookie: cAdm, body: { winner: 'uganda' } });
+    await sCall('PUT', `admin/series/${mid}/result`, { cookie: cAdm, body: { winner: 'zimbabwe' } });
     check('changing a series result re-settles the credits (home +8000 becomes away −4000)', irBefore === 8000 /* the earlier settlement is already marked as entered */ && (await bal(cIre, 'ireland')).pending === -4000);
     await sCall('DELETE', `admin/series/${mid}/result`, { cookie: cAdm });
     check('clearing a result removes its credits', (await bal(cIre, 'ireland')).pending === 0);
@@ -708,20 +708,20 @@ console.log('\n— Series Announcement —');
   // declining an invitation, and the waiting-invitations badge
   {
     const cQatar = await sLogin('board', sc('Qatar'));
-    const cUg = await sLogin('board', sc('Uganda'));
+    const cUg = await sLogin('board', sc('Zimbabwe'));
     const dash = async (cookie, slug) => (await sCall('GET', `boards/${slug}/dashboard`, { cookie })).body;
-    const ugBase = (await dash(cUg, 'uganda')).invitations; // Uganda already has the quadrilateral invitation from above
-    check('the badge counts the invitations waiting for the board', ugBase === (await view(cUg, 'uganda')).invitations.length && true);
-    const q1 = await post(cQatar, 'qatar', good({ name: 'Gulf Cup', opponents: ['uganda'], stadiums: [STADIUMS.qatar[0]] }));
+    const ugBase = (await dash(cUg, 'zimbabwe')).invitations; // Zimbabwe already has the quadrilateral invitation from above
+    check('the badge counts the invitations waiting for the board', ugBase === (await view(cUg, 'zimbabwe')).invitations.length && true);
+    const q1 = await post(cQatar, 'qatar', good({ name: 'Gulf Cup', opponents: ['zimbabwe'], stadiums: [STADIUMS.qatar[0]] }));
     const qid = q1.body.series?.id;
-    check('the invited board\'s dashboard badge counts the waiting invitation (and only theirs)', (await dash(cUg, 'uganda')).invitations === ugBase + 1 && (await dash(cQatar, 'qatar')).invitations === (await view(cQatar, 'qatar')).invitations.length);
-    check('only the invited board can decline', (await sCall('POST', `boards/england/series/${qid}/decline`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/qatar/series/${qid}/decline`, { cookie: cQatar })).status === 404 && (await sCall('POST', `boards/uganda/series/${qid}/decline`, { cookie: cAdm })).status === 403 && (await sCall('POST', `boards/uganda/series/${qid}/decline`)).status === 401);
-    check('the opponent declines', (await sCall('POST', `boards/uganda/series/${qid}/decline`, { cookie: cUg })).status === 200);
+    check('the invited board\'s dashboard badge counts the waiting invitation (and only theirs)', (await dash(cUg, 'zimbabwe')).invitations === ugBase + 1 && (await dash(cQatar, 'qatar')).invitations === (await view(cQatar, 'qatar')).invitations.length);
+    check('only the invited board can decline', (await sCall('POST', `boards/england/series/${qid}/decline`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/qatar/series/${qid}/decline`, { cookie: cQatar })).status === 404 && (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`, { cookie: cAdm })).status === 403 && (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`)).status === 401);
+    check('the opponent declines', (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`, { cookie: cUg })).status === 200);
     const hostView = (await view(cQatar, 'qatar')).announced.find((x) => x.id === qid);
-    check('the host sees "declined by Uganda" straight away', hostView?.status === 'declined' && hostView.declinedBy.name === 'Uganda' && !hostView.editable);
-    check('it disappears from the opponent\'s invitations and badge, and is not upcoming', !(await view(cUg, 'uganda')).invitations.some((x) => x.id === qid) && (await dash(cUg, 'uganda')).invitations === ugBase && !(await view(cEng, 'england')).upcoming.some((x) => x.id === qid));
-    check('a declined series cannot be accepted, declined again or edited', (await sCall('POST', `boards/uganda/series/${qid}/accept`, { cookie: cUg })).body.error.code === 'declined' && (await sCall('POST', `boards/uganda/series/${qid}/decline`, { cookie: cUg })).status === 409 && (await sCall('PUT', `boards/qatar/series/${qid}`, { cookie: cQatar, body: good({ opponents: ['uganda'], stadiums: [STADIUMS.qatar[0]] }) })).body.error.code === 'declined');
-    check('the host can announce again immediately, and a declined series does not count toward the limit', (await view(cQatar, 'qatar')).active === 0 && (await post(cQatar, 'qatar', good({ name: 'Gulf Cup 2', opponents: ['uganda'], stadiums: [STADIUMS.qatar[0]] }))).status === 201 && (await post(cQatar, 'qatar', good({ name: 'Gulf Cup 3', opponents: ['uganda'], stadiums: [STADIUMS.qatar[1]] }))).status === 201);
+    check('the host sees "declined by Zimbabwe" straight away', hostView?.status === 'declined' && hostView.declinedBy.name === 'Zimbabwe' && !hostView.editable);
+    check('it disappears from the opponent\'s invitations and badge, and is not upcoming', !(await view(cUg, 'zimbabwe')).invitations.some((x) => x.id === qid) && (await dash(cUg, 'zimbabwe')).invitations === ugBase && !(await view(cEng, 'england')).upcoming.some((x) => x.id === qid));
+    check('a declined series cannot be accepted, declined again or edited', (await sCall('POST', `boards/zimbabwe/series/${qid}/accept`, { cookie: cUg })).body.error.code === 'declined' && (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`, { cookie: cUg })).status === 409 && (await sCall('PUT', `boards/qatar/series/${qid}`, { cookie: cQatar, body: good({ opponents: ['zimbabwe'], stadiums: [STADIUMS.qatar[0]] }) })).body.error.code === 'declined');
+    check('the host can announce again immediately, and a declined series does not count toward the limit', (await view(cQatar, 'qatar')).active === 0 && (await post(cQatar, 'qatar', good({ name: 'Gulf Cup 2', opponents: ['zimbabwe'], stadiums: [STADIUMS.qatar[0]] }))).status === 201 && (await post(cQatar, 'qatar', good({ name: 'Gulf Cup 3', opponents: ['zimbabwe'], stadiums: [STADIUMS.qatar[1]] }))).status === 201);
     // one decline cancels a multi-board series; a board that already accepted cannot decline
     const cPor = await sLogin('board', sc('Portugal'));
     const cJp = await sLogin('board', sc('Japan'));

@@ -40,7 +40,7 @@ export function buildDataset(book, meta = {}) {
   let staleAliases = 'none';
   try {
     const links = JSON.parse(fs.readFileSync(new URL('../../src/data/commandCenter/playerAliases.json', import.meta.url), 'utf8'));
-    const stale = links.filter((a) => !dataset.players.some((p) => p.boardId === a.board && p.name === a.name)).map((a) => `${a.name} (${a.board})`);
+    const stale = links.filter((a) => !isHiddenBoard(a.board) && !dataset.players.some((p) => p.boardId === a.board && p.name === a.name)).map((a) => `${a.name} (${a.board})`);
     if (stale.length) staleAliases = `FIX playerAliases.json: ${stale.join(', ')}`;
   } catch {
     /* no link file: nothing to check */

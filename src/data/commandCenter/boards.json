@@ -255,21 +255,6 @@
   }
  },
  {
-  "slug": "uganda",
-  "name": "Uganda",
-  "flag": "🇺🇬",
-  "colors": {
-   "primary": "#1a1a1a",
-   "secondary": "#fcdc04",
-   "accent": "#d90000"
-  },
-  "scene": "savanna",
-  "mascot": {
-   "name": "Crested Crane",
-   "emoji": "🦢"
-  }
- },
- {
   "slug": "usa",
   "name": "USA",
   "flag": "🇺🇸",

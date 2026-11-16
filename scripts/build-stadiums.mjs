@@ -3,6 +3,7 @@
 //   node scripts/build-stadiums.mjs        (or: npm run stadiums)
 // The sheet has one column per board. Its second "England" column is India's. Fix the sheet and run this again to update the site.
 import fs from 'node:fs';
+import { isHiddenBoard } from '../src/data/hiddenBoards.mjs';
 
 const SRC = 'All Assests/All Stadiums/IOCF Stadiums - Sheet1.csv';
 const OUT = 'src/data/commandCenter/stadiums.json';
@@ -43,6 +44,7 @@ header.forEach((name, col) => {
     if (seenEngland.length === 2) n = 'india'; // the sheet's second England column
   }
   const board = boards.find((b) => norm(b.name) === n);
+  if (!board && isHiddenBoard(name)) return; // a dismantled board's column stays in the sheet
   if (!board) {
     console.error(`No board matches the column "${name}"`);
     process.exitCode = 1;
