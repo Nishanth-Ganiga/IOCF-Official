@@ -4,10 +4,10 @@
 // `into` names the entry on the new board when it is spelt differently.
 export const TRANSFERS = [
   { name: 'Bhavin Kumar', from: 'Pakistan', to: 'South Africa' },
-  // Adithya Mahajan ("Aditya" in the scorer exports) played for these boards and is now in the USA
-  { name: 'Adithya Mahajan', from: 'Bangladesh', to: 'USA' },
-  { name: 'Adithya Mahajan', from: 'Qatar', to: 'USA' },
-  { name: 'Adithya Mahajan', from: 'South Africa', to: 'USA' },
+  // Adithya Mahajan ("Aditya" in the scorer exports) played for these boards and is on South Africa's roster (he went to the USA and came back)
+  { name: 'Adithya Mahajan', from: 'Bangladesh', to: 'South Africa' },
+  { name: 'Adithya Mahajan', from: 'Qatar', to: 'South Africa' },
+  { name: 'Adithya Mahajan', from: 'USA', to: 'South Africa' },
   { name: 'Siddharth V Jain', from: 'South Africa', to: 'Bangladesh', into: 'Sidd V Jain' },
   { name: 'Karthik Varma', from: 'Ireland', to: 'England', into: 'Karthik Verma' },
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
