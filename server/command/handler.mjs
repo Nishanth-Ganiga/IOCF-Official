@@ -657,8 +657,12 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (clash && clash.board_slug !== board.slug) return fail(409, 'username_taken', 'That username is already used by another account.');
 
           if (!existing) {
+            // the id follows the board's place in the list; where that id is already another account's (boards were removed or added since), the next free one
+            const taken = new Set((await store.list()).map((x) => x.account_id));
+            let n = BOARDS.indexOf(board) + 1;
+            while (taken.has(`IOCF-BRD-${String(n).padStart(3, '0')}`)) n += 1;
             const made = await store.create({
-              account_id: `IOCF-BRD-${String(BOARDS.indexOf(board) + 1).padStart(3, '0')}`,
+              account_id: `IOCF-BRD-${String(n).padStart(3, '0')}`,
               role: 'board',
               board_slug: board.slug,
               board_name: board.name,
