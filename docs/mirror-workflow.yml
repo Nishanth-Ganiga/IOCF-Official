@@ -1,0 +1,38 @@
+# To switch this on: in the repository on github.com, Add file → Create new file → name it .github/workflows/mirror.yml → paste all of this → Commit.
+# (A push from the command line is refused unless the access token has the "workflow" scope.)
+# Keeps the private mirror sheet up to date: every 15 minutes, after every push to main, and on demand (Actions → Mirror sheet → Run workflow).
+# It needs these repository secrets (Settings → Secrets and variables → Actions): GOOGLE_SERVICE_ACCOUNT_JSON, MIRROR_SHEET_ID,
+# SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY. Without them the job does nothing.
+name: Mirror sheet
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: mirror-sheet
+  cancel-in-progress: false
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Write the mirror sheet
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          MIRROR_SHEET_ID: ${{ secrets.MIRROR_SHEET_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ] || [ -z "$MIRROR_SHEET_ID" ]; then
+            echo "Mirror secrets are not set: nothing to do."
+            exit 0
+          fi
+          npm run mirror

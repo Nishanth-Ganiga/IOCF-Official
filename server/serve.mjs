@@ -7,12 +7,49 @@ import http from 'node:http';
 import path from 'node:path';
 import { loadConfig, syncOnce } from '../scripts/sync/sheet.mjs';
 import { commandCenterRequestListener } from './command/http.mjs';
+import { productionStoreFromEnv } from './command/loginTable.mjs';
+import { loadRankingInput } from './command/rankInput.mjs';
+import { BOARDS } from './command/handler.mjs';
+import { STADIUMS } from './command/series.mjs';
+import { mirrorConfigured, runMirror } from './mirror/mirror.mjs';
 
 const root = process.cwd();
 const cfg = loadConfig(root);
 const dist = path.join(root, 'dist');
 const cacheFile = path.join(root, '.cache', 'iocf-data.json');
-const commandCenter = commandCenterRequestListener();
+const ccStore = productionStoreFromEnv();
+
+// the private mirror sheet (README → The private mirror sheet): rewritten a minute after anything on the site changes, and every 15 minutes
+let mirrorTimer = null;
+let mirrorRunning = false;
+async function mirrorNow() {
+  if (!mirrorConfigured() || !ccStore || mirrorRunning) return;
+  mirrorRunning = true;
+  try {
+    const input = await loadRankingInput({ store: ccStore });
+    let rankHistory = [];
+    try {
+      rankHistory = JSON.parse(fs.readFileSync(fs.existsSync(cacheFile) ? cacheFile : path.join(dist, 'iocf-data.json'), 'utf8')).rankHistory ?? [];
+    } catch {
+      /* none yet */
+    }
+    const r = await runMirror({ dataset: input.dataset, rankHistory, leagueStats: input.leagueStats, store: ccStore, boards: BOARDS, baseStadiums: STADIUMS });
+    console.log(`[mirror] ok: ${r.tabs} tabs, ${r.rows} rows`);
+  } catch (err) {
+    console.error(`[mirror] failed: ${err.message}`);
+  } finally {
+    mirrorRunning = false;
+  }
+}
+const mirrorSoon = () => {
+  if (!mirrorConfigured()) return;
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(() => void mirrorNow(), 60_000);
+  mirrorTimer.unref?.();
+};
+if (mirrorConfigured()) setInterval(() => void mirrorNow(), 15 * 60_000).unref?.();
+
+const commandCenter = commandCenterRequestListener({ store: ccStore, afterWrite: mirrorSoon });
 const status = { lastSyncAt: null, lastOk: null, lastError: null, source: null, report: null, syncing: false };
 
 async function sync() {

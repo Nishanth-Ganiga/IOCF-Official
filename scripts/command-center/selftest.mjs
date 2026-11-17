@@ -1326,6 +1326,84 @@ check('with no database configured the API answers 503 "not configured"', nb.sta
 const prodNoSecret = createHandler({ store, env: { SUPABASE_URL: 'https://x.supabase.co' } });
 check('with a database but no session secret the API refuses to run (503)', (await prodNoSecret({ method: 'GET', path: ['me'], headers: {}, body: null, ip: '1.1.1.1' })).status === 503);
 
+console.log('\n— The private mirror sheet —');
+{
+  const { generateKeyPairSync } = await import('node:crypto');
+  const { buildMirror, runMirror, mirrorConfigured } = await import('../../server/mirror/mirror.mjs');
+  const { parseServiceAccount, sheetIdOf } = await import('../../server/mirror/google.mjs');
+  const { cell, flatten, table } = await import('../../server/mirror/tabs.mjs');
+  const snap = JSON.parse(fs.readFileSync('src/data/snapshot.json', 'utf8'));
+  const mstore = new MemoryStore();
+  await mstore.create({ account_id: 'IOCF-BRD-001', role: 'board', board_slug: 'india', board_name: 'India', username: 'india.chair', password_hash: 'scrypt$SECRET-HASH-VALUE', status: 'active', chairman_name: 'X' });
+  await mstore.stadiumPut({ key: 'r1', board: 'india', name: 'Test Dome', place: 'Pune', venue: 'Pune, India', country: 'India', level: 3, cost: 30000, status: 'accepted', requested_by: 'india.chair', requested_at: 1, decided_by: 'iocf.admin', decided_at: 2 });
+  await mstore.statsPut({ key: 'rec-x-india', kind: 'record', name: 'X Cup', title: 'X', tour: 't', players: 1, fields: ['name', 'team', 'runs'], rows: [['Some Player', 'INDIA', 12]], uploaded_at: 1, uploaded_by: 'a' });
+  const built = await buildMirror({ dataset: snap, leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), store: mstore, boards: BOARDS, baseStadiums: STADIUMS, now: () => 0 });
+  const tab = (n) => built.tabs.find((t) => t.name === n);
+  const everything = JSON.stringify(built.tabs);
+  check('the mirror has a tab for every part of the site (boards, players, umpires, leagues, tournaments, series, stadiums, credits, statistics…) and the Overview comes first', built.tabs[0].name === 'Overview' && ['Boards', 'Players', 'Umpires', 'Franchise Leagues', 'League Squads', 'Tournament Tables', 'Series Records', 'Stadiums', 'Stadium Requests', 'Credit Adjustments', 'Series Player Stats', 'Announced Series', 'Activity Log'].every((n) => tab(n)) && built.tabs.length >= 35);
+  check('the tabs hold what the site holds: every board, player and umpire, the new stadium with its venue, the uploaded player rows', tab('Boards').rows.length === snap.boards.length && tab('Players').rows.length === snap.players.length && tab('Umpires').rows.length === snap.umpires.length && tab('Stadiums').rows.some((r) => r.includes('Test Dome') && r.includes('Pune, India')) && tab('Series Player Stats').rows.some((r) => r.includes('Some Player')));
+  check('no password, hash or key is ever written to the sheet', !/SECRET-HASH-VALUE|scrypt\$|password_hash|private_key/i.test(everything) && !tab('Board Accounts').header.some((h) => /pass|hash|session|fail|lock/i.test(h)));
+  check('cells are text, numbers or true/false; lists and objects become JSON; long text is cut; an empty value is an empty cell', cell(null) === '' && cell(5) === 5 && cell(['a', { b: 1 }]) === '["a",{"b":1}]' && cell('x'.repeat(60000)).length < 50000 && flatten({ a: { b: 1 }, c: ['x', 'y'] }).c === 'x | y' && table('T', [{ a: 1 }, { b: 2 }]).header.join() === 'a,b');
+
+  // a pretend Google: records every call
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+  const key = JSON.stringify({ client_email: 'mirror@iocf.iam.gserviceaccount.com', private_key: privateKey });
+  const calls = [];
+  let created = [];
+  const fakeGoogle = (deny = false) => async (url, init = {}) => {
+    const body = typeof init.body === 'string' ? init.body : init.body?.toString();
+    calls.push({ url: String(url), method: init.method ?? 'GET', body });
+    const ok = (o) => ({ ok: true, status: 200, json: async () => o, text: async () => JSON.stringify(o) });
+    if (String(url).startsWith('https://oauth2')) return ok({ access_token: 'tok', expires_in: 3600 });
+    if (deny) return { ok: false, status: 403, text: async () => 'no', json: async () => ({}) };
+    if (/fields=sheets/.test(String(url))) return ok({ sheets: [{ properties: { sheetId: 1, title: 'Sheet1' } }, ...created.map((t, i) => ({ properties: { sheetId: 10 + i, title: t } }))] });
+    if (/spreadsheets\/[^/]+:batchUpdate$/.test(String(url))) {
+      for (const r of JSON.parse(body).requests) if (r.addSheet) created.push(r.addSheet.properties.title);
+      return ok({});
+    }
+    return ok({});
+  };
+  const env = { GOOGLE_SERVICE_ACCOUNT_JSON: key, MIRROR_SHEET_ID: 'a'.repeat(44) };
+  const done = await runMirror({ env, fetchImpl: fakeGoogle(), dataset: snap, store: mstore, boards: BOARDS, baseStadiums: STADIUMS, leagueStats: null });
+  const clearCall = calls.find((c) => /values:batchClear$/.test(c.url));
+  const updates = calls.filter((c) => /values:batchUpdate$/.test(c.url));
+  const written = updates.flatMap((c) => JSON.parse(c.body).data);
+  const tokenCall = calls.find((c) => c.url.startsWith('https://oauth2'));
+  const writes = calls.filter((c) => c.method !== 'GET' && !c.url.startsWith('https://oauth2')).length;
+  check('it signs in as the service account (a signed token) and writes every tab: tabs are added, cleared in one request, then written in a few grouped requests, header first, as plain values', /jwt-bearer/.test(tokenCall.body) && created.length === done.tabs && JSON.parse(clearCall.body).ranges.length === done.tabs && updates.every((c) => JSON.parse(c.body).valueInputOption === 'RAW') && written.find((d) => /Boards/.test(d.range)).values[0][0] === 'name' && written.some((d) => /Players/.test(d.range)));
+  check('a whole run needs only a handful of write requests (Google allows 60 a minute), however big the sheet', writes <= 20, `${writes} writes`);
+  check('nothing but the Google API is called, and no password reaches Google', calls.every((c) => /^https:\/\/(oauth2|sheets)\.googleapis\.com\//.test(c.url)) && !calls.some((c) => /SECRET-HASH-VALUE/.test(c.body ?? '')));
+  check('a second run reuses the tabs (nothing is added twice)', await (async () => { const before = created.length; await runMirror({ env, fetchImpl: fakeGoogle(), dataset: snap, store: mstore, boards: BOARDS, baseStadiums: STADIUMS }); return created.length === before; })());
+  check('a sheet the robot cannot open gives a clear "share it with the service account" error; a missing key says it is not set up', await runMirror({ env, fetchImpl: fakeGoogle(true), dataset: snap, store: mstore, boards: BOARDS, baseStadiums: STADIUMS }).then(() => false, (e) => e.code === 'mirror_no_access') && await runMirror({ env: {}, dataset: snap, boards: BOARDS }).then(() => false, (e) => e.code === 'mirror_not_configured') && mirrorConfigured(env) && !mirrorConfigured({}));
+  check('when Google says "too many requests" the tool waits and tries again, then succeeds', await (async () => {
+    let failed = 0;
+    const waits = [];
+    const flaky = async (url, init) => {
+      if (/values:batchClear/.test(String(url)) && failed < 2) { failed++; return { ok: false, status: 429, text: async () => 'quota', json: async () => ({}) }; }
+      return fakeGoogle()(url, init);
+    };
+    const r = await runMirror({ env, fetchImpl: flaky, sleep: async (ms) => { waits.push(ms); }, dataset: snap, store: mstore, boards: BOARDS, baseStadiums: STADIUMS });
+    return failed === 2 && waits.length === 2 && waits[0] >= 20000 && r.tabs > 30;
+  })());
+  check('the sheet id can be given as the link or the id; the key as JSON or base64', sheetIdOf(`https://docs.google.com/spreadsheets/d/${'a'.repeat(44)}/edit?gid=0`) === 'a'.repeat(44) && parseServiceAccount(Buffer.from(key).toString('base64')).email === 'mirror@iocf.iam.gserviceaccount.com');
+
+  // the administrator's button
+  const mh = createHandler({ store: mstore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234', ...env }, rankInput: async () => ({ dataset: snap, leagueStats: null }), mirrorFetch: fakeGoogle() });
+  const mcall = (method, p, { body, cookie } = {}) => mh({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: '9.9.9.9' });
+  await mstore.create({ account_id: 'IOCF-ADM-001', role: 'admin', board_slug: null, board_name: null, username: 'mirror.admin', password_hash: await (await import('../../server/command/crypto.mjs')).hashPassword('Mirror-Admin-Pass-1'), status: 'active' });
+  const ml = await mcall('POST', 'login', { body: { role: 'admin', username: 'mirror.admin', password: 'Mirror-Admin-Pass-1' } });
+  const mcookie = `iocf_cc=${cookieOf(ml)}`;
+  const before = calls.length;
+  const press = await mcall('POST', 'admin/mirror', { cookie: mcookie });
+  check('the administrator\'s "Update now" button writes the sheet; a board cannot press it, and signed out nobody can', press.status === 200 && press.body.tabs >= 35 && calls.length > before && (await mcall('POST', 'admin/mirror')).status === 401);
+  const ph = createHandler({ store: mstore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, rankInput: async () => ({ dataset: snap, leagueStats: null }) });
+  const pcall = (method, p, { body, cookie } = {}) => ph({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: '9.9.9.8' });
+  const plainAdmin = `iocf_cc=${cookieOf(await pcall('POST', 'login', { body: { role: 'admin', username: 'mirror.admin', password: 'Mirror-Admin-Pass-1' } }))}`;
+  const notSet = await pcall('POST', 'admin/mirror', { cookie: plainAdmin });
+  const ovMirror = await mcall('GET', 'admin/overview', { cookie: mcookie });
+  check('the overview says whether the mirror is set up, and the button is refused cleanly when it is not', ovMirror.body.mirrorConfigured === true && notSet.status === 503 && notSet.body.error.code === 'mirror_not_configured', JSON.stringify([ovMirror.status, ovMirror.body.mirrorConfigured, notSet.status, notSet.body]).slice(0, 200));
+}
+
 console.log(`\n${failures.length ? '✗' : '✓'} ${passed} passed, ${failures.length} failed`);
 fs.rmSync(home, { recursive: true, force: true });
 if (failures.length) {

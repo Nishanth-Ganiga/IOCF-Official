@@ -37,7 +37,8 @@ const clientIp = (req) =>
   req.headers['fly-client-ip'] || req.headers['x-vercel-forwarded-for'] || req.headers['x-real-ip'] || (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
 
 /** (req, res) => Promise — answers requests under /api/command; the caller decides which requests reach it. */
-export function commandCenterRequestListener({ store = productionStoreFromEnv(), env = process.env } = {}) {
+/** `afterWrite()` (optional) is called after every request that changed something (not for signing in or out), e.g. to refresh the mirror sheet. */
+export function commandCenterRequestListener({ store = productionStoreFromEnv(), env = process.env, afterWrite } = {}) {
   const handle = createHandler({ store, env });
   return async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -62,5 +63,12 @@ export function commandCenterRequestListener({ store = productionStoreFromEnv(),
     });
     res.writeHead(out.status, out.headers);
     res.end(JSON.stringify(out.body));
+    if (afterWrite && req.method !== 'GET' && req.method !== 'HEAD' && out.status < 400 && !/^\/(login|logout)\/?$/.test(path)) {
+      try {
+        afterWrite();
+      } catch {
+        /* a failed refresh never affects the request */
+      }
+    }
   };
 }

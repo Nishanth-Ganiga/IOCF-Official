@@ -37,6 +37,7 @@
 //   POST /boards/:slug/stadiums         ask to build a stadium (own board; the administrator can act for any board)  { name, place }  (the level and the cost are fixed by the server)
 //   POST /boards/:slug/stadiums/:id/dismiss  clear a "not accepted" message (own board; the administrator can act for any board)
 //   DELETE /boards/:slug/stadiums/:id   withdraw a request that is still waiting (own board; the administrator can act for any board)
+//   POST /admin/mirror                  admin only   writes everything on the site to the private mirror sheet now
 //   GET  /admin/stadiums                admin only   the requests waiting, and the recent decisions
 //   POST /admin/stadiums/:id/accept     admin only   adds the stadium to the board's list (the cost is deducted in the sheet by hand)
 //   POST /admin/stadiums/:id/decline    admin only   { reason? }  the request leaves the queue; the board is told it was not accepted
@@ -49,6 +50,7 @@ import { computeAllRankings } from '../../src/data/commandCenter/rankingsCompute
 import { movesOf, updateState } from '../../src/data/commandCenter/rankMoves.mjs';
 import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
+import { mirrorConfigured, runMirror } from '../mirror/mirror.mjs';
 import { MAX_PENDING, STADIUM_COST, STADIUM_LEVEL, countryOf, newRequest, noticeFor, stadiumLists, takenNames, toApi as stadiumToApi, validateRequest } from './stadiums.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
@@ -96,6 +98,7 @@ const ACTIONS = {
   stadium_withdrawn: 'Stadium request withdrawn',
   stadium_accepted: 'Stadium request accepted',
   stadium_declined: 'Stadium request declined',
+  mirror_written: 'Backup sheet updated',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -110,7 +113,7 @@ const publicUser = (a) => ({ accountId: a.account_id, role: a.role, username: a.
 
 const RANK_REFRESH_MS = 10 * 60 * 1000;
 
-export function createHandler({ store, env = process.env, now = () => Date.now(), rankInput }) {
+export function createHandler({ store, env = process.env, now = () => Date.now(), rankInput, mirrorFetch = fetch }) {
   const secret = env.COMMAND_CENTER_SESSION_SECRET || randomBytes(32).toString('hex'); // a per-process secret still works for dev/tests
   const production = Boolean(env.COMMAND_CENTER_SESSION_SECRET);
 
@@ -173,6 +176,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
     try {
       return stadiumLists(await store.stadiumList());
     } catch (err) {
+      if (err?.code === 'mirror_no_access') return fail(502, 'mirror_no_access', err.message);
+      if (err?.code === 'mirror_not_configured') return fail(503, 'mirror_not_configured', err.message);
       if (err?.code === 'stadiums_missing') return STADIUMS; // the table is not set up yet: the old list alone
       throw err;
     }
@@ -537,6 +542,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             inactiveBoardAccounts: boardAccounts.filter((x) => x.status !== 'active').length,
             boardsWithoutAccount: BOARDS.length - boardAccounts.length,
             availableModules: MODULES.filter((m) => m.status === 'active').length,
+            mirrorConfigured: mirrorConfigured(env),
             pendingStadiumRequests: await store.stadiumList().then((rows) => rows.filter((x) => x.status === 'pending').length, () => 0),
             recentActivity: recent.map((r) => ({ at: r.at, action: r.action, label: actionLabel(r.action), actor: r.actor, target: r.target })),
           });
@@ -768,6 +774,14 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (patch.username || patch.password_hash) await audit('credentials_set', who, existing.account_id, req, { username: Boolean(patch.username), password: Boolean(patch.password_hash) });
           if ('chairman_name' in patch) await audit('chairman_updated', who, existing.account_id, req);
           return json(200, { ok: true, accountId: row.account_id, username: row.username, status: row.status, created: false });
+        }
+
+        if (b === 'mirror' && !c && method === 'POST') {
+          if (!mirrorConfigured(env)) return fail(503, 'mirror_not_configured', 'The private mirror sheet is not set up yet: add GOOGLE_SERVICE_ACCOUNT_JSON and MIRROR_SHEET_ID to the server\'s settings (see the README).');
+          const input = await loadRankInput();
+          const r = await runMirror({ env, fetchImpl: mirrorFetch, dataset: input.dataset, rankHistory: input.dataset?.rankHistory ?? [], leagueStats: input.leagueStats, store, boards: BOARDS, baseStadiums: STADIUMS });
+          await audit('mirror_written', who, null, req, { tabs: r.tabs, rows: r.rows });
+          return json(200, { ok: true, tabs: r.tabs, rows: r.rows, warnings: r.warnings });
         }
 
         if (b === 'stadiums' && !c && method === 'GET') {

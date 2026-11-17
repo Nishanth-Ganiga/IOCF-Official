@@ -100,6 +100,19 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
             </button>
           </li>
           <li>
+            <button type="button" disabled={busy === 'mirror'} onClick={() => void run('mirror', () => api.mirrorNow(), 'The backup sheet was updated with everything on the site.')} className="group block h-full w-full rounded-2xl border border-[#c9a24b]/60 bg-ink-2 p-5 text-left transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b] disabled:opacity-60">
+              <span className="flex items-start justify-between gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#c9a24b] text-[#c9a24b]">
+                  <ModuleIcon icon="report" className="h-7 w-7" />
+                </span>
+                <span className="rounded-full border border-[#c9a24b] px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em] text-[#c9a24b]">{overview?.mirrorConfigured === false ? 'NOT SET UP' : 'ADMIN'}</span>
+              </span>
+              <span className="mt-4 block font-display text-2xl tracking-wide text-bone">BACKUP SHEET</span>
+              <span className="mt-1.5 block text-sm leading-relaxed text-mist">{overview?.mirrorConfigured === false ? 'The private backup sheet is not connected yet. See the README (The private mirror sheet).' : 'Writes everything on the site to the private Google Sheet now. It also updates itself every 15 minutes.'}</span>
+              <span className="mt-4 block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">{busy === 'mirror' ? 'WRITING…' : 'UPDATE NOW →'}</span>
+            </button>
+          </li>
+          <li>
             <button type="button" onClick={() => nav('stadiums')} className="group block h-full w-full rounded-2xl border border-[#c9a24b]/60 bg-ink-2 p-5 text-left transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]">
               <span className="flex items-start justify-between gap-3">
                 <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#c9a24b] text-[#c9a24b]">
@@ -161,6 +174,9 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
             </button>
           </li>
         </ul>
+        <p role="status" aria-live="polite" className="mt-3 min-h-[1.25rem] text-sm text-[#c9a24b]">
+          {flash}
+        </p>
       </section>
 
       {/* overview */}

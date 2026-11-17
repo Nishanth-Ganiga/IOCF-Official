@@ -71,6 +71,27 @@ A locked profile with real server-side sign-in (one administrator, 26 board chai
 
 **Build a Stadium.** A board chairman opens *Build a Stadium*, gives a stadium name and a place in the home country, and sends the request. The level (always 3) and the cost (30,000 credits) are fixed by the server: the form shows them but they cannot be changed, and anything the browser sends for them is ignored. The administrator sees the requests under *Stadium Requests*: **Accept** adds the stadium to the board's list, so it can be chosen for a series (the system does not touch credits: the administrator deducts the 30,000 in the sheet by hand); **Decline** removes the request from the queue and shows the board a "not accepted" message. Every request and decision is a row in the `command_stadiums` table in Supabase (`server/command/stadiums.sql`, also part of `schema.sql`; run it once in the SQL Editor). The old stadium sheet (`All Assests/All Stadiums`, built by `npm run stadiums`) is only the list from before this feature; new stadiums come from this process, not from a CSV.
 
+## The private mirror sheet
+
+A second Google Sheet that holds **everything on the website** as tabs (boards, players and their achievements, umpires, franchise leagues and squads, tournament tables, series records and announced series, stadiums and stadium requests, credits, board accounts, uploaded player statistics, the activity log…). It is rewritten from the website's data, so it always matches the site; it is a backup and a place to look at the data, not an input (edit the IOCF sheet or the Command Center, not the mirror). Passwords and password hashes are never written.
+
+It stays private: share it with **yourself and the robot account only** (never "anyone with the link").
+
+One-time setup:
+1. Google Cloud Console → create a project → **APIs & Services → Enable APIs → Google Sheets API**.
+2. **IAM & Admin → Service Accounts → Create** (any name, e.g. `iocf-mirror`; no roles needed) → open it → **Keys → Add key → JSON**. A key file downloads. Keep it secret; it is git-ignored (`*service-account*.json`).
+3. Open the mirror sheet → **Share** → add the service account's e-mail (`…@….iam.gserviceaccount.com`) as **Editor**. Share it with nobody else.
+4. Give the tool the key and the sheet:
+   - on your computer: add these two lines to `~/.iocf-command-center/env` (then `npm run mirror`):
+     `GOOGLE_SERVICE_ACCOUNT_JSON=<the whole key file on one line, or its base64>` and `MIRROR_SHEET_ID=<the sheet's link or id>`
+   - for the live site's **Backup Sheet** button (Vercel) and the Fly server: add the same two as environment variables
+   - for the automatic job (`docs/mirror-workflow.yml`, every 15 minutes and after every push; to switch it on, copy it to `.github/workflows/mirror.yml` using GitHub's website — a push from the command line needs a token with the `workflow` scope): add `GOOGLE_SERVICE_ACCOUNT_JSON`, `MIRROR_SHEET_ID`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as repository secrets (Settings → Secrets and variables → Actions)
+
+Updating it:
+- automatically every 15 minutes (the GitHub job), and a minute after any change when the site runs on the Fly server;
+- on demand: **Command Center → Backup Sheet → Update now**;
+- from a terminal: `npm run mirror` (`-- --dry-run` shows what would be written without a Google key; `-- --csv <folder>` also saves every tab as a CSV).
+
 ## Player statistics (CSV exports)
 
 Per-player statistics come from STUMPS scorer exports kept in `All Assests/`:

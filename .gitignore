@@ -17,3 +17,7 @@ register.key
 IOCF_CREDENTIALS_PLAIN*
 local-store.json
 IOCF_COMMAND_CENTER_*
+
+# the mirror sheet: the Google service account key must never be committed
+*service-account*.json
+.env.mirror

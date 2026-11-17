@@ -94,6 +94,8 @@ export type Overview = {
   availableModules: number;
   /** Build a Stadium requests waiting for a decision. */
   pendingStadiumRequests?: number;
+  /** Is the private mirror sheet set up on the server? */
+  mirrorConfigured?: boolean;
   recentActivity: ActivityEntry[];
 };
 
@@ -254,6 +256,7 @@ export const api = {
   requestStadium: (slug: string, input: { name: string; place: string }) => request<{ request: StadiumRequest }>('POST', `/boards/${encodeURIComponent(slug)}/stadiums`, input),
   withdrawStadium: (slug: string, id: string) => request<{ ok: true }>('DELETE', `/boards/${encodeURIComponent(slug)}/stadiums/${encodeURIComponent(id)}`),
   dismissStadium: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/stadiums/${encodeURIComponent(id)}/dismiss`),
+  mirrorNow: () => request<{ ok: true; tabs: number; rows: number; warnings: string[] }>('POST', '/admin/mirror'),
   adminStadiums: () => request<AdminStadiums>('GET', '/admin/stadiums'),
   acceptStadium: (id: string) => request<{ request: StadiumRequest }>('POST', `/admin/stadiums/${encodeURIComponent(id)}/accept`),
   declineStadium: (id: string, reason?: string) => request<{ request: StadiumRequest }>('POST', `/admin/stadiums/${encodeURIComponent(id)}/decline`, { reason }),
