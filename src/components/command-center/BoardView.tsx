@@ -50,7 +50,7 @@ export default function BoardView({ slug, moduleId, sub, user, nav }: { slug: st
         {admin && (
           <div role="status" className="gutter mb-6">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#c9a24b]/60 bg-black/70 px-4 py-3 backdrop-blur">
-              <p className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b]">ADMINISTRATOR PREVIEW · VIEWING THE {theme.name.toUpperCase()} BOARD AS MASTER ADMINISTRATOR</p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-[#c9a24b]">ADMINISTRATOR PREVIEW · VIEWING THE {theme.name.toUpperCase()} BOARD AS MASTER ADMINISTRATOR · YOU CAN DO EVERYTHING THE BOARD CAN</p>
               <button type="button" onClick={() => nav()} className="rounded-full border border-white/25 px-4 py-1.5 text-[11px] font-semibold tracking-[0.2em] text-bone transition hover:border-[#c9a24b] hover:text-[#c9a24b]">
                 ← BACK TO ADMIN DASHBOARD
               </button>
@@ -63,7 +63,7 @@ export default function BoardView({ slug, moduleId, sub, user, nav }: { slug: st
             {module?.id === 'credits' && <CreditsPanel theme={theme} />}
             {module?.id === 'stadiums' && <BuildStadium theme={theme} />}
             {module?.id === 'fixtures' && <FixturesCalendar theme={theme} />}
-            {module?.id === 'series-announcement' && <SeriesAnnouncement theme={theme} sub={sub} admin={admin} go={(next) => nav(...base, moduleId, ...(next ? [next] : []))} />}
+            {module?.id === 'series-announcement' && <SeriesAnnouncement theme={theme} sub={sub} go={(next) => nav(...base, moduleId, ...(next ? [next] : []))} />}
           </ModulePage>
         ) : (
           <Dashboard theme={theme} data={state.data} chairman={chairman} onOpen={(id, sub) => nav(...base, id, ...(sub ? [sub] : []))} />

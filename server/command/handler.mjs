@@ -29,14 +29,14 @@
 //   DELETE /admin/credits/adjustments/:id  admin only
 //   GET  /boards/:slug/fixtures         every match of every confirmed series (the calendar)
 //   GET  /boards/:slug/series           the board's announced series, invitations and the upcoming list
-//   POST /boards/:slug/series           announce a series (own board)
+//   POST /boards/:slug/series           announce a series (own board; the administrator can act for any board)
 //   PUT  /boards/:slug/series/:id       edit it until an opponent accepts
-//   POST /boards/:slug/series/:id/decline  turn an invitation down (own board)
-//   POST /boards/:slug/series/:id/accept  accept an invitation (own board)
+//   POST /boards/:slug/series/:id/decline  turn an invitation down (own board; the administrator can act for any board)
+//   POST /boards/:slug/series/:id/accept  accept an invitation (own board; the administrator can act for any board)
 //   GET  /boards/:slug/stadiums         the board's stadiums, its requests and any "not accepted" messages (own board; admin: any)
-//   POST /boards/:slug/stadiums         ask to build a stadium (own board)  { name, place }  (the level and the cost are fixed by the server)
-//   POST /boards/:slug/stadiums/:id/dismiss  clear a "not accepted" message (own board)
-//   DELETE /boards/:slug/stadiums/:id   withdraw a request that is still waiting (own board)
+//   POST /boards/:slug/stadiums         ask to build a stadium (own board; the administrator can act for any board)  { name, place }  (the level and the cost are fixed by the server)
+//   POST /boards/:slug/stadiums/:id/dismiss  clear a "not accepted" message (own board; the administrator can act for any board)
+//   DELETE /boards/:slug/stadiums/:id   withdraw a request that is still waiting (own board; the administrator can act for any board)
 //   GET  /admin/stadiums                admin only   the requests waiting, and the recent decisions
 //   POST /admin/stadiums/:id/accept     admin only   takes the cost from the board's credits and adds the stadium to its list
 //   POST /admin/stadiums/:id/decline    admin only   { reason? }  the request leaves the queue; the board is told it was not accepted
@@ -372,10 +372,11 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       if (a === 'boards' && b && c === 'stadiums') {
         const board = BOARDS.find((x) => x.slug === b);
         if (!board) return fail(404, 'not_found', 'Board not found.');
-        const own = who.role === 'board' && who.board_slug === board.slug;
+        // the board's own chairman, or the master administrator acting for the board (so the administrator can test everything a board can do)
+        const own = who.role === 'admin' || (who.role === 'board' && who.board_slug === board.slug);
         if (!own && who.role !== 'admin') return fail(403, 'forbidden', 'You do not have access to this board.');
         const t = now();
-        const mustOwn = () => (own ? null : fail(403, 'forbidden', 'Only the board chairman can do this.'));
+        const mustOwn = () => (own ? null : fail(403, 'forbidden', 'Only the board chairman or the administrator can do this.'));
 
         if (!d && method === 'GET') {
           const rows = await store.stadiumList();
@@ -402,7 +403,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const v = validateRequest(req.body, board, BOARDS, takenNames(rows));
           if (v.error) return fail(400, 'invalid', v.error);
           const row = await store.stadiumPut(newRequest(v.value, board, who, randomUUID(), t));
-          await audit('stadium_requested', who, row.key, req, { board: board.slug, name: row.name, venue: row.venue });
+          await audit('stadium_requested', who, row.key, req, { board: board.slug, name: row.name, venue: row.venue, ...(who.role === 'admin' ? { byAdministrator: true } : {}) });
           return json(201, { request: stadiumToApi(row, BOARDS) });
         }
 
@@ -431,10 +432,11 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       if (a === 'boards' && b && c === 'series') {
         const board = BOARDS.find((x) => x.slug === b);
         if (!board) return fail(404, 'not_found', 'Board not found.');
-        const own = who.role === 'board' && who.board_slug === board.slug;
+        // the board's own chairman, or the master administrator acting for the board (so the administrator can test everything a board can do)
+        const own = who.role === 'admin' || (who.role === 'board' && who.board_slug === board.slug);
         if (!own && who.role !== 'admin') return fail(403, 'forbidden', 'You do not have access to this board.');
         const t = now();
-        const mustOwn = () => (own ? null : fail(403, 'forbidden', 'Only the board chairman can do this.'));
+        const mustOwn = () => (own ? null : fail(403, 'forbidden', 'Only the board chairman or the administrator can do this.'));
         const limitMsg = (name, you) => `${you ? 'Your board is' : `${name} is`} already in ${SERIES_CFG.maxSeriesPerBoard} series on those dates. A board can play at most ${SERIES_CFG.maxSeriesPerBoard} series at a time; a new series can start the day after one of them ends.`;
 
         if (!d && method === 'GET') {
@@ -465,7 +467,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const full = v.value.opponents.map((o) => BOARDS.find((x) => x.slug === o)).find((o) => busyOn(all, o.slug, t, range) >= SERIES_CFG.maxSeriesPerBoard);
           if (full) return fail(409, 'series_limit', limitMsg(full.name, false));
           const row = await store.seriesInsert(newSeries(v.value, board.slug, t));
-          await audit('series_announced', who, row.id, req, { name: row.name });
+          await audit('series_announced', who, row.id, req, { name: row.name, ...(who.role === 'admin' ? { forBoard: board.slug } : {}) });
           return json(201, { series: toApi(row, BOARDS, t) });
         }
 

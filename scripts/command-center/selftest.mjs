@@ -524,7 +524,12 @@ console.log('\n— Series Announcement —');
 
   // permissions
   check('a board cannot announce for another board', (await post(cAus, 'india', good())).status === 403);
-  check('the administrator can look but not announce', (await sCall('GET', 'boards/india/series', { cookie: cAdm })).status === 200 && (await post(cAdm, 'india', good())).status === 403);
+  check('the administrator can look and also announce for a board (to test it), then remove the test series', await (async () => {
+    const look = (await sCall('GET', 'boards/india/series', { cookie: cAdm })).body;
+    const made = await post(cAdm, 'india', good({ name: 'Admin Test Cup', dates: ['2026-11-20'] }));
+    const removed = made.status === 201 && (await sCall('DELETE', `admin/series/${made.body.series.id}`, { cookie: cAdm })).status === 200;
+    return look.canAct === true && made.status === 201 && removed;
+  })());
   check('a board cannot read another board\'s series page', (await sCall('GET', 'boards/india/series', { cookie: cAus })).status === 403);
   check('series need a signed-in session', (await sCall('GET', 'boards/india/series')).status === 401);
 
@@ -570,9 +575,18 @@ console.log('\n— Series Announcement —');
   check('only the host can edit', (await sCall('PUT', `boards/india/series/${sid}`, { cookie: cAus, body: good() })).status === 403 && (await sCall('PUT', `boards/australia/series/${sid}`, { cookie: cAus, body: good({ opponents: ['india'], stadiums: [STADIUMS.australia[0]] }) })).status === 404);
 
   // acceptance
-  check('only the invited board can accept', (await sCall('POST', `boards/england/series/${sid}/accept`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/india/series/${sid}/accept`, { cookie: cIndia })).status === 404 && (await sCall('POST', `boards/australia/series/${sid}/accept`, { cookie: cAdm })).status === 403);
+  check('only the invited board can accept', (await sCall('POST', `boards/england/series/${sid}/accept`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/india/series/${sid}/accept`, { cookie: cIndia })).status === 404 && (await sCall('POST', `boards/england/series/${sid}/accept`, { cookie: cAdm })).status === 404);
   const acc = await sCall('POST', `boards/australia/series/${sid}/accept`, { cookie: cAus });
   check('the opponent accepts and the series is confirmed', acc.status === 200 && acc.body.series.status === 'accepted');
+  check('the administrator can accept and decline an invitation on behalf of a board', await (async () => {
+    const mk = await post(cAdm, 'india', good({ name: 'Admin Accept Cup', opponents: ['scotland'], dates: ['2026-11-25'] }));
+    const accAdm = await sCall('POST', `boards/scotland/series/${mk.body.series.id}/accept`, { cookie: cAdm });
+    const mk2 = await post(cAdm, 'india', good({ name: 'Admin Decline Cup', opponents: ['scotland'], dates: ['2026-12-05'] }));
+    const decAdm = await sCall('POST', `boards/scotland/series/${mk2.body.series.id}/decline`, { cookie: cAdm });
+    await sCall('DELETE', `admin/series/${mk.body.series.id}`, { cookie: cAdm });
+    await sCall('DELETE', `admin/series/${mk2.body.series.id}`, { cookie: cAdm });
+    return mk.status === 201 && accAdm.status === 200 && accAdm.body.series.status === 'accepted' && mk2.status === 201 && decAdm.status === 200;
+  })());
   const up = await view(cEng, 'england');
   check('an accepted series shows in every board\'s upcoming list', up.upcoming.some((x) => x.id === sid) && up.upcoming.find((x) => x.id === sid).stadiums.length === 3 && (await view(cMexico, 'mexico')).upcoming.some((x) => x.id === sid) && (await view(cAus, 'australia')).invitations.length === 0);
   check('after acceptance it can no longer be edited', (await sCall('PUT', `boards/india/series/${sid}`, { cookie: cIndia, body: good() })).status === 409);
@@ -689,7 +703,7 @@ console.log('\n— Series Announcement —');
       check('a request needs only a name and a place; a level or cost sent by the browser is ignored (always level 3, 30,000)', mine.status === 201 && mine.body.request.level === 3 && mine.body.request.cost === 30000 && mine.body.request.venue === 'Kabul, Afghanistan' && mine.body.request.status === 'pending');
       check('the place must be in the board\'s home country, the name must be new, and both are required', (await ask(cAfg, { name: 'Sydney Dome', place: 'Sydney, Australia' })).status === 400 && (await ask(cAfg, { name: 'afghan national sports complex', place: 'Kabul' })).status === 400 && (await ask(cAfg, { name: 'kabul crown', place: 'Herat' })).status === 400 && (await ask(cAfg, { name: 'Ab', place: 'Herat' })).status === 400 && (await ask(cAfg, { name: 'Herat Dome', place: '' })).status === 400);
       check('"Kabul, Afghanistan" and "Kabul" are the same place (the country is added once)', (await ask(cAfg, { name: 'Herat Arena', place: 'Herat, Afghanistan' })).body.request.venue === 'Herat, Afghanistan');
-      check('only the board itself can ask; another board and the administrator cannot', (await ask(cNepal, { name: 'Spy Dome', place: 'Kabul' })).status === 403 && (await ask(cAdm, { name: 'Spy Dome', place: 'Kabul' })).status === 403 && (await sg('afghanistan', cNepal)).status === 403);
+      check('only that board (or the administrator) can ask: another board cannot ask or read', (await ask(cNepal, { name: 'Spy Dome', place: 'Kabul' })).status === 403 && (await sg('afghanistan', cNepal)).status === 403 && (await sCall('DELETE', `boards/afghanistan/stadiums/${mine.body.request.id}`, { cookie: cNepal })).status === 403);
       const queue = (await sCall('GET', 'admin/stadiums', { cookie: cAdm })).body;
       check('the administrator sees the waiting requests (oldest first); a board cannot open the admin queue', queue.pending.length === 2 && queue.pending[0].name === 'Kabul Crown' && (await sCall('GET', 'admin/stadiums', { cookie: cAfg })).status === 403 && (await sCall('POST', `admin/stadiums/${queue.pending[0].id}/accept`, { cookie: cAfg })).status === 403);
       check('a waiting request is not a stadium yet and costs nothing', !(await sg('afghanistan', cAfg)).body.stadiums.some((x) => x.name === 'Kabul Crown') && (await bal(cAfg, 'afghanistan')).pending === 0 && (await sCall('GET', 'admin/overview', { cookie: cAdm })).body.pendingStadiumRequests === 2);
@@ -709,6 +723,8 @@ console.log('\n— Series Announcement —');
       check('a name already built cannot be requested again, by any board', (await ask(await sLogin('board', sc('Scotland')), { name: 'KABUL CROWN', place: 'Edinburgh' }, 'scotland')).status === 400);
       const withdraw = (await ask(cAfg, { name: 'Mazar Park', place: 'Mazar-i-Sharif' })).body.request;
       check('a board can withdraw a request that is waiting; it leaves the queue and cannot then be accepted', (await sCall('DELETE', `boards/afghanistan/stadiums/${withdraw.id}`, { cookie: cAfg })).status === 200 && (await sCall('POST', `admin/stadiums/${withdraw.id}/accept`, { cookie: cAdm })).status === 409 && (await sCall('GET', 'admin/stadiums', { cookie: cAdm })).body.pending.length === 0);
+      const byAdmin = await ask(cAdm, { name: 'Admin Test Dome', place: 'Kabul' });
+      check('the administrator can send a request for a board (to test it), and withdraw it', byAdmin.status === 201 && (await sg('afghanistan', cAdm)).body.canAct === true && (await sCall('DELETE', `boards/afghanistan/stadiums/${byAdmin.body.request.id}`, { cookie: cAdm })).status === 200);
       const limit = [];
       for (const nm of ['Lim One', 'Lim Two', 'Lim Three', 'Lim Four']) limit.push((await ask(cAfg, { name: nm, place: 'Kabul' })).status);
       check('a board can have at most 3 requests waiting', limit.join() === '201,201,201,409');
@@ -753,7 +769,7 @@ console.log('\n— Series Announcement —');
     const q1 = await post(cQatar, 'qatar', good({ name: 'Gulf Cup', opponents: ['zimbabwe'], stadiums: [STADIUMS.qatar[0]] }));
     const qid = q1.body.series?.id;
     check('the invited board\'s dashboard badge counts the waiting invitation (and only theirs)', (await dash(cUg, 'zimbabwe')).invitations === ugBase + 1 && (await dash(cQatar, 'qatar')).invitations === (await view(cQatar, 'qatar')).invitations.length);
-    check('only the invited board can decline', (await sCall('POST', `boards/england/series/${qid}/decline`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/qatar/series/${qid}/decline`, { cookie: cQatar })).status === 404 && (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`, { cookie: cAdm })).status === 403 && (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`)).status === 401);
+    check('only the invited board can decline', (await sCall('POST', `boards/england/series/${qid}/decline`, { cookie: cEng })).status === 404 && (await sCall('POST', `boards/qatar/series/${qid}/decline`, { cookie: cQatar })).status === 404 && (await sCall('POST', `boards/england/series/${qid}/decline`, { cookie: cAdm })).status === 404 && (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`)).status === 401);
     check('the opponent declines', (await sCall('POST', `boards/zimbabwe/series/${qid}/decline`, { cookie: cUg })).status === 200);
     const hostView = (await view(cQatar, 'qatar')).announced.find((x) => x.id === qid);
     check('the host sees "declined by Zimbabwe" straight away', hostView?.status === 'declined' && hostView.declinedBy.name === 'Zimbabwe' && !hostView.editable);
@@ -770,7 +786,7 @@ console.log('\n— Series Announcement —');
     check('a board that has accepted cannot decline', (await sCall('POST', `boards/nepal/series/${t2}/decline`, { cookie: cNp })).status === 409);
     await sCall('POST', `boards/japan/series/${t2}/decline`, { cookie: cJp });
     check('one decline cancels a trilateral series for everyone', (await view(cPor, 'portugal')).announced.find((x) => x.id === t2).status === 'declined' && !(await view(cNp, 'nepal')).invitations.some((x) => x.id === t2) && (await sCall('GET', 'admin/series', { cookie: cAdm })).body.series.find((x) => x.id === t2).declinedBy.name === 'Japan' && (await view(cPor, 'portugal')).active === 0);
-    check('declines are recorded in the audit log', (await sStore.listAudit(500)).filter((x) => x.action === 'series_declined').length === 2);
+    check('declines are recorded in the audit log', (await sStore.listAudit(500)).filter((x) => x.action === 'series_declined').length === 3); // (one of them is the administrator's test decline)
     // the host sees a decline for 3 days
     t0 += 4 * 86400000;
     const cQatar2 = await sLogin('board', sc('Qatar'));

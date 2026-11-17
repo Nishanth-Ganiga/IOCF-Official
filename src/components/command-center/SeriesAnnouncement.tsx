@@ -26,7 +26,7 @@ const day = (d: string | null) => (d ? new Date(`${d}T00:00:00Z`).toLocaleDateSt
  * Series Announcement: three tiles — announce a series, accept the series, upcoming series. All rules (the 2-series limit, the
  * 11:59 PM IST deadline, editing until accepted) are enforced by the server; this screen only shows what it allows.
  */
-export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: BoardTheme; sub?: string; admin: boolean; go: Go }) {
+export default function SeriesAnnouncement({ theme, sub, go }: { theme: BoardTheme; sub?: string; go: Go }) {
   const [data, setData] = useState<SeriesOverview | null>(null);
   const [error, setError] = useState('');
   const [extras, setExtras] = useState<Extras>(NO_EXTRAS);
@@ -66,8 +66,8 @@ export default function SeriesAnnouncement({ theme, sub, admin, go }: { theme: B
         </button>
       )}
       {!page && <Hub theme={theme} data={data} go={go} extras={extras} />}
-      {page === 'announce' && <Announce theme={theme} data={data} admin={admin} reload={load} />}
-      {page === 'accept' && <Accept theme={theme} data={data} admin={admin} reload={load} />}
+      {page === 'announce' && <Announce theme={theme} data={data} reload={load} />}
+      {page === 'accept' && <Accept theme={theme} data={data} reload={load} />}
       {page === 'upcoming' && <Upcoming theme={theme} data={data} extras={extras} />}
       {page === 'history' && <SeriesHistory theme={theme} data={data} extras={extras} />}
       {page === 'stats' && <SeriesPlayerStats theme={theme} />}
@@ -230,7 +230,7 @@ export function Upcoming({ theme, data, extras = NO_EXTRAS }: { theme: BoardThem
 
 /* ---------- accept ---------- */
 
-export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data: SeriesOverview; admin: boolean; reload: () => Promise<void> }) {
+export function Accept({ theme, data, reload }: { theme: BoardTheme; data: SeriesOverview; reload: () => Promise<void> }) {
   const pal = paletteOf(theme);
   const [busy, setBusy] = useState('');
   const [declining, setDeclining] = useState('');
@@ -298,7 +298,7 @@ export function Accept({ theme, data, admin, reload }: { theme: BoardTheme; data
                 ANNOUNCED BY {s.host.name.toUpperCase()}
               </p>
               <Facts s={s} you="invitation" />
-              {!admin && (
+              {data.canAct && (
                 declining === s.id ? (
                   <div role="alertdialog" aria-label={`Decline ${s.name}`} className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-crimson/50 px-4 py-3">
                     <span className="text-sm text-bone">Decline “{s.name}”? {s.host.name} will see that you declined.</span>
@@ -346,7 +346,7 @@ return (
 }
 
 
-export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; data: SeriesOverview; admin: boolean; reload: () => Promise<void> }) {
+export function Announce({ theme, data, reload }: { theme: BoardTheme; data: SeriesOverview; reload: () => Promise<void> }) {
   const pal = paletteOf(theme);
   const [form, setForm] = useState<SeriesInput>(EMPTY);
   const [editing, setEditing] = useState<Series | null>(null);
@@ -444,8 +444,8 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
         ]}
       />
 
-      {admin ? (
-        <Empty text="Only the board’s chairman can announce a series. You are viewing this board as the administrator." />
+      {!data.canAct ? (
+        <Empty text="Only the board’s chairman can announce a series." />
       ) : (
         <form
           onSubmit={(e) => {
@@ -555,7 +555,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
                 </span>
               </div>
               <Facts s={s} you="announced" />
-              {!admin && s.status === 'declined' && (
+              {data.canAct && s.status === 'declined' && (
                 <p className="mt-4 flex flex-wrap items-center gap-3">
                   <button type="button" onClick={() => startAgain(s)} className="rounded-lg border px-5 py-2 text-xs font-bold tracking-[0.2em] transition hover:brightness-125" style={{ borderColor: pal.highlight, color: pal.highlight }}>
                     ANNOUNCE AGAIN
@@ -563,7 +563,7 @@ export function Announce({ theme, data, admin, reload }: { theme: BoardTheme; da
                   <span className="text-xs text-smoke">Declined by {s.declinedBy?.name ?? 'the opponent'} — it no longer counts toward your {data.limit} series. Change the details if you like and send it again.</span>
                 </p>
               )}
-              {!admin && s.status !== 'declined' && (
+              {data.canAct && s.status !== 'declined' && (
                 <p className="mt-4">
                   {s.editable ? (
                     <button type="button" onClick={() => startEdit(s)} className="rounded-lg border px-5 py-2 text-xs font-bold tracking-[0.2em] transition hover:brightness-125" style={{ borderColor: pal.highlight, color: pal.highlight }}>
