@@ -65,7 +65,7 @@ const validDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.pars
  * `keepClubFormat`: the club format a series being edited already has. A retired format (series.json: "retired") is kept on the series that
  * were announced with it, but it can no longer be chosen for a new one.
  */
-export function validateSeries(input, host, boards, t = Date.now(), keepClubFormat = null) {
+export function validateSeries(input, host, boards, t = Date.now(), keepClubFormat = null, stadiums = STADIUMS) {
   const i = input && typeof input === 'object' ? input : {};
   const name = clean(i.name);
   if (name.length < 3 || name.length > 60) return { error: 'Enter the name of the series (3 to 60 characters).' };
@@ -80,10 +80,10 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
   if (!type.matchOptions.includes(matches)) return { error: `Choose how many matches: ${type.matchOptions.join(' or ')}.` };
   // every scheduled match needs a stadium of one of the boards allowed to host it (the final is not scheduled)
   const fixtures = buildFixtures(type.id, [host, ...opponents], matches).filter((f) => !f.final);
-  const stadiums = Array.isArray(i.stadiums) ? i.stadiums.map(String) : [];
-  if (!(STADIUMS[host] ?? []).length && type.id === 'bilateral') return { error: 'No stadium is registered for your board yet, so a series cannot be announced. Contact the IOCF administrator.' };
-  if (fixtures.some((f) => !stadiumBoards(type.id, f, host).some((b) => (STADIUMS[b] ?? []).length))) return { error: 'No stadium is registered for the boards in one of the matches. Contact the IOCF administrator.' };
-  if (stadiums.length !== fixtures.length || fixtures.some((f, k) => !stadiumBoards(type.id, f, host).some((b) => (STADIUMS[b] ?? []).includes(stadiums[k])))) {
+  const chosen = Array.isArray(i.stadiums) ? i.stadiums.map(String) : [];
+  if (!(stadiums[host] ?? []).length && type.id === 'bilateral') return { error: 'No stadium is registered for your board yet, so a series cannot be announced. Contact the IOCF administrator.' };
+  if (fixtures.some((f) => !stadiumBoards(type.id, f, host).some((b) => (stadiums[b] ?? []).length))) return { error: 'No stadium is registered for the boards in one of the matches. Contact the IOCF administrator.' };
+  if (chosen.length !== fixtures.length || fixtures.some((f, k) => !stadiumBoards(type.id, f, host).some((b) => (stadiums[b] ?? []).includes(chosen[k])))) {
     return { error: fixtures.length === 1 ? 'Choose the stadium for the match.' : `Choose a stadium for each of the ${fixtures.length} scheduled matches.` };
   }
   // every scheduled match also has a date: after the day the series is announced (a series cannot start on that day), within a year, and
@@ -105,7 +105,7 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
     clubFormat = SERIES_CFG.clubFormats.find((c) => c.id === i.clubFormat && (!c.retired || c.id === keepClubFormat))?.id;
     if (!clubFormat) return { error: 'Choose the club format (overs and wickets).' };
   }
-  return { value: { name, series_type: type.id, opponents, matches, stadiums, dates, bet, format: i.format, club_format: clubFormat } };
+  return { value: { name, series_type: type.id, opponents, matches, stadiums: chosen, dates, bet, format: i.format, club_format: clubFormat } };
 }
 
 export function newSeries(fields, host, t) {

@@ -69,6 +69,8 @@ Boards, players, umpires, franchise leagues, tournaments and the Main-page text 
 
 A locked profile with real server-side sign-in (one administrator, 26 board chairmen). Logins live in a private Supabase table; the site never holds a password. The maintainer's tooling is in `scripts/command-center/` (`npm run cc`); no credentials are ever stored in this repository.
 
+**Build a Stadium.** A board chairman opens *Build a Stadium*, gives a stadium name and a place in the home country, and sends the request. The level (always 3) and the cost (30,000 credits) are fixed by the server: the form shows them but they cannot be changed, and anything the browser sends for them is ignored. The administrator sees the requests under *Stadium Requests*: **Accept** takes 30,000 from the board's credits (a pending adjustment in Board Credits & Finance) and adds the stadium to the board's list, so it can be chosen for a series; **Decline** removes the request from the queue and shows the board a "not accepted" message. Every request and decision is a row in the `command_stadiums` table in Supabase (`server/command/stadiums.sql`, also part of `schema.sql`; run it once in the SQL Editor). The old stadium sheet (`All Assests/All Stadiums`, built by `npm run stadiums`) is only the list from before this feature; new stadiums come from this process, not from a CSV.
+
 ## Player statistics (CSV exports)
 
 Per-player statistics come from STUMPS scorer exports kept in `All Assests/`:

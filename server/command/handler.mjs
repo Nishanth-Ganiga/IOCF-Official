@@ -33,6 +33,13 @@
 //   PUT  /boards/:slug/series/:id       edit it until an opponent accepts
 //   POST /boards/:slug/series/:id/decline  turn an invitation down (own board)
 //   POST /boards/:slug/series/:id/accept  accept an invitation (own board)
+//   GET  /boards/:slug/stadiums         the board's stadiums, its requests and any "not accepted" messages (own board; admin: any)
+//   POST /boards/:slug/stadiums         ask to build a stadium (own board)  { name, place }  (the level and the cost are fixed by the server)
+//   POST /boards/:slug/stadiums/:id/dismiss  clear a "not accepted" message (own board)
+//   DELETE /boards/:slug/stadiums/:id   withdraw a request that is still waiting (own board)
+//   GET  /admin/stadiums                admin only   the requests waiting, and the recent decisions
+//   POST /admin/stadiums/:id/accept     admin only   takes the cost from the board's credits and adds the stadium to its list
+//   POST /admin/stadiums/:id/decline    admin only   { reason? }  the request leaves the queue; the board is told it was not accepted
 //
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
@@ -42,6 +49,7 @@ import { computeAllRankings } from '../../src/data/commandCenter/rankingsCompute
 import { movesOf, updateState } from '../../src/data/commandCenter/rankMoves.mjs';
 import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
+import { MAX_PENDING, STADIUM_COST, STADIUM_LEVEL, countryOf, newRequest, noticeFor, stadiumLists, takenNames, toApi as stadiumToApi, validateRequest } from './stadiums.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
@@ -84,6 +92,10 @@ const ACTIONS = {
   series_stats_uploaded: 'Statistics uploaded',
   series_stats_removed: 'Series statistics removed',
   series_format_set: 'Series format set',
+  stadium_requested: 'Stadium requested',
+  stadium_withdrawn: 'Stadium request withdrawn',
+  stadium_accepted: 'Stadium request accepted',
+  stadium_declined: 'Stadium request declined',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -154,6 +166,16 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
   const enabledModules = async (slug) => {
     const overrides = await store.moduleOverrides(slug);
     return MODULES.filter((m) => m.status === 'active' && overrides.find((o) => o.module_id === m.id)?.enabled !== false).map((m) => m.id);
+  };
+
+  /** Every stadium list the series rules use: the old sheet's stadiums plus every accepted request. */
+  const stadiumsNow = async () => {
+    try {
+      return stadiumLists(await store.stadiumList());
+    } catch (err) {
+      if (err?.code === 'stadiums_missing') return STADIUMS; // the table is not set up yet: the old list alone
+      throw err;
+    }
   };
 
   // ---- login ----
@@ -347,6 +369,65 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         return json(200, { pending: lines.filter((l) => !l.applied).reduce((n, l) => n + l.delta, 0), entries: lines.map(({ kind, at, delta, text, series, id, applied }) => ({ kind, at, delta, text, series: series ?? null, id: who.role === 'admin' ? (id ?? null) : null, entered: applied })) });
       }
 
+      if (a === 'boards' && b && c === 'stadiums') {
+        const board = BOARDS.find((x) => x.slug === b);
+        if (!board) return fail(404, 'not_found', 'Board not found.');
+        const own = who.role === 'board' && who.board_slug === board.slug;
+        if (!own && who.role !== 'admin') return fail(403, 'forbidden', 'You do not have access to this board.');
+        const t = now();
+        const mustOwn = () => (own ? null : fail(403, 'forbidden', 'Only the board chairman can do this.'));
+
+        if (!d && method === 'GET') {
+          const rows = await store.stadiumList();
+          const mine = rows.filter((x) => x.board === board.slug);
+          const lists = stadiumLists(rows);
+          const venueOf = new Map(mine.filter((x) => x.status === 'accepted').map((x) => [x.name, x.venue]));
+          return json(200, {
+            level: STADIUM_LEVEL,
+            cost: STADIUM_COST,
+            country: countryOf(board),
+            canAct: own,
+            maxPending: MAX_PENDING,
+            stadiums: (lists[board.slug] ?? []).map((name) => ({ name, venue: venueOf.get(name) ?? null, level: venueOf.has(name) ? STADIUM_LEVEL : null })),
+            pending: mine.filter((x) => x.status === 'pending').sort((p, q) => q.requested_at - p.requested_at).map((x) => stadiumToApi(x, BOARDS)),
+            notices: mine.filter((x) => noticeFor(x, board.slug, t)).sort((p, q) => (q.decided_at ?? 0) - (p.decided_at ?? 0)).map((x) => stadiumToApi(x, BOARDS)),
+          });
+        }
+
+        if (!d && method === 'POST') {
+          const no = mustOwn();
+          if (no) return no;
+          const rows = await store.stadiumList();
+          if (rows.filter((x) => x.board === board.slug && x.status === 'pending').length >= MAX_PENDING) return fail(409, 'too_many', `You already have ${MAX_PENDING} requests waiting for the administrator. Wait for a decision before sending another.`);
+          const v = validateRequest(req.body, board, BOARDS, takenNames(rows));
+          if (v.error) return fail(400, 'invalid', v.error);
+          const row = await store.stadiumPut(newRequest(v.value, board, who, randomUUID(), t));
+          await audit('stadium_requested', who, row.key, req, { board: board.slug, name: row.name, venue: row.venue });
+          return json(201, { request: stadiumToApi(row, BOARDS) });
+        }
+
+        if (d && e === 'dismiss' && method === 'POST') {
+          const no = mustOwn();
+          if (no) return no;
+          const cur = await store.stadiumGet(d);
+          if (!cur || cur.board !== board.slug || cur.status !== 'declined') return fail(404, 'not_found', 'Request not found.');
+          await store.stadiumPut({ ...cur, acknowledged_at: t });
+          return json(200, { ok: true });
+        }
+
+        if (d && !e && method === 'DELETE') {
+          const no = mustOwn();
+          if (no) return no;
+          const cur = await store.stadiumGet(d);
+          if (!cur || cur.board !== board.slug) return fail(404, 'not_found', 'Request not found.');
+          if (cur.status !== 'pending') return fail(409, 'decided', 'The administrator has already decided on this request.');
+          await store.stadiumPut({ ...cur, status: 'withdrawn', decided_by: who.username, decided_at: t });
+          await audit('stadium_withdrawn', who, cur.key, req, { name: cur.name });
+          return json(200, { ok: true });
+        }
+        return fail(404, 'not_found', 'Not found.');
+      }
+
       if (a === 'boards' && b && c === 'series') {
         const board = BOARDS.find((x) => x.slug === b);
         if (!board) return fail(404, 'not_found', 'Board not found.');
@@ -363,8 +444,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             limit: SERIES_CFG.maxSeriesPerBoard,
             active: activeCount(all, board.slug, t),
             canAct: own,
-            stadiums: STADIUMS[board.slug] ?? [],
-            allStadiums: STADIUMS,
+            stadiums: (await stadiumsNow())[board.slug] ?? [],
+            allStadiums: await stadiumsNow(),
             announced: all.filter((x) => x.host === board.slug && (isLive(x, t) || declinedVisibleTo(x, board.slug, t))).map((x) => toApi(x, BOARDS, t)),
             invitations: live.filter((x) => x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).map((x) => toApi(x, BOARDS, t)),
             completed: live.filter((x) => x.status === 'accepted' && x.result_winner).sort((p, q) => (q.result_at ?? 0) - (p.result_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
@@ -375,7 +456,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         if (!d && method === 'POST') {
           const no = mustOwn();
           if (no) return no;
-          const v = validateSeries(req.body, board.slug, BOARDS, t);
+          const v = validateSeries(req.body, board.slug, BOARDS, t, null, await stadiumsNow());
           if (v.error) return fail(400, 'invalid', v.error);
           const all = await store.seriesList();
           // a board can be in 2 series at a time: a new one is refused only if 2 others are on at the same time (it may start the day after one ends)
@@ -396,7 +477,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (cur.status === 'declined') return fail(409, 'declined', 'This series was declined and can no longer be edited. Announce it again instead.');
           if (cur.status !== 'pending' || cur.accepted.length > 0) return fail(409, 'locked', 'This series has been accepted and can no longer be edited.');
           if (t > cur.deadline_at) return fail(409, 'expired', 'The deadline for this series has passed.');
-          const v = validateSeries(req.body, board.slug, BOARDS, t, cur.club_format);
+          const v = validateSeries(req.body, board.slug, BOARDS, t, cur.club_format, await stadiumsNow());
           if (v.error) return fail(400, 'invalid', v.error);
           const all = await store.seriesList();
           const range = rangeOf(v.value.dates);
@@ -454,6 +535,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             inactiveBoardAccounts: boardAccounts.filter((x) => x.status !== 'active').length,
             boardsWithoutAccount: BOARDS.length - boardAccounts.length,
             availableModules: MODULES.filter((m) => m.status === 'active').length,
+            pendingStadiumRequests: await store.stadiumList().then((rows) => rows.filter((x) => x.status === 'pending').length, () => 0),
             recentActivity: recent.map((r) => ({ at: r.at, action: r.action, label: actionLabel(r.action), actor: r.actor, target: r.target })),
           });
         }
@@ -686,6 +768,46 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           return json(200, { ok: true, accountId: row.account_id, username: row.username, status: row.status, created: false });
         }
 
+        if (b === 'stadiums' && !c && method === 'GET') {
+          const rows = await store.stadiumList();
+          return json(200, {
+            level: STADIUM_LEVEL,
+            cost: STADIUM_COST,
+            pending: rows.filter((x) => x.status === 'pending').sort((p, q) => p.requested_at - q.requested_at).map((x) => stadiumToApi(x, BOARDS)),
+            recent: rows.filter((x) => x.status === 'accepted' || x.status === 'declined').sort((p, q) => (q.decided_at ?? 0) - (p.decided_at ?? 0)).slice(0, 30).map((x) => stadiumToApi(x, BOARDS)),
+          });
+        }
+
+        if (b === 'stadiums' && c && d === 'accept' && method === 'POST') {
+          const cur = await store.stadiumGet(c);
+          if (!cur) return fail(404, 'not_found', 'Request not found.');
+          if (cur.status !== 'pending') return fail(409, 'decided', cur.status === 'withdrawn' ? 'The board has withdrawn this request.' : 'This request has already been decided.');
+          const t = now();
+          const others = (await store.stadiumList()).filter((x) => x.key !== cur.key);
+          if (takenNames(others).has(cur.name.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, ''))) return fail(409, 'name_taken', 'A stadium with this name already exists now. Decline the request, or ask the board to choose another name.');
+          // the cost goes to the board's credits first (a credit adjustment, shown in Board Credits & Finance); the stadium is added only after that worked
+          const adj = await store.creditsInsert({ id: randomUUID(), board: cur.board, amount: -STADIUM_COST, reason: `Stadium built: ${cur.name} (level ${STADIUM_LEVEL})`.slice(0, 120), created_by: who.username, created_at: t });
+          let row;
+          try {
+            row = await store.stadiumPut({ ...cur, status: 'accepted', level: STADIUM_LEVEL, cost: STADIUM_COST, decided_by: who.username, decided_at: t, adjustment_id: adj.id });
+          } catch (err) {
+            await store.creditsDelete(adj.id).catch(() => undefined);
+            throw err;
+          }
+          await audit('stadium_accepted', who, cur.key, req, { board: cur.board, name: cur.name, cost: STADIUM_COST });
+          return json(200, { request: stadiumToApi(row, BOARDS) });
+        }
+
+        if (b === 'stadiums' && c && d === 'decline' && method === 'POST') {
+          const cur = await store.stadiumGet(c);
+          if (!cur) return fail(404, 'not_found', 'Request not found.');
+          if (cur.status !== 'pending') return fail(409, 'decided', cur.status === 'withdrawn' ? 'The board has withdrawn this request.' : 'This request has already been decided.');
+          const reason = String(req.body?.reason ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+          const row = await store.stadiumPut({ ...cur, status: 'declined', decided_by: who.username, decided_at: now(), decline_reason: reason || null });
+          await audit('stadium_declined', who, cur.key, req, { board: cur.board, name: cur.name });
+          return json(200, { request: stadiumToApi(row, BOARDS) });
+        }
+
         if (b === 'audit' && method === 'GET') {
           return json(200, { entries: (await store.listAudit(50)).map((r) => ({ at: r.at, action: r.action, label: actionLabel(r.action), actor: r.actor, target: r.target })) });
         }
@@ -698,6 +820,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       if (err?.code === 'stats_missing') return fail(503, 'stats_missing', 'Series statistics are not set up yet: the statistics tables have not been created in Supabase.');
       if (err?.code === 'credits_outdated') return fail(503, 'credits_outdated', 'Board Credits needs a database update: run the latest credits SQL in Supabase.');
       if (err?.code === 'credits_missing') return fail(503, 'credits_missing', 'Board Credits is not set up yet: the credits table has not been created in Supabase.');
+      if (err?.code === 'stadiums_missing') return fail(503, 'stadiums_missing', 'Build a Stadium is not set up yet: the stadium table has not been created in Supabase (run stadiums.sql).');
       if (err?.code === 'series_missing') return fail(503, 'series_missing', 'Series Announcement is not set up yet: the series table has not been created in Supabase.');
       if (err?.code === 'unsupported') return fail(501, 'unsupported', err.message);
       console.error('[command-center]', err instanceof Error ? err.message : err);

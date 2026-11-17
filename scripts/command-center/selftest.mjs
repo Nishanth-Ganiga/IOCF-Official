@@ -138,7 +138,7 @@ check('a wrong password on an inactive account does NOT reveal it is inactive', 
 check('the administrator account cannot be deactivated', (await call('PATCH', `admin/accounts/${admin.accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } })).status === 400);
 check('admin reactivates India', (await call('PATCH', `admin/accounts/${cred('India').accountId}`, { cookie: adm.cookie, body: { status: 'active' } })).status === 200 && (await login('board', cred('India'))).r.status === 200);
 const ov = (await call('GET', 'admin/overview', { cookie: adm.cookie })).body;
-check('overview counts are right', ov.totalBoards === 25 && ov.totalAccounts === 26 && ov.activeBoardAccounts === 25 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 3);
+check('overview counts are right', ov.totalBoards === 25 && ov.totalAccounts === 26 && ov.activeBoardAccounts === 25 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 4);
 await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } });
 check('overview counts inactive boards', (await call('GET', 'admin/overview', { cookie: adm.cookie })).body.inactiveBoardAccounts === 1);
 const list = (await call('GET', 'admin/accounts', { cookie: adm.cookie })).body;
@@ -188,10 +188,10 @@ check('the account list now shows Japan as active and the others as having no lo
 console.log('\n— 7/8. modules —');
 const nz2 = await login('board', cred('New Zealand'));
 const dash = await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie });
-check('Series Announcement, Fixtures & Scheduling and Board Credits are the active modules', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement,fixtures,credits' && dash.body.modules.join() === 'series-announcement,fixtures,credits');
+check('Series Announcement, Fixtures & Scheduling, Board Credits and Build a Stadium are the active modules', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement,fixtures,credits,stadiums' && dash.body.modules.join() === 'series-announcement,fixtures,credits,stadiums');
 check('coming-soon modules cannot be switched on', (await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'squads', enabled: true } })).status === 400);
 await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'series-announcement', enabled: false } });
-check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.join() === 'fixtures,credits' && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 3);
+check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.join() === 'fixtures,credits,stadiums' && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 4);
 
 console.log('\n— 10. password reset —');
 const before = cred('Pakistan');
@@ -334,7 +334,7 @@ check('admin table: the imported admin can sign in, and an e-mail style user id 
 const sqlAccounts = [...(await store.list())];
 sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x; --" };
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
-check('setup SQL: creates the 9 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 9 && (setupSql.match(/enable row level security/g) ?? []).length === 9);
+check('setup SQL: creates the 10 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 10 && (setupSql.match(/enable row level security/g) ?? []).length === 10);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
 check('setup SQL: has all 26 accounts and 25 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 26 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 25);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
@@ -458,7 +458,7 @@ check('the admin overview works on the single table', ot_ov.totalBoards === 25 &
 const ot_setT = await ot_tcall('PUT', 'admin/boards/portugal/account', { cookie: ot_adm4.cookie, body: { username: 'portugal.boss', password: 'Admin-Set-1' } });
 check('Board Accounts (admin tile) can set a login in the table', ot_setT.status === 200 && (await ot_tlogin('board', 'portugal.boss', 'Admin-Set-1')).r.status === 200);
 check('module switches say they need the full setup instead of failing silently', (await ot_tcall('PUT', 'admin/boards/portugal/modules', { cookie: ot_adm4.cookie, body: { moduleId: 'series-announcement', enabled: false } })).status === 501);
-check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement,fixtures,credits');
+check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement,fixtures,credits,stadiums');
 
 // nothing configured
 const ot_empty = ot_makeSupabase({});
@@ -678,6 +678,44 @@ console.log('\n— Series Announcement —');
     const adjId = (await sCall('GET', 'boards/japan/credits', { cookie: cAdm })).body.entries.find((e) => e.text === 'Penalty').id;
     check('an adjustment can be removed and the balance follows', (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 200 && (await bal(cJapan, 'japan')).pending === 18000 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cAdm })).status === 404 && (await sCall('DELETE', `admin/credits/adjustments/${adjId}`, { cookie: cJapan })).status === 403);
     check('adjustments are recorded in the audit log', (await sStore.listAudit(500)).some((x) => x.action === 'credit_adjusted') && (await sStore.listAudit(500)).some((x) => x.action === 'credit_adjustment_removed'));
+    // ---- Build a Stadium: a board asks, the administrator accepts (30,000 credits are taken) or declines (the board is told) ----
+    {
+      const cAfg = await sLogin('board', sc('Afghanistan'));
+      const sg = (slug, cookie) => sCall('GET', `boards/${slug}/stadiums`, { cookie });
+      const ask = (cookie, body, slug = 'afghanistan') => sCall('POST', `boards/${slug}/stadiums`, { cookie, body });
+      const info0 = (await sg('afghanistan', cAfg)).body;
+      check('a board sees its stadium list, the fixed level 3 and the fixed cost of 30,000', info0.level === 3 && info0.cost === 30000 && info0.country === 'Afghanistan' && info0.stadiums.some((x) => x.name === 'Afghan National Sports Complex') && info0.canAct === true);
+      const mine = await ask(cAfg, { name: 'Kabul Crown', place: 'Kabul', level: 5, cost: 1 });
+      check('a request needs only a name and a place; a level or cost sent by the browser is ignored (always level 3, 30,000)', mine.status === 201 && mine.body.request.level === 3 && mine.body.request.cost === 30000 && mine.body.request.venue === 'Kabul, Afghanistan' && mine.body.request.status === 'pending');
+      check('the place must be in the board\'s home country, the name must be new, and both are required', (await ask(cAfg, { name: 'Sydney Dome', place: 'Sydney, Australia' })).status === 400 && (await ask(cAfg, { name: 'afghan national sports complex', place: 'Kabul' })).status === 400 && (await ask(cAfg, { name: 'kabul crown', place: 'Herat' })).status === 400 && (await ask(cAfg, { name: 'Ab', place: 'Herat' })).status === 400 && (await ask(cAfg, { name: 'Herat Dome', place: '' })).status === 400);
+      check('"Kabul, Afghanistan" and "Kabul" are the same place (the country is added once)', (await ask(cAfg, { name: 'Herat Arena', place: 'Herat, Afghanistan' })).body.request.venue === 'Herat, Afghanistan');
+      check('only the board itself can ask; another board and the administrator cannot', (await ask(cNepal, { name: 'Spy Dome', place: 'Kabul' })).status === 403 && (await ask(cAdm, { name: 'Spy Dome', place: 'Kabul' })).status === 403 && (await sg('afghanistan', cNepal)).status === 403);
+      const queue = (await sCall('GET', 'admin/stadiums', { cookie: cAdm })).body;
+      check('the administrator sees the waiting requests (oldest first); a board cannot open the admin queue', queue.pending.length === 2 && queue.pending[0].name === 'Kabul Crown' && (await sCall('GET', 'admin/stadiums', { cookie: cAfg })).status === 403 && (await sCall('POST', `admin/stadiums/${queue.pending[0].id}/accept`, { cookie: cAfg })).status === 403);
+      check('a waiting request is not a stadium yet and costs nothing', !(await sg('afghanistan', cAfg)).body.stadiums.some((x) => x.name === 'Kabul Crown') && (await bal(cAfg, 'afghanistan')).pending === 0 && (await sCall('GET', 'admin/overview', { cookie: cAdm })).body.pendingStadiumRequests === 2);
+      const kabul = queue.pending.find((x) => x.name === 'Kabul Crown');
+      const herat = queue.pending.find((x) => x.name === 'Herat Arena');
+      const no = await sCall('POST', `admin/stadiums/${herat.id}/decline`, { cookie: cAdm, body: { reason: 'Not this season' } });
+      const afterNo = (await sg('afghanistan', cAfg)).body;
+      check('declining removes the request from the queue, takes no credits, and tells the board it was not accepted', no.status === 200 && (await sCall('GET', 'admin/stadiums', { cookie: cAdm })).body.pending.length === 1 && (await bal(cAfg, 'afghanistan')).pending === 0 && afterNo.notices.length === 1 && afterNo.notices[0].name === 'Herat Arena' && afterNo.notices[0].declineReason === 'Not this season' && !afterNo.stadiums.some((x) => x.name === 'Herat Arena'));
+      check('the board can dismiss the message; a declined request cannot be decided again', (await sCall('POST', `boards/afghanistan/stadiums/${herat.id}/dismiss`, { cookie: cAfg })).status === 200 && (await sg('afghanistan', cAfg)).body.notices.length === 0 && (await sCall('POST', `admin/stadiums/${herat.id}/accept`, { cookie: cAdm })).status === 409);
+      const yes = await sCall('POST', `admin/stadiums/${kabul.id}/accept`, { cookie: cAdm });
+      const afterYes = (await sg('afghanistan', cAfg)).body;
+      const credits = (await bal(cAfg, 'afghanistan'));
+      check('accepting takes 30,000 from the board\'s credits (a pending adjustment) and adds the stadium to its list with its venue and level', yes.status === 200 && yes.body.request.status === 'accepted' && credits.pending === -30000 && credits.entries.some((e) => e.delta === -30000 && /Stadium built: Kabul Crown/.test(e.text)) && afterYes.stadiums.some((x) => x.name === 'Kabul Crown' && x.venue === 'Kabul, Afghanistan' && x.level === 3));
+      check('an accepted request cannot be accepted again (the cost is taken once), nor declined', (await sCall('POST', `admin/stadiums/${kabul.id}/accept`, { cookie: cAdm })).status === 409 && (await sCall('POST', `admin/stadiums/${kabul.id}/decline`, { cookie: cAdm })).status === 409 && (await bal(cAfg, 'afghanistan')).pending === -30000);
+      const sr = await sCall('GET', 'boards/afghanistan/series', { cookie: cAfg });
+      check('the new stadium is in the board\'s series choices, and a series can be announced there', sr.body.stadiums.includes('Kabul Crown') && sr.body.allStadiums.afghanistan.includes('Kabul Crown') && (await post(cAfg, 'afghanistan', good({ name: 'Kabul Cup', opponents: ['scotland'], stadiums: ['Kabul Crown'] }))).status === 201);
+      check('a name already built cannot be requested again, by any board', (await ask(await sLogin('board', sc('Scotland')), { name: 'KABUL CROWN', place: 'Edinburgh' }, 'scotland')).status === 400);
+      const withdraw = (await ask(cAfg, { name: 'Mazar Park', place: 'Mazar-i-Sharif' })).body.request;
+      check('a board can withdraw a request that is waiting; it leaves the queue and cannot then be accepted', (await sCall('DELETE', `boards/afghanistan/stadiums/${withdraw.id}`, { cookie: cAfg })).status === 200 && (await sCall('POST', `admin/stadiums/${withdraw.id}/accept`, { cookie: cAdm })).status === 409 && (await sCall('GET', 'admin/stadiums', { cookie: cAdm })).body.pending.length === 0);
+      const limit = [];
+      for (const nm of ['Lim One', 'Lim Two', 'Lim Three', 'Lim Four']) limit.push((await ask(cAfg, { name: nm, place: 'Kabul' })).status);
+      check('a board can have at most 3 requests waiting', limit.join() === '201,201,201,409');
+      for (const r of (await sCall('GET', 'admin/stadiums', { cookie: cAdm })).body.pending) await sCall('POST', `admin/stadiums/${r.id}/decline`, { cookie: cAdm });
+      const acts = (await sStore.listAudit(500)).map((x) => x.action);
+      check('requests and decisions are recorded in the audit log, and every field is kept in the stadium table', ['stadium_requested', 'stadium_accepted', 'stadium_declined', 'stadium_withdrawn'].every((a) => acts.includes(a)) && (await sStore.stadiumGet(kabul.id)).adjustment_id && (await sStore.stadiumGet(kabul.id)).decided_by && (await sStore.stadiumGet(herat.id)).status === 'declined');
+    }
     // the sheet is the master: settlements stay pending until the administrator marks them as entered in the sheet
     {
       const ov = (await sCall('GET', 'admin/credits', { cookie: cAdm })).body;

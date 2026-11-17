@@ -35,6 +35,13 @@
   "icon": "credits"
  },
  {
+  "id": "stadiums",
+  "title": "Build a Stadium",
+  "description": "Ask the administrator to build a new stadium for your board.",
+  "status": "active",
+  "icon": "stadium"
+ },
+ {
   "id": "reports",
   "title": "Reports & Documents",
   "description": "Download official reports and board documents.",

@@ -55,6 +55,36 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export type DashboardInfo = { board: string; preview: boolean; chairmanName: string | null; modules: string[]; /** Series invitations waiting for this board. */ invitations: number };
 
+/** One Build a Stadium request (the level and the cost are always the server's: level 3, ₹30,000). */
+export type StadiumRequest = {
+  id: string;
+  board: string;
+  boardName: string;
+  name: string;
+  place: string;
+  venue: string;
+  level: number;
+  cost: number;
+  status: 'pending' | 'accepted' | 'declined' | 'withdrawn';
+  requestedBy: string | null;
+  requestedAt: number;
+  decidedBy: string | null;
+  decidedAt: number | null;
+  declineReason: string | null;
+};
+export type StadiumsInfo = {
+  level: number;
+  cost: number;
+  country: string;
+  canAct: boolean;
+  maxPending: number;
+  stadiums: { name: string; venue: string | null; level: number | null }[];
+  pending: StadiumRequest[];
+  /** Requests the administrator did not accept, until the board dismisses the message. */
+  notices: StadiumRequest[];
+};
+export type AdminStadiums = { level: number; cost: number; pending: StadiumRequest[]; recent: StadiumRequest[] };
+
 export type Overview = {
   totalBoards: number;
   totalAccounts: number;
@@ -62,6 +92,8 @@ export type Overview = {
   inactiveBoardAccounts: number;
   boardsWithoutAccount: number;
   availableModules: number;
+  /** Build a Stadium requests waiting for a decision. */
+  pendingStadiumRequests?: number;
   recentActivity: ActivityEntry[];
 };
 
@@ -218,6 +250,13 @@ export const api = {
   adjustCredit: (adj: { board: string; amount: number; reason: string }) => request<{ id: string }>('POST', '/admin/credits/adjustments', adj),
   markEntered: (what: { seriesId?: string; adjustmentId?: string; all?: boolean; entered: boolean }) => request<{ updated: number }>('POST', '/admin/credits/entered', what),
   removeAdjustment: (id: string) => request<{ ok: true }>('DELETE', `/admin/credits/adjustments/${encodeURIComponent(id)}`),
+  stadiums: (slug: string) => request<StadiumsInfo>('GET', `/boards/${encodeURIComponent(slug)}/stadiums`),
+  requestStadium: (slug: string, input: { name: string; place: string }) => request<{ request: StadiumRequest }>('POST', `/boards/${encodeURIComponent(slug)}/stadiums`, input),
+  withdrawStadium: (slug: string, id: string) => request<{ ok: true }>('DELETE', `/boards/${encodeURIComponent(slug)}/stadiums/${encodeURIComponent(id)}`),
+  dismissStadium: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/stadiums/${encodeURIComponent(id)}/dismiss`),
+  adminStadiums: () => request<AdminStadiums>('GET', '/admin/stadiums'),
+  acceptStadium: (id: string) => request<{ request: StadiumRequest }>('POST', `/admin/stadiums/${encodeURIComponent(id)}/accept`),
+  declineStadium: (id: string, reason?: string) => request<{ request: StadiumRequest }>('POST', `/admin/stadiums/${encodeURIComponent(id)}/decline`, { reason }),
   declineSeries: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/decline`),
   seriesMeta: () => request<{ meta: Record<string, string>; choices: string[] }>('GET', '/series-meta'),
   seriesStatsList: () => request<{ stats: SeriesStatsSummary[] }>('GET', '/series-stats').then((r) => r.stats),

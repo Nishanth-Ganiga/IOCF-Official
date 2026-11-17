@@ -61,6 +61,29 @@ export class MemoryStore {
   async metaList() {
     return (this.data.meta ??= []).map((x) => ({ ...x }));
   }
+  async stadiumList() {
+    return (this.data.stadiums ??= []).map((x) => ({ ...x }));
+  }
+  async stadiumGet(key) {
+    const r = (this.data.stadiums ??= []).find((x) => x.key === key);
+    return r ? { ...r } : null;
+  }
+  async stadiumPut(row) {
+    const list = (this.data.stadiums ??= []);
+    const i = list.findIndex((x) => x.key === row.key);
+    if (i >= 0) list[i] = { ...row };
+    else list.push({ ...row });
+    await this.persist();
+    return { ...row };
+  }
+  async stadiumDelete(key) {
+    const list = (this.data.stadiums ??= []);
+    const i = list.findIndex((x) => x.key === key);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    await this.persist();
+    return true;
+  }
   async rankList() {
     return (this.data.rank ??= []).map((x) => ({ ...x }));
   }
@@ -242,15 +265,16 @@ export class SeriesRest {
 
 /** Two small tables keyed by text: series player statistics (command_series_stats) and the formats given to earlier series (command_series_meta). */
 export class KeyedRest {
-  constructor({ url, serviceKey, fetchImpl = fetch, table, missing }) {
+  constructor({ url, serviceKey, fetchImpl = fetch, table, missing, code = 'stats_missing' }) {
     this.url = `${url.replace(/\/$/, '')}/rest/v1/${table}`;
     this.headers = { apikey: serviceKey, ...(serviceKey.startsWith('sb_') ? {} : { authorization: `Bearer ${serviceKey}` }), 'content-type': 'application/json' };
     this.fetch = fetchImpl;
     this.missing = missing;
+    this.code = code;
   }
   async req(method, query, body, extra = {}) {
     const res = await this.fetch(`${this.url}${query}`, { method, headers: { ...this.headers, ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (res.status === 404) throw Object.assign(new Error(`The ${this.missing} table does not exist yet.`), { code: 'stats_missing' });
+    if (res.status === 404) throw Object.assign(new Error(`The ${this.missing} table does not exist yet.`), { code: this.code });
     if (!res.ok) throw new Error(`Database request failed (${res.status})`);
     const text = await res.text();
     return text ? JSON.parse(text) : null;
@@ -277,6 +301,7 @@ export function keyedMethods(url, serviceKey, fetchImpl) {
   const stats = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_series_stats', missing: 'series statistics' });
   const meta = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_series_meta', missing: 'series details' });
   const rank = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_rank_state', missing: 'rankings' });
+  const stadiums = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_stadiums', missing: 'stadium requests', code: 'stadiums_missing' });
   return {
     statsList: ({ summary = false } = {}) => stats.list(summary ? 'key,kind,name,title,tour,players,uploaded_at,uploaded_by' : '*'),
     statsGet: (key) => stats.get(key),
@@ -288,6 +313,10 @@ export function keyedMethods(url, serviceKey, fetchImpl) {
     rankList: () => rank.list(),
     rankGet: (key) => rank.get(key),
     rankPutMany: (rows) => rank.putMany(rows),
+    stadiumList: () => stadiums.list(),
+    stadiumGet: (key) => stadiums.get(key),
+    stadiumPut: (row) => stadiums.put(row),
+    stadiumDelete: (key) => stadiums.delete(key),
   };
 }
 

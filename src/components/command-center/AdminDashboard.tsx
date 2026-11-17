@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, type AccountsInfo, type BoardAccount, type CcUser, type Overview } from '../../data/commandApi';
 import { MODULES, themeOf } from '../../data/commandCenter/boardConfig';
 import { store } from '../../data/store';
-import { BoardFlag } from './Mascot';
+import { BoardFlag, ModuleIcon } from './Mascot';
 
 type Nav = (...parts: string[]) => void;
 type Filter = 'all' | 'active' | 'inactive' | 'none';
@@ -96,6 +96,21 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
               </span>
               <span className="mt-4 block font-display text-2xl tracking-wide text-bone">BOARD ACCOUNTS</span>
               <span className="mt-1.5 block text-sm leading-relaxed text-mist">Set the username and password for each of the 26 boards.</span>
+              <span className="mt-4 block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">OPEN →</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" onClick={() => nav('stadiums')} className="group block h-full w-full rounded-2xl border border-[#c9a24b]/60 bg-ink-2 p-5 text-left transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-[#c9a24b]">
+              <span className="flex items-start justify-between gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#c9a24b] text-[#c9a24b]">
+                  <ModuleIcon icon="stadium" className="h-7 w-7" />
+                </span>
+                <span className="rounded-full border border-[#c9a24b] px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.18em]" style={overview?.pendingStadiumRequests ? { background: '#c9a24b', color: '#0b0b0f' } : { color: '#c9a24b' }}>
+                  {overview?.pendingStadiumRequests ? `${overview.pendingStadiumRequests} WAITING` : 'ADMIN'}
+                </span>
+              </span>
+              <span className="mt-4 block font-display text-2xl tracking-wide text-bone">STADIUM REQUESTS</span>
+              <span className="mt-1.5 block text-sm leading-relaxed text-mist">Accept or decline the stadiums boards ask to build. An accepted stadium costs the board 30,000 credits.</span>
               <span className="mt-4 block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">OPEN →</span>
             </button>
           </li>
