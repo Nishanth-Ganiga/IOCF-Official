@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadEnvFile, homeDir } from './command-center/lib.mjs';
 import { buildMirror, mirrorConfigured, runMirror } from '../server/mirror/mirror.mjs';
+import { valuesOf } from '../server/mirror/google.mjs';
 import { productionStoreFromEnv } from '../server/command/loginTable.mjs';
 import { loadRankingInput } from '../server/command/rankInput.mjs';
 import { BOARDS } from '../server/command/handler.mjs';
@@ -23,11 +24,19 @@ const csv = (v) => (/[",\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""
 try {
   const store = productionStoreFromEnv();
   if (!store) console.warn('No database configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY): the Command Center tabs will be empty.');
-  const input = store ? await loadRankingInput({ store }) : null;
-  let dataset = input?.dataset;
-  if (!dataset) {
-    const { buildFromSource, loadConfig } = await import('./sync/sheet.mjs');
-    dataset = (await buildFromSource({ sheetUrl: loadConfig(process.cwd()).sheetUrl, sheetFile: '' })).dataset;
+  let dataset;
+  let liveInput = null;
+  try {
+    liveInput = store ? await loadRankingInput({ store }) : null;
+    dataset = liveInput?.dataset;
+    if (!dataset) {
+      const { buildFromSource, loadConfig } = await import('./sync/sheet.mjs');
+      dataset = (await buildFromSource({ sheetUrl: loadConfig(process.cwd()).sheetUrl, sheetFile: '' })).dataset;
+    }
+  } catch (e) {
+    if (!flag('--dry-run') && !opt('--csv')) throw e;
+    console.warn(`Could not read the live data (${e.message}); using the last synced copy, public/iocf-data.json.`);
+    dataset = JSON.parse(fs.readFileSync('public/iocf-data.json', 'utf8'));
   }
   const leagueStats = JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8'));
   let rankHistory = [];
@@ -39,12 +48,12 @@ try {
   const job = { dataset, rankHistory, leagueStats, store, boards: BOARDS, baseStadiums: STADIUMS };
   if (flag('--dry-run') || opt('--csv')) {
     const { tabs, warnings } = await buildMirror(job);
-    console.table(tabs.map((t) => ({ tab: t.name, columns: t.header.length, rows: t.rows.length })));
+    console.table(tabs.map((t) => ({ tab: t.name, columns: Math.max(...valuesOf(t).map((r) => r.length)), rows: valuesOf(t).length })));
     for (const w of warnings) console.warn('not read:', w);
     if (opt('--csv')) {
       const dir = path.resolve(opt('--csv'));
       fs.mkdirSync(dir, { recursive: true });
-      for (const t of tabs) fs.writeFileSync(path.join(dir, `${t.name}.csv`), [t.header, ...t.rows].map((r) => r.map(csv).join(',')).join('\n'));
+      for (const t of tabs) fs.writeFileSync(path.join(dir, `${t.name}.csv`), valuesOf(t).map((r) => r.map(csv).join(',')).join('\n'));
       console.log(`Wrote ${tabs.length} CSV files to ${dir}`);
     }
     if (flag('--dry-run')) process.exit(0);

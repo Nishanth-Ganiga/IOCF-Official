@@ -1340,10 +1340,25 @@ console.log('\n— The private mirror sheet —');
   const built = await buildMirror({ dataset: snap, leagueStats: JSON.parse(fs.readFileSync('src/data/leagueStats.json', 'utf8')), store: mstore, boards: BOARDS, baseStadiums: STADIUMS, now: () => 0 });
   const tab = (n) => built.tabs.find((t) => t.name === n);
   const everything = JSON.stringify(built.tabs);
-  check('the mirror has a tab for every part of the site (boards, players, umpires, leagues, tournaments, series, stadiums, credits, statistics…) and the Overview comes first', built.tabs[0].name === 'Overview' && ['Boards', 'Players', 'Umpires', 'Franchise Leagues', 'League Squads', 'Tournament Tables', 'Series Records', 'Stadiums', 'Stadium Requests', 'Credit Adjustments', 'Series Player Stats', 'Announced Series', 'Activity Log'].every((n) => tab(n)) && built.tabs.length >= 35);
+  check('the mirror has a tab for every part of the site (boards, players, umpires, leagues, tournaments, series, stadiums, credits, statistics…) and the Overview comes first', built.tabs[0].name === 'Overview' && ['Boards', 'Players', 'Umpires', 'Franchise Leagues', 'League Squads', 'Tournament Tables', 'Series Records', 'Stadiums', 'Stadium Requests', 'Credit Adjustments', 'Series Player Stats', 'Announced Series', 'Activity Log'].every((n) => tab(n)) && built.tabs.length >= 60);
   check('the tabs hold what the site holds: every board, player and umpire, the new stadium with its venue, the uploaded player rows', tab('Boards').rows.length === snap.boards.length && tab('Players').rows.length === snap.players.length && tab('Umpires').rows.length === snap.umpires.length && tab('Stadiums').rows.some((r) => r.includes('Test Dome') && r.includes('Pune, India')) && tab('Series Player Stats').rows.some((r) => r.includes('Some Player')));
   check('no password, hash or key is ever written to the sheet', !/SECRET-HASH-VALUE|scrypt\$|password_hash|private_key/i.test(everything) && !tab('Board Accounts').header.some((h) => /pass|hash|session|fail|lock/i.test(h)));
   check('cells are text, numbers or true/false; lists and objects become JSON; long text is cut; an empty value is an empty cell', cell(null) === '' && cell(5) === 5 && cell(['a', { b: 1 }]) === '["a",{"b":1}]' && cell('x'.repeat(60000)).length < 50000 && flatten({ a: { b: 1 }, c: ['x', 'y'] }).c === 'x | y' && table('T', [{ a: 1 }, { b: 2 }]).header.join() === 'a,b');
+
+  // one tab per board, in the board's own colours
+  const { boardPalette, textOn, luminance, styleRequests, resetRequests, rgb } = await import('../../server/mirror/style.mjs');
+  const { valuesOf } = await import('../../server/mirror/google.mjs');
+  const boardNames = snap.boards.map((b) => b.name);
+  const bt = (n) => built.tabs.find((t) => t.name === n);
+  const india = bt('India');
+  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+  check('every board has its own tab, right after the Overview, in alphabetical order, with the board banner on top', boardNames.every((n) => bt(n)) && built.tabs.slice(1, 1 + boardNames.length).map((t) => t.name).join() === [...boardNames].sort((a, b) => a.localeCompare(b)).join() && india.rows[0][0] === 'INDIA BOARD');
+  check('a board tab holds that board\'s chairman, credits, players, umpires, stadiums (with the new one\'s venue), stadium requests and rankings, as separate blocks', (() => { const flat = india.rows.map((r) => r.join('|')); const b = snap.boards.find((x) => x.name === 'India'); return flat.some((r) => r.startsWith('Chairman|') && r.includes(b.chairman)) && flat.some((r) => r.startsWith('PLAYERS')) && flat.some((r) => r.startsWith('UMPIRES')) && flat.some((r) => /Test Dome\|Pune, India\|3/.test(r)) && flat.some((r) => r.startsWith('STADIUM REQUESTS')) && flat.some((r) => r.startsWith('BOARD RANKINGS')) && snap.players.filter((p) => p.boardId === 'india').every((p) => flat.some((r) => r.startsWith(`${p.name}|`))); })());
+  check('each board tab has its own colour (from the board\'s flag colours); text on every banner and section bar is readable', boardNames.every((n) => { const th = BOARDS.find((x) => x.name === n); const p = boardPalette(th); return bt(n).tabColor === p.tab && contrast(p.banner, textOn(p.banner)) >= 4.5 && contrast(p.bar, textOn(p.bar)) >= 3 && bt(n).palette.bar === p.bar; }) && new Set(boardNames.map((n) => bt(n).tabColor)).size > 15);
+  const reqs = styleRequests(india, 7, valuesOf(india));
+  const rc = (f) => reqs.filter((r) => r.repeatCell && JSON.stringify(r.repeatCell.cell).includes(JSON.stringify(rgb(f))));
+  check('the formatting requests colour the banner and section bars, merge them across the tab, band every table, and set column widths', rc(boardPalette(BOARDS.find((x) => x.name === 'India')).banner).length >= 1 && reqs.some((r) => r.mergeCells) && reqs.filter((r) => r.addBanding).length >= 8 && reqs.some((r) => r.updateDimensionProperties?.properties?.pixelSize >= 100));
+  check('a plain table tab gets a dark header, alternating rows and widths to fit; resetting clears old formats, merges and bands', (() => { const t = built.tabs.find((x) => x.name === 'Players'); const q = styleRequests(t, 3, valuesOf(t)); const rs = resetRequests(3, [11, 12]); return q.filter((r) => r.addBanding).length === 1 && q.some((r) => r.repeatCell) && q.filter((r) => r.updateDimensionProperties).length === t.header.length && rs.filter((r) => r.deleteBanding).length === 2 && rs.some((r) => r.unmergeCells) && rs.some((r) => r.repeatCell?.fields === 'userEnteredFormat'); })());
 
   // a pretend Google: records every call
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
@@ -1395,7 +1410,7 @@ console.log('\n— The private mirror sheet —');
   const mcookie = `iocf_cc=${cookieOf(ml)}`;
   const before = calls.length;
   const press = await mcall('POST', 'admin/mirror', { cookie: mcookie });
-  check('the administrator\'s "Update now" button writes the sheet; a board cannot press it, and signed out nobody can', press.status === 200 && press.body.tabs >= 35 && calls.length > before && (await mcall('POST', 'admin/mirror')).status === 401);
+  check('the administrator\'s "Update now" button writes the sheet; a board cannot press it, and signed out nobody can', press.status === 200 && press.body.tabs >= 60 && calls.length > before && (await mcall('POST', 'admin/mirror')).status === 401);
   const ph = createHandler({ store: mstore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, rankInput: async () => ({ dataset: snap, leagueStats: null }) });
   const pcall = (method, p, { body, cookie } = {}) => ph({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: '9.9.9.8' });
   const plainAdmin = `iocf_cc=${cookieOf(await pcall('POST', 'login', { body: { role: 'admin', username: 'mirror.admin', password: 'Mirror-Admin-Pass-1' } }))}`;

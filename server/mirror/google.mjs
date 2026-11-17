@@ -3,6 +3,7 @@
 //
 // The private mirror sheet is shared with the owner and with the service account's e-mail address only. Nothing here is public.
 import { createSign } from 'node:crypto';
+import { resetRequests, rgb, styleRequests } from './style.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -31,6 +32,9 @@ export function sheetIdOf(linkOrId) {
   if (!/^[a-zA-Z0-9_-]{20,}$/.test(id)) throw Object.assign(new Error('MIRROR_SHEET_ID is not set (or is not a Google Sheets link).'), { code: 'mirror_not_configured' });
   return id;
 }
+
+/** What goes in a tab's cells: a layout tab is its rows as they are; a table is its header row, then its rows. */
+export const valuesOf = (t) => (t.layout ? t.rows : [t.header, ...t.rows]);
 
 export class SheetsClient {
   constructor({ account, sheetId, fetchImpl = fetch, now = () => Date.now(), sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
@@ -78,30 +82,49 @@ export class SheetsClient {
     return text ? JSON.parse(text) : null;
   }
 
-  /** The tabs the sheet has now: [{ sheetId, title }]. */
+  /** The tabs the sheet has now: [{ sheetId, title, banded: [ids] }]. */
   async tabs() {
-    const r = await this.call('GET', `${SHEETS}/${this.sheetId}?fields=sheets.properties(sheetId,title)`);
-    return (r?.sheets ?? []).map((s) => s.properties);
+    const r = await this.call('GET', `${SHEETS}/${this.sheetId}?fields=sheets(properties(sheetId,title),bandedRanges(bandedRangeId))`);
+    return (r?.sheets ?? []).map((s) => ({ ...s.properties, banded: (s.bandedRanges ?? []).map((x) => x.bandedRangeId) }));
+  }
+
+  /** Sends formatting requests in groups (one request to Google holds many). */
+  async batch(requests) {
+    for (let i = 0; i < requests.length; i += 300) await this.call('POST', `${SHEETS}/${this.sheetId}:batchUpdate`, { requests: requests.slice(i, i + 300) });
   }
 
   /**
-   * Makes the sheet hold exactly these tabs, in this order: new tabs are added, each tab is sized to its data and its header row is frozen
-   * and in bold. A tab the mirror does not know (one you made yourself) is left alone.
+   * Makes the sheet hold these tabs, in this order: new tabs are added, each is sized to its data, given its tab colour, and cleared of the
+   * old formatting (so a changed layout never leaves old colours or merged cells behind). A tab the mirror does not know is left alone.
    */
   async prepare(tabs) {
     let have = await this.tabs();
     const missing = tabs.filter((t) => !have.some((h) => h.title === t.name));
-    const requests = missing.map((t) => ({ addSheet: { properties: { title: t.name, gridProperties: { rowCount: Math.max(2, t.rows.length + 1), columnCount: Math.max(1, t.header.length) } } } }));
-    if (requests.length) await this.call('POST', `${SHEETS}/${this.sheetId}:batchUpdate`, { requests });
+    if (missing.length) await this.batch(missing.map((t) => ({ addSheet: { properties: { title: t.name } } })));
     have = await this.tabs();
     const fix = [];
     tabs.forEach((t, index) => {
-      const id = have.find((h) => h.title === t.name)?.sheetId;
-      if (id === undefined) return;
-      fix.push({ updateSheetProperties: { properties: { sheetId: id, index, gridProperties: { rowCount: Math.max(2, t.rows.length + 1), columnCount: Math.max(1, t.header.length), frozenRowCount: 1 } }, fields: 'index,gridProperties.rowCount,gridProperties.columnCount,gridProperties.frozenRowCount' } });
-      fix.push({ repeatCell: { range: { sheetId: id, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: 'userEnteredFormat.textFormat.bold' } });
+      const h = have.find((x) => x.title === t.name);
+      if (!h) return;
+      const values = valuesOf(t);
+      const cols = Math.max(1, ...values.map((r) => r.length));
+      const props = { sheetId: h.sheetId, index, gridProperties: { rowCount: Math.max(2, values.length + (t.layout ? 5 : 1)), columnCount: cols, frozenRowCount: t.layout ? 0 : 1 } };
+      let fields = 'index,gridProperties.rowCount,gridProperties.columnCount,gridProperties.frozenRowCount';
+      if (t.tabColor) { props.tabColorStyle = { rgbColor: rgb(t.tabColor) }; fields += ',tabColorStyle'; }
+      fix.push({ updateSheetProperties: { properties: props, fields } }, ...resetRequests(h.sheetId, h.banded));
     });
-    for (let i = 0; i < fix.length; i += 60) await this.call('POST', `${SHEETS}/${this.sheetId}:batchUpdate`, { requests: fix.slice(i, i + 60) });
+    await this.batch(fix);
+  }
+
+  /** Colours, widths and merges for every tab (after the values are written). */
+  async format(tabs) {
+    const have = await this.tabs();
+    const requests = [];
+    for (const t of tabs) {
+      const h = have.find((x) => x.title === t.name);
+      if (h) requests.push(...styleRequests(t, h.sheetId, valuesOf(t)));
+    }
+    await this.batch(requests);
   }
 
   /**
@@ -122,10 +145,10 @@ export class SheetsClient {
       cells = 0;
     };
     for (const t of tabs) {
-      const all = [t.header, ...t.rows];
+      const all = valuesOf(t);
       for (let i = 0; i < all.length; i += ROWS) {
         const block = all.slice(i, i + ROWS);
-        const size = block.length * Math.max(1, t.header.length);
+        const size = block.length * Math.max(1, ...block.map((r) => r.length));
         if (cells && cells + size > CELLS) await flush();
         data.push({ range: a1(t, `A${i + 1}`), majorDimension: 'ROWS', values: block });
         cells += size;

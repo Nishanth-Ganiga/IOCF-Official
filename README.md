@@ -73,7 +73,10 @@ A locked profile with real server-side sign-in (one administrator, 26 board chai
 
 ## The private mirror sheet
 
-A second Google Sheet that holds **everything on the website** as tabs (boards, players and their achievements, umpires, franchise leagues and squads, tournament tables, series records and announced series, stadiums and stadium requests, credits, board accounts, uploaded player statistics, the activity log…). It is rewritten from the website's data, so it always matches the site; it is a backup and a place to look at the data, not an input (edit the IOCF sheet or the Command Center, not the mirror). Passwords and password hashes are never written.
+A second Google Sheet that holds **everything on the website**, laid out like the IOCF workbook:
+- an **Overview** tab (what the sheet is, the colour legend, a list of every tab with its size);
+- **one tab per board** (Afghanistan, Australia, … Zimbabwe), each in that board's own colours (taken from its flag colours: dark banner, coloured section bars, light table headers, pale alternating rows) with the board's chairman, CEO and credits, its rankings and achievements, its players with their awards, its umpires with their assignments, its stadiums and stadium requests, its series (the IOCF records and the ones announced on the site), its franchise-league squad entries and its credit changes;
+- then the **all-board tabs** in the workbook's purple, one row per record, for searching and filtering: boards, players and their achievements, umpires, franchise leagues and squads, tournament tables, series records, stadiums, credits, board accounts, the uploaded player statistics and the activity log. It is rewritten from the website's data, so it always matches the site; it is a backup and a place to look at the data, not an input (edit the IOCF sheet or the Command Center, not the mirror). Passwords and password hashes are never written.
 
 It stays private: share it with **yourself and the robot account only** (never "anyone with the link").
 

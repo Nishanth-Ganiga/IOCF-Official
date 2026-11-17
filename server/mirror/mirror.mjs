@@ -2,7 +2,9 @@
 // Used by the command line (scripts/mirror-to-sheet.mjs), by the scheduled job (.github/workflows/mirror.yml) and by the
 // administrator's "Update the backup sheet" button (POST /admin/mirror).
 import { SheetsClient, parseServiceAccount, sheetIdOf } from './google.mjs';
-import { commandTabs, datasetTabs, overviewTab, statTabs } from './tabs.mjs';
+import { boardTab, overviewLayout } from './boardTabs.mjs';
+import { PURPLE } from './style.mjs';
+import { commandTabs, datasetTabs, statTabs } from './tabs.mjs';
 
 /** Is the mirror set up here (a service account key and the sheet's id)? */
 export function mirrorConfigured(env = process.env) {
@@ -35,13 +37,17 @@ export async function buildMirror({ dataset: given, rankHistory = null, leagueSt
     read('series formats', () => store.metaList()),
     read('activity log', () => store.listAudit(500)),
   ]);
-  const tabs = [
+  const all = [
     ...datasetTabs(dataset),
     ...commandTabs({ boards, series, stadiumRows, baseStadiums, credits, accounts, stats, meta, audit }),
     ...statTabs({ seriesStats: stats.filter((e) => e.kind !== 'tournament'), tournamentStats: stats.filter((e) => e.kind === 'tournament'), leagueStats }),
-  ];
-  const overview = overviewTab({ at: new Date(now()).toISOString(), generatedAt: dataset.generatedAt, source: dataset.source, tabs });
-  if (warnings.length) overview.rows.push(['', ''], ['Not written this time', ''], ...warnings.map((w) => [w, '']));
+  ].map((t) => ({ ...t, tabColor: PURPLE.tab, palette: PURPLE }));
+  // one tab per board, in the board's own colours, right after the Overview; then every detail of every board together
+  const boardTabs = [...dataset.boards].sort((a, b) => a.name.localeCompare(b.name)).map((b) => boardTab(b, { dataset, boards, series, stadiumRows, baseStadiums, credits, accounts, now }));
+  const rest = all.filter((t) => !boardTabs.some((bt) => bt.name === t.name));
+  const clash = all.filter((t) => boardTabs.some((bt) => bt.name === t.name)).map((t) => ({ ...t, name: `${t.name} (all)` }));
+  const tabs = [...boardTabs, ...clash, ...rest];
+  const overview = overviewLayout({ at: new Date(now()).toISOString().slice(0, 16).replace('T', ' ') + ' UTC', dataset, tabs, boardTabNames: boardTabs.map((t) => t.name), warnings });
   return { tabs: [overview, ...tabs], warnings };
 }
 
@@ -51,5 +57,6 @@ export async function runMirror({ env = process.env, fetchImpl = fetch, sleep, .
   const { tabs, warnings } = await buildMirror(input);
   await client.prepare(tabs);
   await client.writeAll(tabs);
+  await client.format(tabs);
   return { tabs: tabs.length, rows: tabs.reduce((n, t) => n + t.rows.length, 0), cells: tabs.reduce((n, t) => n + (t.rows.length + 1) * t.header.length, 0), warnings };
 }
