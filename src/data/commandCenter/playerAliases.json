@@ -135,7 +135,7 @@
   ]
  },
  {
-  "name": "Appu",
+  "name": "Appushree",
   "board": "italy",
   "aliases": [
    {
@@ -143,11 +143,17 @@
     "boards": [
      "italy"
     ]
+   },
+   {
+    "name": "Appu",
+    "boards": [
+     "italy"
+    ]
    }
   ]
  },
  {
-  "name": "Sanasil",
+  "name": "Sanazil",
   "board": "italy",
   "aliases": [
    {
@@ -661,7 +667,7 @@
   ]
  },
  {
-  "name": "Anurag Raj Gautam",
+  "name": "Anurag Raj",
   "board": "australia",
   "aliases": [
    {
@@ -939,7 +945,7 @@
   ]
  },
  {
-  "name": "Firoz",
+  "name": "Firoze Babu",
   "board": "italy",
   "aliases": [
    {
@@ -948,7 +954,7 @@
   ]
  },
  {
-  "name": "Josin",
+  "name": "Josin Roy",
   "board": "italy",
   "aliases": [
    {
@@ -957,7 +963,7 @@
   ]
  },
  {
-  "name": "Vipin Sai",
+  "name": "Vipin Venu",
   "board": "italy",
   "aliases": [
    {
@@ -1514,16 +1520,22 @@
   ]
  },
  {
-  "name": "Abhishek",
+  "name": "Abhishek Anil",
   "board": "italy",
   "aliases": [
    {
     "name": "Abhishek Anil"
+   },
+   {
+    "name": "Abhishek",
+    "boards": [
+     "italy"
+    ]
    }
   ]
  },
  {
-  "name": "Hybi",
+  "name": "Hybi Anil",
   "board": "italy",
   "aliases": [
    {
@@ -1544,7 +1556,7 @@
   ]
  },
  {
-  "name": "Jinson",
+  "name": "Jinson Yohannan",
   "board": "italy",
   "aliases": [
    {
@@ -1867,6 +1879,27 @@
     "boards": [
      "zimbabwe"
     ]
+   }
+  ]
+ },
+ {
+  "name": "Meraj Ansari",
+  "board": "papua-new-guinea",
+  "aliases": [
+   {
+    "name": "Meeraj Ansari",
+    "boards": [
+     "papua-new-guinea"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Waseem Iqbal",
+  "board": "papua-new-guinea",
+  "aliases": [
+   {
+    "name": "Mohd Waseem"
    }
   ]
  }
