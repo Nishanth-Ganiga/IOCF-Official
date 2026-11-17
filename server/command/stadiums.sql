@@ -9,14 +9,14 @@ create table if not exists public.command_stadiums (
   venue         text not null,               -- place + country, as shown ("Mumbai, India")
   country       text not null,
   level         integer not null default 3,  -- always 3 (set by the server, never by the board)
-  cost          integer not null default 30000, -- credits taken from the board when the request is accepted
+  cost          integer not null default 30000, -- credits the administrator deducts in the sheet when the request is accepted
   status        text not null default 'pending', -- pending | accepted | declined
   requested_by  text,                        -- the chairman's username
   requested_at  bigint not null,             -- epoch milliseconds
   decided_by    text,                        -- the administrator who accepted or declined
   decided_at    bigint,
   decline_reason text,
-  adjustment_id text,                        -- the credit adjustment (command_credit_adjustments) that took the cost
+  adjustment_id text,                        -- (not used: the cost is deducted in the sheet by hand)
   acknowledged_at bigint                     -- when the board dismissed the "not accepted" message
 );
 alter table public.command_stadiums enable row level security;

@@ -101,7 +101,7 @@ export default function BuildStadium({ theme }: { theme: BoardTheme }) {
           {theme.name.toUpperCase()} BOARD · BUILD A STADIUM
         </p>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-mist">
-          Ask the IOCF administrator to build a new stadium for {theme.name}. When the request is accepted, <b className="text-bone">{rupees(data.cost)}</b> is taken from your board&apos;s credits and the stadium is added to your list, so you can choose it for the series you host.
+          Ask the IOCF administrator to build a new stadium for {theme.name}. When the request is accepted, the stadium is added to your list, so you can choose it for the series you host, and the administrator deducts <b className="text-bone">{rupees(data.cost)}</b> from your board&apos;s credits.
         </p>
         {data.canAct ? (
           <form onSubmit={send} className="mt-5 grid gap-4 md:grid-cols-2">
@@ -125,9 +125,9 @@ export default function BuildStadium({ theme }: { theme: BoardTheme }) {
               COST
               <input value={`${rupees(data.cost)} in credits`} readOnly disabled aria-readonly className={field} />
               <span className="mt-1 block text-[11px] font-normal tracking-normal text-smoke">
-                Taken from your credits only if the request is accepted.
+                Deducted from your credits by the administrator only if the request is accepted.
                 {balance !== null && ` Your balance now: ${rupees(balance)}.`}
-                {balance !== null && balance < data.cost && <b className="text-crimson-2"> It is below the cost; accepting it takes your balance below zero.</b>}
+                {balance !== null && balance < data.cost && <b className="text-crimson-2"> It is below the cost; your balance will go below zero if this is accepted.</b>}
               </span>
             </label>
             <div className="md:col-span-2">

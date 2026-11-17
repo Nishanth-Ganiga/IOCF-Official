@@ -62,7 +62,7 @@ export default function AdminStadiums({ nav }: { nav: Nav }) {
         <p className="text-[11px] font-semibold tracking-[0.3em]" style={{ color: GOLD }}>MASTER ADMINISTRATOR</p>
         <h1 className="mt-1 font-display text-[clamp(2.2rem,6vw,4.5rem)] leading-[0.9] tracking-wide text-bone">STADIUM REQUESTS</h1>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-mist">
-          Boards ask to build a new stadium (always level 3). <b className="text-bone">Accept</b> takes {rupees(data?.cost ?? 30000)} from the board&apos;s credits (it appears in Board Credits &amp; Finance as a pending change) and adds the stadium to its list. <b className="text-bone">Decline</b> removes the request and tells the board it was not accepted.
+          Boards ask to build a new stadium (always level 3). <b className="text-bone">Accept</b> adds the stadium to the board&apos;s list. The system does not touch the credits: deduct {rupees(data?.cost ?? 30000)} from the board in the sheet yourself. <b className="text-bone">Decline</b> removes the request and tells the board it was not accepted.
         </p>
       </header>
 
@@ -98,7 +98,7 @@ export default function AdminStadiums({ nav }: { nav: Nav }) {
                   <dd className="text-bone">{rupees(r.cost)}</dd>
                   <dt className="text-[11px] font-semibold tracking-[0.16em] text-smoke">BALANCE</dt>
                   <dd className="text-bone">
-                    {bal === null ? 'not listed in the sheet' : `${rupees(bal)} → ${rupees(bal - r.cost)} if accepted`}
+                    {bal === null ? 'not listed in the sheet' : `${rupees(bal)} → ${rupees(bal - r.cost)} once you deduct it`}
                     {bal !== null && bal - r.cost < 0 && <b className="text-crimson-2"> (below zero)</b>}
                   </dd>
                   <dt className="text-[11px] font-semibold tracking-[0.16em] text-smoke">SENT</dt>
@@ -119,8 +119,8 @@ export default function AdminStadiums({ nav }: { nav: Nav }) {
                   </div>
                 ) : (
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <button type="button" disabled={busy !== ''} onClick={() => void run(`y-${r.id}`, () => api.acceptStadium(r.id), `${r.name} was added to ${r.boardName}. ${rupees(r.cost)} was taken from its credits.`)} className="rounded-lg px-5 py-2 text-xs font-bold tracking-[0.18em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: GOLD }}>
-                      {busy === `y-${r.id}` ? 'ACCEPTING…' : `ACCEPT · TAKE ${rupees(r.cost)}`}
+                    <button type="button" disabled={busy !== ''} onClick={() => void run(`y-${r.id}`, () => api.acceptStadium(r.id), `${r.name} was added to ${r.boardName}. Now deduct ${rupees(r.cost)} from ${r.boardName} in the sheet.`)} className="rounded-lg px-5 py-2 text-xs font-bold tracking-[0.18em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: GOLD }}>
+                      {busy === `y-${r.id}` ? 'ACCEPTING…' : 'ACCEPT'}
                     </button>
                     <button type="button" disabled={busy !== ''} onClick={() => setDeclining(r.id)} className="rounded-lg border border-white/25 px-5 py-2 text-xs font-bold tracking-[0.18em] text-bone transition hover:border-crimson/60 hover:text-crimson-2 disabled:opacity-50">
                       DECLINE
@@ -147,7 +147,7 @@ export default function AdminStadiums({ nav }: { nav: Nav }) {
                 </span>
               </span>
               <span className="text-[11px] font-semibold tracking-[0.18em]" style={{ color: r.status === 'accepted' ? '#6fcf8e' : '#e07a7a' }}>
-                {r.status === 'accepted' ? `ACCEPTED · −${rupees(r.cost)}` : 'DECLINED'}
+                {r.status === 'accepted' ? `ACCEPTED · DEDUCT ${rupees(r.cost)} IN THE SHEET` : 'DECLINED'}
               </span>
             </li>
           ))}

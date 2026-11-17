@@ -110,7 +110,7 @@ export default function AdminDashboard({ user, nav, onSignOut }: { user: CcUser;
                 </span>
               </span>
               <span className="mt-4 block font-display text-2xl tracking-wide text-bone">STADIUM REQUESTS</span>
-              <span className="mt-1.5 block text-sm leading-relaxed text-mist">Accept or decline the stadiums boards ask to build. An accepted stadium costs the board 30,000 credits.</span>
+              <span className="mt-1.5 block text-sm leading-relaxed text-mist">Accept or decline the stadiums boards ask to build. An accepted stadium costs the board 30,000 credits, which you deduct in the sheet.</span>
               <span className="mt-4 block text-xs font-semibold tracking-[0.2em] text-[#c9a24b] transition group-hover:translate-x-1">OPEN →</span>
             </button>
           </li>

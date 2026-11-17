@@ -716,8 +716,8 @@ console.log('\n— Series Announcement —');
       const yes = await sCall('POST', `admin/stadiums/${kabul.id}/accept`, { cookie: cAdm });
       const afterYes = (await sg('afghanistan', cAfg)).body;
       const credits = (await bal(cAfg, 'afghanistan'));
-      check('accepting takes 30,000 from the board\'s credits (a pending adjustment) and adds the stadium to its list with its venue and level', yes.status === 200 && yes.body.request.status === 'accepted' && credits.pending === -30000 && credits.entries.some((e) => e.delta === -30000 && /Stadium built: Kabul Crown/.test(e.text)) && afterYes.stadiums.some((x) => x.name === 'Kabul Crown' && x.venue === 'Kabul, Afghanistan' && x.level === 3));
-      check('an accepted request cannot be accepted again (the cost is taken once), nor declined', (await sCall('POST', `admin/stadiums/${kabul.id}/accept`, { cookie: cAdm })).status === 409 && (await sCall('POST', `admin/stadiums/${kabul.id}/decline`, { cookie: cAdm })).status === 409 && (await bal(cAfg, 'afghanistan')).pending === -30000);
+      check('accepting adds the stadium to the board\'s list with its venue and level, and takes NO credits (the administrator deducts them in the sheet)', yes.status === 200 && yes.body.request.status === 'accepted' && credits.pending === 0 && credits.entries.length === 0 && afterYes.stadiums.some((x) => x.name === 'Kabul Crown' && x.venue === 'Kabul, Afghanistan' && x.level === 3));
+      check('an accepted request cannot be accepted again (the cost is taken once), nor declined', (await sCall('POST', `admin/stadiums/${kabul.id}/accept`, { cookie: cAdm })).status === 409 && (await sCall('POST', `admin/stadiums/${kabul.id}/decline`, { cookie: cAdm })).status === 409 && (await bal(cAfg, 'afghanistan')).pending === 0);
       const sr = await sCall('GET', 'boards/afghanistan/series', { cookie: cAfg });
       check('the new stadium is in the board\'s series choices, and a series can be announced there', sr.body.stadiums.includes('Kabul Crown') && sr.body.allStadiums.afghanistan.includes('Kabul Crown') && (await post(cAfg, 'afghanistan', good({ name: 'Kabul Cup', opponents: ['scotland'], stadiums: ['Kabul Crown'] }))).status === 201);
       check('a name already built cannot be requested again, by any board', (await ask(await sLogin('board', sc('Scotland')), { name: 'KABUL CROWN', place: 'Edinburgh' }, 'scotland')).status === 400);
@@ -730,7 +730,7 @@ console.log('\n— Series Announcement —');
       check('a board can have at most 3 requests waiting', limit.join() === '201,201,201,409');
       for (const r of (await sCall('GET', 'admin/stadiums', { cookie: cAdm })).body.pending) await sCall('POST', `admin/stadiums/${r.id}/decline`, { cookie: cAdm });
       const acts = (await sStore.listAudit(500)).map((x) => x.action);
-      check('requests and decisions are recorded in the audit log, and every field is kept in the stadium table', ['stadium_requested', 'stadium_accepted', 'stadium_declined', 'stadium_withdrawn'].every((a) => acts.includes(a)) && (await sStore.stadiumGet(kabul.id)).adjustment_id && (await sStore.stadiumGet(kabul.id)).decided_by && (await sStore.stadiumGet(herat.id)).status === 'declined');
+      check('requests and decisions are recorded in the audit log, and every field is kept in the stadium table', ['stadium_requested', 'stadium_accepted', 'stadium_declined', 'stadium_withdrawn'].every((a) => acts.includes(a)) && (await sStore.stadiumGet(kabul.id)).cost === 30000 && (await sStore.stadiumGet(kabul.id)).decided_by && (await sStore.stadiumGet(herat.id)).status === 'declined');
     }
     // the sheet is the master: settlements stay pending until the administrator marks them as entered in the sheet
     {

@@ -38,7 +38,7 @@
 //   POST /boards/:slug/stadiums/:id/dismiss  clear a "not accepted" message (own board; the administrator can act for any board)
 //   DELETE /boards/:slug/stadiums/:id   withdraw a request that is still waiting (own board; the administrator can act for any board)
 //   GET  /admin/stadiums                admin only   the requests waiting, and the recent decisions
-//   POST /admin/stadiums/:id/accept     admin only   takes the cost from the board's credits and adds the stadium to its list
+//   POST /admin/stadiums/:id/accept     admin only   adds the stadium to the board's list (the cost is deducted in the sheet by hand)
 //   POST /admin/stadiums/:id/decline    admin only   { reason? }  the request leaves the queue; the board is told it was not accepted
 //
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
@@ -787,15 +787,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const t = now();
           const others = (await store.stadiumList()).filter((x) => x.key !== cur.key);
           if (takenNames(others).has(cur.name.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, ''))) return fail(409, 'name_taken', 'A stadium with this name already exists now. Decline the request, or ask the board to choose another name.');
-          // the cost goes to the board's credits first (a credit adjustment, shown in Board Credits & Finance); the stadium is added only after that worked
-          const adj = await store.creditsInsert({ id: randomUUID(), board: cur.board, amount: -STADIUM_COST, reason: `Stadium built: ${cur.name} (level ${STADIUM_LEVEL})`.slice(0, 120), created_by: who.username, created_at: t });
-          let row;
-          try {
-            row = await store.stadiumPut({ ...cur, status: 'accepted', level: STADIUM_LEVEL, cost: STADIUM_COST, decided_by: who.username, decided_at: t, adjustment_id: adj.id });
-          } catch (err) {
-            await store.creditsDelete(adj.id).catch(() => undefined);
-            throw err;
-          }
+          // the cost is NOT taken here: the administrator deducts it from the board's credits in the sheet by hand
+          const row = await store.stadiumPut({ ...cur, status: 'accepted', level: STADIUM_LEVEL, cost: STADIUM_COST, decided_by: who.username, decided_at: t });
           await audit('stadium_accepted', who, cur.key, req, { board: cur.board, name: cur.name, cost: STADIUM_COST });
           return json(200, { request: stadiumToApi(row, BOARDS) });
         }

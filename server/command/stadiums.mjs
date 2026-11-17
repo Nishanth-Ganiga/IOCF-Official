@@ -1,8 +1,8 @@
 // Build a Stadium: the rules, in one place. Used by the API (handler.mjs) and by the self-test.
 //   • a board asks to build a stadium: a name and a place in its home country. The level is always 3 and costs ₹30,000;
 //     neither can be chosen or changed by the board (whatever the browser sends is ignored)
-//   • the administrator accepts or declines the request. Accepting takes the cost from the board's credits (a credit
-//     adjustment, so it shows in Board Credits & Finance) and adds the stadium to the board's list; declining removes the
+//   • the administrator accepts or declines the request. Accepting adds the stadium to the board's list; the cost is NOT taken
+//     by the system: the administrator deducts it from the board's credits in the sheet by hand. Declining removes the
 //     request from the administrator's queue and tells the board it was not accepted
 //   • the stadiums that existed before this feature come from stadiums.json (the old stadium sheet); every new one is a row in
 //     the command_stadiums table. A board's stadium list is both together.
