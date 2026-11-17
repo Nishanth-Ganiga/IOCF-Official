@@ -8,7 +8,7 @@ export const TRANSFERS = [
   { name: 'Adithya Mahajan', from: 'Bangladesh', to: 'South Africa' },
   { name: 'Adithya Mahajan', from: 'Qatar', to: 'South Africa' },
   { name: 'Adithya Mahajan', from: 'USA', to: 'South Africa' },
-  { name: 'Siddharth V Jain', from: 'South Africa', to: 'Bangladesh', into: 'Sidd V Jain' },
+  { name: 'Siddharth V Jain', from: 'South Africa', to: 'Bangladesh' },
   { name: 'Karthik Varma', from: 'Ireland', to: 'England', into: 'Karthik Verma' },
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
   { name: 'Aniket Gavit', from: 'England', to: 'New Zealand' },
@@ -20,10 +20,10 @@ export const TRANSFERS = [
   // Mexico's new board: Ali Khan (chairman) came from Bangladesh, Ashfaq Hosain (CEO) from the USA
   { name: 'Ali Khan', from: 'Bangladesh', to: 'Mexico' },
   { name: 'Ashfaq Hosain', from: 'USA', to: 'Mexico' },
-  // Sidd V Jain (Siddharth V Jain in the scorer exports) played for Bangladesh, South Africa and Australia; he is now one player on Mexico
+  // Siddharth V Jain ("Sidd V Jain" on some lists) played for Bangladesh, South Africa and Australia; he is now one player on Mexico
   ...['Bangladesh', 'South Africa', 'Australia'].flatMap((from) => [
-    { name: 'Siddharth V Jain', from, to: 'Mexico', into: 'Sidd V Jain' },
-    { name: 'Sidd V Jain', from, to: 'Mexico' },
+    { name: 'Siddharth V Jain', from, to: 'Mexico' },
+    { name: 'Sidd V Jain', from, to: 'Mexico', into: 'Siddharth V Jain' },
   ]),
   // Akshay played for Italy and is now on Japan's roster (his Japan entry is the one kept)
   { name: 'Akshay', from: 'Italy', to: 'Japan' },
@@ -38,6 +38,7 @@ export const TRANSFERS = [
 
 // The same person listed twice on one board under different spellings: the entries are merged into `keep` (with their awards).
 export const MERGES = [
+  { board: "Mexico", keep: "Siddharth V Jain", drop: ["Sidd V Jain"] },
   { board: "Australia", keep: "Anand Ajikumar", drop: ["Anandan Ajikumar"] },
   { board: "Australia", keep: "Muhammad Noor", drop: ["Mohammaed Noor"] },
   { board: "Bangladesh", keep: "Tanusri Dutta", drop: ["Tansuri Dutta"] },

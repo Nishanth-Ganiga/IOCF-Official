@@ -310,7 +310,7 @@
   ]
  },
  {
-  "name": "Irfan Ali",
+  "name": "Irfan Ali Soomro",
   "board": "spain",
   "aliases": [
    {
@@ -328,7 +328,7 @@
   ]
  },
  {
-  "name": "Talha Gujjar",
+  "name": "Talha Saeed Gujjar",
   "board": "usa",
   "aliases": [
    {
@@ -481,11 +481,14 @@
   ]
  },
  {
-  "name": "Yohaan Daruwallaa",
+  "name": "Yohaan",
   "board": "qatar",
   "aliases": [
    {
     "name": "Yohaan Daruwalla"
+   },
+   {
+    "name": "Yohaan Daruwallaa"
    }
   ]
  },
@@ -661,7 +664,7 @@
   ]
  },
  {
-  "name": "Achu Achu",
+  "name": "Achu",
   "board": "qatar",
   "aliases": [
    {
@@ -720,11 +723,11 @@
   ]
  },
  {
-  "name": "Sidd V Jain",
+  "name": "Siddharth V Jain",
   "board": "mexico",
   "aliases": [
    {
-    "name": "Siddharth V Jain"
+    "name": "Sidd V Jain"
    }
   ]
  },
@@ -1276,11 +1279,14 @@
   ]
  },
  {
-  "name": "Muzammil Zafar",
+  "name": "Muzamil Zaffar",
   "board": "spain",
   "aliases": [
    {
     "name": "Muzammil Zaffar"
+   },
+   {
+    "name": "Muzammil Zafar"
    }
   ]
  },
@@ -1463,7 +1469,7 @@
   ]
  },
  {
-  "name": "Jyothish",
+  "name": "Jyothish S",
   "board": "england",
   "aliases": [
    {
@@ -1472,7 +1478,7 @@
   ]
  },
  {
-  "name": "Rahees",
+  "name": "Rahees Rainian",
   "board": "england",
   "aliases": [
    {
@@ -1481,7 +1487,7 @@
   ]
  },
  {
-  "name": "Renjish",
+  "name": "Renjish Punalur",
   "board": "england",
   "aliases": [
    {
@@ -1768,6 +1774,45 @@
     "boards": [
      "uganda"
     ]
+   }
+  ]
+ },
+ {
+  "name": "Aditya Shashank",
+  "board": "mexico",
+  "aliases": [
+   {
+    "name": "Adithya Shashank"
+   }
+  ]
+ },
+ {
+  "name": "Emil Bento",
+  "board": "mexico",
+  "aliases": [
+   {
+    "name": "Emil Bentoo"
+   }
+  ]
+ },
+ {
+  "name": "Arslan Ali",
+  "board": "spain",
+  "aliases": [
+   {
+    "name": "Arslan",
+    "boards": [
+     "spain"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Furqan Rasheed",
+  "board": "spain",
+  "aliases": [
+   {
+    "name": "Fuqran Rasheed"
    }
   ]
  }
