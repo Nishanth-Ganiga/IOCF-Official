@@ -445,7 +445,7 @@
   ]
  },
  {
-  "name": "Karan Ghimerа",
+  "name": "Karan Ghimira",
   "board": "zimbabwe",
   "aliases": [
    {
@@ -457,11 +457,17 @@
   ]
  },
  {
-  "name": "Prayas Parasar",
+  "name": "Prayash Parsar",
   "board": "zimbabwe",
   "aliases": [
    {
     "name": "Prayash Parsar",
+    "boards": [
+     "zimbabwe"
+    ]
+   },
+   {
+    "name": "Prayas Parasar",
     "boards": [
      "zimbabwe"
     ]
@@ -532,7 +538,7 @@
   ]
  },
  {
-  "name": "Ritik",
+  "name": "Rittik Upadhyay",
   "board": "zimbabwe",
   "aliases": [
    {
@@ -1639,7 +1645,10 @@
   "board": "netherlands",
   "aliases": [
    {
-    "name": "Bishwajit Dutta"
+    "name": "Bishwajit Dutta",
+    "boards": [
+     "netherlands"
+    ]
    }
   ]
  },
@@ -1813,6 +1822,51 @@
   "aliases": [
    {
     "name": "Fuqran Rasheed"
+   }
+  ]
+ },
+ {
+  "name": "Mudasir Zaffar",
+  "board": "spain",
+  "aliases": [
+   {
+    "name": "Mudasir Ali"
+   }
+  ]
+ },
+ {
+  "name": "Abhishak Gautam",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "Abhishek Gautam",
+    "boards": [
+     "zimbabwe"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Biswajit Dutta",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "Bishwajit Dutta",
+    "boards": [
+     "zimbabwe"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "MN Kafley",
+  "board": "zimbabwe",
+  "aliases": [
+   {
+    "name": "MN Kafle",
+    "boards": [
+     "zimbabwe"
+    ]
    }
   ]
  }

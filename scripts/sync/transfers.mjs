@@ -13,6 +13,8 @@ export const TRANSFERS = [
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
   { name: 'Aniket Gavit', from: 'England', to: 'New Zealand' },
   { name: 'Mudasir Ali', from: 'Qatar', to: 'Pakistan' },
+  { name: 'Mudasir Ali', from: 'Pakistan', to: 'Spain', into: 'Mudasir Zaffar' }, // the same person: now on Spain's list as Mudasir Zaffar
+  { name: 'Mudasir Ali', from: 'Spain', to: 'Spain', into: 'Mudasir Zaffar' }, // (his umpire entry on Spain's sheet is under the old name)
   { name: 'Harsh Dubey', from: 'Bangladesh', to: 'USA' },
   { name: 'Harsh Dubey', from: 'Australia', to: 'USA' },
   { name: 'Muhammad Touqeer', from: 'Qatar', to: 'Spain' },

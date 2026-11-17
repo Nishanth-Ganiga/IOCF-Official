@@ -492,7 +492,7 @@ console.log('\n— Series Announcement —');
   const post = (cookie, slug, body) => sCall('POST', `boards/${slug}/series`, { cookie, body });
   const view = async (cookie, slug) => (await sCall('GET', `boards/${slug}/series`, { cookie })).body;
 
-  check('the stadium list covers the boards (India has its own, Mexico none)', STADIUMS.india.length === 3 && STADIUMS.mexico.length === 0 && Object.keys(STADIUMS).length === 25 && STADIUMS.india.every((x) => !/^\d/.test(x)));
+  check('the stadium list covers the boards (India has its own, Mexico one)', STADIUMS.india.length === 3 && STADIUMS.mexico.length === 1 && Object.keys(STADIUMS).length === 25 && STADIUMS.india.every((x) => !/^\d/.test(x)));
   check('series options are as specified', SERIES_CFG.types.map((t) => t.matchOptions.join('/')).join() === '1/3/5/7,4/7,7/13' && SERIES_CFG.bets.join() === '1000,2000,3000,4000,5000,10000,20000,50000' && SERIES_CFG.formats.join() === 'Club,T10,T20,TEST,ODI,L4I' && SERIES_CFG.clubFormats.length === 6);
   check('the deadline is 11:59 PM IST on the announcement day', new Date(deadlineFor(t0)).toISOString() === '2026-06-10T18:29:59.999Z' && new Date(deadlineFor(Date.UTC(2026, 5, 10, 19, 0))).toISOString() === '2026-06-11T18:29:59.999Z');
 
