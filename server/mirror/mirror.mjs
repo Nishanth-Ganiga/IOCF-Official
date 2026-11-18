@@ -4,6 +4,7 @@
 import { SheetsClient, parseServiceAccount, sheetIdOf } from './google.mjs';
 import { boardTab, overviewLayout } from './boardTabs.mjs';
 import { PURPLE } from './style.mjs';
+import { applyCorrections } from '../../src/data/commandCenter/statCorrections.mjs';
 import { commandTabs, datasetTabs, statTabs } from './tabs.mjs';
 
 /** Is the mirror set up here (a service account key and the sheet's id)? */
@@ -40,7 +41,7 @@ export async function buildMirror({ dataset: given, rankHistory = null, leagueSt
   const all = [
     ...datasetTabs(dataset),
     ...commandTabs({ boards, series, stadiumRows, baseStadiums, credits, accounts, stats, meta, audit }),
-    ...statTabs({ seriesStats: stats.filter((e) => e.kind !== 'tournament'), tournamentStats: stats.filter((e) => e.kind === 'tournament'), leagueStats }),
+    ...statTabs({ seriesStats: stats.filter((e) => e.kind !== 'tournament'), tournamentStats: stats.filter((e) => e.kind === 'tournament').map((e) => ({ ...e, rows: applyCorrections(e.key.replace(/^tour-/, ''), e.fields, e.rows) })), leagueStats }),
   ].map((t) => ({ ...t, tabColor: PURPLE.tab, palette: PURPLE }));
   // one tab per board, in the board's own colours, right after the Overview; then every detail of every board together
   const boardTabs = [...dataset.boards].sort((a, b) => a.name.localeCompare(b.name)).map((b) => boardTab(b, { dataset, boards, series, stadiumRows, baseStadiums, credits, accounts, now }));

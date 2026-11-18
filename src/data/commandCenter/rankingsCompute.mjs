@@ -14,6 +14,7 @@ import { isHiddenBoard } from '../hiddenBoards.mjs';
 import { FORMAT_ORDER, TOURNAMENT_FORMAT, formatKey, norm } from '../careerStats.mjs';
 import { CATEGORIES, boardsIn, groupPlayers, rankPlayers, rankRows, seriesTable } from '../rankingsCore.mjs';
 import { buildAliasIndex } from './aliases.mjs';
+import { applyCorrections } from './statCorrections.mjs';
 import { cleanSquadText, linkSquad, teamKey } from './leagueLink.mjs';
 import { rankingId } from './rankingIds.mjs';
 
@@ -100,7 +101,7 @@ export function computeAllRankings(input) {
   const tournaments = { ...(input.tournamentStats?.tournaments ?? {}), ...Object.fromEntries(Object.entries(input.tournamentOverrides ?? {}).map(([id, t]) => [id, { fields: t.fields, rows: t.rows }])) };
   for (const [id, t] of Object.entries(tournaments)) {
     const fields = t.fields ?? input.tournamentStats.fields;
-    for (const row of t.rows) {
+    for (const row of applyCorrections(id, fields, t.rows)) {
       const p = decodeRow(fields, row);
       const b = boardOfTeam(p.team, boardNames);
       lines.push({ name: p.name, boardSlug: b.slug, boardName: b.name, source: 'tournament', id, format: TOURNAMENT_FORMAT[id] ?? null, line: p });

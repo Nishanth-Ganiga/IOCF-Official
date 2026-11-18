@@ -1,5 +1,6 @@
 import { api } from './commandApi';
 import { decodePlayers, type PlayerStats } from './leagueStats';
+import { applyCorrections } from './commandCenter/statCorrections.mjs';
 import { isHiddenBoard } from './hiddenBoards.mjs';
 import { store } from './store';
 import type { TournamentEdition } from './tournaments';
@@ -31,7 +32,7 @@ export function loadTournamentStats(): Promise<AllTournamentStats> {
         try {
           const { tournaments } = await api.tournamentStatsLive();
           const out = { ...b };
-          for (const [id, t] of Object.entries(tournaments)) out[id] = { title: t.title, tour: t.tour, players: decodePlayers(t.fields, t.rows) };
+          for (const [id, t] of Object.entries(tournaments)) out[id] = { title: t.title, tour: t.tour, players: decodePlayers(t.fields, applyCorrections(id, t.fields, t.rows)) };
           return out;
         } catch {
           return b; // the Command Center service is not reachable (or nothing was uploaded): the bundled statistics
@@ -50,7 +51,7 @@ function bundled(): Promise<AllTournamentStats> {
   cache ??= import('./tournamentStats.json').then((m) => {
     const raw = m.default as unknown as Raw;
     const out: AllTournamentStats = {};
-    for (const [id, t] of Object.entries(raw.tournaments)) out[id] = { title: t.title, tour: t.tour, players: decodePlayers(raw.fields, t.rows) };
+    for (const [id, t] of Object.entries(raw.tournaments)) out[id] = { title: t.title, tour: t.tour, players: decodePlayers(raw.fields, applyCorrections(id, raw.fields, t.rows)) };
     return out;
   });
   return cache;

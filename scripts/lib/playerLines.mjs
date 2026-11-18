@@ -1,6 +1,7 @@
 // The logic of `npm run player`: which statistics lines a player gets, and which similar-named lines are not counted for him.
 import { buildAliasIndex, resolveAlias } from '../../src/data/commandCenter/aliases.mjs';
 import { norm, selectLines, sumLines } from '../../src/data/careerStats.mjs';
+import { applyCorrections } from '../../src/data/commandCenter/statCorrections.mjs';
 
 const slug = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const dec = (fields, row) => Object.fromEntries(fields.map((f, i) => [f, row[i]]));
@@ -12,7 +13,10 @@ export function explainPlayer(input, name) {
   const me = roster[0] ?? { name, boardId: '' };
   const lines = [];
   const tournaments = { ...(input.tournamentStats?.tournaments ?? {}), ...Object.fromEntries(Object.entries(input.tournamentOverrides ?? {})) };
-  for (const [id, t] of Object.entries(tournaments)) for (const r of t.rows) lines.push({ source: 'tournament', id, line: dec(t.fields ?? input.tournamentStats.fields, r) });
+  for (const [id, t] of Object.entries(tournaments)) {
+    const fields = t.fields ?? input.tournamentStats.fields;
+    for (const r of applyCorrections(id, fields, t.rows)) lines.push({ source: 'tournament', id, line: dec(fields, r) });
+  }
   for (const s of input.seriesStats ?? []) for (const r of s.rows) lines.push({ source: 'series', id: s.key, line: dec(s.fields, r) });
   for (const [id, l] of Object.entries(input.leagueStats?.leagues ?? {})) for (const r of l.rows) lines.push({ source: 'franchise', id, line: dec(input.leagueStats.fields, r) });
   const all = lines.map((l) => ({ ...l, name: l.line.name, boardSlug: slug(String(l.line.team).replace(/\s+(EMERGING|W)$/i, '')) }));

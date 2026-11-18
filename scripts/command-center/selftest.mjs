@@ -1367,6 +1367,22 @@ console.log('\n— The private mirror sheet —');
     seriesStats: [{ key: 'rec-a', fields: F, rows: [['Hamid Sahito', 'PAKISTAN', 3, 40, 2], ['Hamid Sahitoo', 'PAKISTAN', 2, 30, 1], ['Someone Else', 'INDIA', 1, 5, 0]] }] };
   const ex = explainPlayer(pin, 'Hamid Sahito');
   check('the player tool counts a player\'s exact lines per scope (series, franchise, board, overall) and lists a similar misspelt name that is NOT counted', ex.totals.series.runs === 40 && ex.totals.franchise.runs === 100 && ex.totals.board.wickets === 2 && ex.totals.overall.runs === 140 && ex.similar.length === 1 && ex.similar[0].line.name === 'Hamid Sahitoo');
+  // lines of a scorer export the uploaded tournament file lacks (src/data/commandCenter/statCorrections.mjs)
+  const { applyCorrections, STAT_CORRECTIONS } = await import('../../src/data/commandCenter/statCorrections.mjs');
+  const CF = ['name', 'team', 'matches', 'runs', 'wickets'];
+  const rowsIn = [['Hizbullah Sahito', 'PAKISTAN', 3, 100, 10], ['Other Man', 'INDIA', 3, 50, 1]];
+  const fixed = applyCorrections('world-test-championship', CF, rowsIn);
+  const none = applyCorrections('asia-cup', CF, rowsIn);
+  const madeRow = applyCorrections('world-test-championship', CF, [['Other Man', 'INDIA', 3, 50, 1]]);
+  check('a correction adds to the player\'s row in that tournament only (runs 100 + 21, wickets 10 + 2), leaves the file and the other rows as they are, and makes the row if he has none', fixed[0][3] === 121 && fixed[0][4] === 12 && fixed[0][2] === 3 && fixed[1][3] === 50 && rowsIn[0][3] === 100 && none === rowsIn && madeRow.length === 2 && madeRow[1][0] === 'Hizbullah Sahito' && madeRow[1][3] === 21 && STAT_CORRECTIONS.length >= 1);
+  const { computeAllRankings: cr } = await import('../../src/data/commandCenter/rankingsCompute.mjs');
+  const { rankingId: rid } = await import('../../src/data/commandCenter/rankingIds.mjs');
+  const RF = ['name', 'team', 'matches', 'batInn', 'runs', 'bowlInn', 'wickets'];
+  const wtc = { fields: RF, tournaments: { 'world-test-championship': { title: 'WTC', tour: 't', rows: [['Hizbullah Sahito', 'PAKISTAN', 3, 3, 100, 3, 10], ['Other Man', 'INDIA', 3, 3, 110, 3, 11]] } } };
+  const ranked = cr({ dataset: snap, tournamentStats: wtc, leagueStats: { fields: RF, leagues: {} }, aliases: [], seriesStats: [], seriesResults: [], meta: {} });
+  const top = ranked[rid.players('tournament', 'batting', 'runs')];
+  const topW = ranked[rid.players('tournament', 'bowling', 'wickets')];
+  check('the rankings count it too: with the 21 runs and 2 wickets he passes a player who is ahead of him without them (major tournaments scope)', top[0].key === 'hizbullahsahito' && topW[0].key === 'hizbullahsahito');
   // a pretend Google: records every call
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
   const key = JSON.stringify({ client_email: 'mirror@iocf.iam.gserviceaccount.com', private_key: privateKey });
