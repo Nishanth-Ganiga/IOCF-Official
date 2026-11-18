@@ -29,6 +29,14 @@ export const TRANSFERS = [
   ]),
   // Akshay played for Italy and is now on Japan's roster (his Japan entry is the one kept)
   { name: 'Akshay', from: 'Italy', to: 'Japan' },
+  // moves the sheet records in the trade notes ("Hizbullah to Spain: Free", "Naveen to PNG", "Sujith to Portugal", "Kaushik to BD", "Suleman to USA", "Huzaifa to USA")
+  { name: 'Hizbullah Sahito', from: 'Pakistan', to: 'Spain' },
+  { name: 'Naveen Gupta', from: 'Canada', to: 'Papua New Guinea' },
+  { name: 'Naveen Gupta', from: 'New Zealand', to: 'Papua New Guinea' },
+  { name: 'Sujith Kumar', from: 'England', to: 'Portugal' },
+  { name: 'Kaushik Kalita', from: 'South Africa', to: 'Bangladesh' },
+  { name: 'Suleman Haider', from: 'Qatar', to: 'USA' },
+  { name: 'Huzaifa Imran', from: 'Qatar', to: 'USA' },
   { name: 'Marami', from: 'Netherlands', to: 'USA' },
   { name: 'Marami Ahmed', from: 'Netherlands', to: 'USA', into: 'Marami' },
   { name: 'Anas Asim', from: 'Qatar', to: 'Spain' }, // already on Spain's list; his Qatar entry is an earlier board

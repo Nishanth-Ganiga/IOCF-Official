@@ -48,7 +48,7 @@
   ]
  },
  {
-  "name": "Blassy",
+  "name": "Blessy",
   "board": "canada",
   "aliases": [
    {
@@ -60,7 +60,7 @@
   ]
  },
  {
-  "name": "Neak Mohammad",
+  "name": "Neak Muhammad",
   "board": "canada",
   "aliases": [
    {
@@ -649,7 +649,7 @@
   ]
  },
  {
-  "name": "Shobha Joseph",
+  "name": "Sobha Joseph",
   "board": "afghanistan",
   "aliases": [
    {
@@ -744,7 +744,7 @@
   ]
  },
  {
-  "name": "Aftab",
+  "name": "Aftab Ali",
   "board": "canada",
   "aliases": [
    {
@@ -753,16 +753,22 @@
   ]
  },
  {
-  "name": "Akash",
+  "name": "Akash Pol",
   "board": "canada",
   "aliases": [
    {
     "name": "Akash Pol"
+   },
+   {
+    "name": "Akash",
+    "boards": [
+     "canada"
+    ]
    }
   ]
  },
  {
-  "name": "Arsalan Kapri",
+  "name": "Arsalan",
   "board": "canada",
   "aliases": [
    {
@@ -774,16 +780,22 @@
   ]
  },
  {
-  "name": "Ayaz",
+  "name": "Ayaz Baloch",
   "board": "canada",
   "aliases": [
    {
     "name": "Ayaz Baloch"
+   },
+   {
+    "name": "Ayaz",
+    "boards": [
+     "canada"
+    ]
    }
   ]
  },
  {
-  "name": "Chaitanya Deshpande",
+  "name": "Chaitanya",
   "board": "canada",
   "aliases": [
    {
@@ -795,7 +807,7 @@
   ]
  },
  {
-  "name": "Faizan",
+  "name": "Faizan Kapri",
   "board": "canada",
   "aliases": [
    {
@@ -813,7 +825,7 @@
   ]
  },
  {
-  "name": "Mansoor",
+  "name": "Mansoor Jan",
   "board": "canada",
   "aliases": [
    {
@@ -822,7 +834,7 @@
   ]
  },
  {
-  "name": "Ahsas Kapri",
+  "name": "Ahsas",
   "board": "canada",
   "aliases": [
    {
@@ -834,7 +846,7 @@
   ]
  },
  {
-  "name": "Shebin",
+  "name": "Shebin Johan",
   "board": "canada",
   "aliases": [
    {
@@ -855,11 +867,17 @@
   ]
  },
  {
-  "name": "Shahnawaz Ms",
+  "name": "Shanawaz Ms",
   "board": "canada",
   "aliases": [
    {
     "name": "Sahnavaz",
+    "boards": [
+     "canada"
+    ]
+   },
+   {
+    "name": "Shahnawaz Ms",
     "boards": [
      "canada"
     ]
@@ -1339,7 +1357,7 @@
   ]
  },
  {
-  "name": "Rubesh Jude Daniel",
+  "name": "Rubesh Jude",
   "board": "sri-lanka",
   "aliases": [
    {
@@ -1900,6 +1918,42 @@
   "aliases": [
    {
     "name": "Mohd Waseem"
+   }
+  ]
+ },
+ {
+  "name": "Asiri Oshanga Weerakoon",
+  "board": "sri-lanka",
+  "aliases": [
+   {
+    "name": "Asiri",
+    "boards": [
+     "sri-lanka"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Binara Udayanga",
+  "board": "sri-lanka",
+  "aliases": [
+   {
+    "name": "Binara",
+    "boards": [
+     "sri-lanka"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Virendra Peiris",
+  "board": "sri-lanka",
+  "aliases": [
+   {
+    "name": "Virendra",
+    "boards": [
+     "sri-lanka"
+    ]
    }
   ]
  }
