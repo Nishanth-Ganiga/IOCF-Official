@@ -37,6 +37,15 @@ export const TRANSFERS = [
   { name: 'Kaushik Kalita', from: 'South Africa', to: 'Bangladesh' },
   { name: 'Suleman Haider', from: 'Qatar', to: 'USA' },
   { name: 'Huzaifa Imran', from: 'Qatar', to: 'USA' },
+  // moves confirmed by the administrator
+  { name: 'Christy Royson', from: 'Nepal', to: 'Afghanistan' },
+  { name: 'Kashif Ramzan', from: 'Nepal', to: 'Afghanistan' },
+  { name: 'Farhan Mallick', from: 'Qatar', to: 'Afghanistan' },
+  { name: 'Malik Zubair', from: 'Qatar', to: 'Australia' },
+  { name: 'Toby Joseph', from: 'England', to: 'New Zealand' },
+  { name: 'Saubhagya Gupta', from: 'Australia', to: 'South Africa' },
+  { name: 'Anand Kumar', from: 'Australia', to: 'Mexico' },
+  // (the two Abhijiths, on England and on the UAE, are two different people)
   { name: 'Marami', from: 'Netherlands', to: 'USA' },
   { name: 'Marami Ahmed', from: 'Netherlands', to: 'USA', into: 'Marami' },
   { name: 'Anas Asim', from: 'Qatar', to: 'Spain' }, // already on Spain's list; his Qatar entry is an earlier board

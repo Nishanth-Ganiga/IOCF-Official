@@ -1956,5 +1956,38 @@
     ]
    }
   ]
+ },
+ {
+  "name": "Muhammad Usman",
+  "board": "pakistan",
+  "aliases": [
+   {
+    "name": "Usman",
+    "boards": [
+     "pakistan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Muhammad Farhan",
+  "board": "pakistan",
+  "aliases": [
+   {
+    "name": "Farhan Mohammad"
+   }
+  ]
+ },
+ {
+  "name": "Sona Roy",
+  "board": "australia",
+  "aliases": [
+   {
+    "name": "Rima Naskar Sona"
+   },
+   {
+    "name": "Rima Roy"
+   }
+  ]
  }
 ]

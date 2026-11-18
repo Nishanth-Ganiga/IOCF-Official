@@ -1360,6 +1360,13 @@ console.log('\n— The private mirror sheet —');
   check('the formatting requests colour the banner and section bars, merge them across the tab, band every table, and set column widths', rc(boardPalette(BOARDS.find((x) => x.name === 'India')).banner).length >= 1 && reqs.some((r) => r.mergeCells) && reqs.filter((r) => r.addBanding).length >= 8 && reqs.some((r) => r.updateDimensionProperties?.properties?.pixelSize >= 100));
   check('a plain table tab gets a dark header, alternating rows and widths to fit; resetting clears old formats, merges and bands', (() => { const t = built.tabs.find((x) => x.name === 'Players'); const q = styleRequests(t, 3, valuesOf(t)); const rs = resetRequests(3, [11, 12]); return q.filter((r) => r.addBanding).length === 1 && q.some((r) => r.repeatCell) && q.filter((r) => r.updateDimensionProperties).length === t.header.length && rs.filter((r) => r.deleteBanding).length === 2 && rs.some((r) => r.unmergeCells) && rs.some((r) => r.repeatCell?.fields === 'userEnteredFormat'); })());
 
+  // `npm run player`: what a player gets, and similar names that are not counted
+  const { explainPlayer } = await import('../lib/playerLines.mjs');
+  const F = ['name', 'team', 'matches', 'runs', 'wickets'];
+  const pin = { dataset: { players: [{ id: 'spain-1', boardId: 'spain', name: 'Hamid Sahito' }] }, aliases: [], tournamentStats: { fields: F, tournaments: {} }, tournamentOverrides: {}, leagueStats: { fields: F, leagues: { psl: { rows: [['Hamid Sahito', 'KARACHI KINGS', 7, 100, 5]] } } },
+    seriesStats: [{ key: 'rec-a', fields: F, rows: [['Hamid Sahito', 'PAKISTAN', 3, 40, 2], ['Hamid Sahitoo', 'PAKISTAN', 2, 30, 1], ['Someone Else', 'INDIA', 1, 5, 0]] }] };
+  const ex = explainPlayer(pin, 'Hamid Sahito');
+  check('the player tool counts a player\'s exact lines per scope (series, franchise, board, overall) and lists a similar misspelt name that is NOT counted', ex.totals.series.runs === 40 && ex.totals.franchise.runs === 100 && ex.totals.board.wickets === 2 && ex.totals.overall.runs === 140 && ex.similar.length === 1 && ex.similar[0].line.name === 'Hamid Sahitoo');
   // a pretend Google: records every call
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
   const key = JSON.stringify({ client_email: 'mirror@iocf.iam.gserviceaccount.com', private_key: privateKey });
