@@ -5,6 +5,7 @@ import type { ProfileId } from '../data/portfolio';
 import { useSmoothScroll } from '../hooks/smoothScroll';
 import AdminDashboard from './command-center/AdminDashboard';
 import AdminCredits from './command-center/AdminCredits';
+import AdminIocf2 from './command-center/Iocf2Admin';
 import AdminStadiums from './command-center/AdminStadiums';
 import AdminSeries from './command-center/AdminSeries';
 import AdminTournamentStats from './command-center/AdminTournamentStats';
@@ -96,6 +97,8 @@ export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: 
         <AdminSeries nav={navigate} />
       ) : parts[0] === 'stadiums' ? (
         <AdminStadiums nav={navigate} />
+      ) : parts[0] === 'iocf2' ? (
+        <AdminIocf2 nav={navigate} tab={parts[1]} param={parts[2]} />
       ) : parts[0] === 'accounts' ? (
         <BoardAccounts focus={parts[1]} nav={navigate} />
       ) : (
@@ -107,7 +110,7 @@ export default function IocfCommandCenter({ profileId, onSwitch }: { profileId: 
     body = <BoardView slug={other ? (parts[1] ?? '') : (user.board ?? '')} moduleId={other ? parts[2] : parts[0]} sub={other ? parts[3] : parts[1]} user={user} nav={navigate} />;
   }
 
-  const showBar = user && !(user.role === 'admin' && parts[0] !== 'accounts' && parts[0] !== 'series' && parts[0] !== 'stadiums' && parts[0] !== 'credits' && parts[0] !== 'tournaments' && !(parts[0] === 'board' && parts[1]));
+  const showBar = user && !(user.role === 'admin' && parts[0] !== 'accounts' && parts[0] !== 'series' && parts[0] !== 'stadiums' && parts[0] !== 'iocf2' && parts[0] !== 'credits' && parts[0] !== 'tournaments' && !(parts[0] === 'board' && parts[1]));
   return (
     <>
       <IocfHeader profileId={profileId} onSwitch={onSwitch} go={go} links={links} searchable={links} />

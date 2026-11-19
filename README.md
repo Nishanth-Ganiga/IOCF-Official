@@ -95,6 +95,16 @@ Updating it:
 - on demand: **Command Center → Backup Sheet → Update now**;
 - from a terminal: `npm run mirror` (`-- --dry-run` shows what would be written without a Google key; `-- --csv <folder>` also saves every tab as a CSV).
 
+## IOCF 2.0 – Official Player Salary Program (PSP 2027)
+
+A section of the Command Center (admin: **IOCF 2.0**; board: the **IOCF 2.0** module). Starting month: January 2027.
+
+- **Admin** (Overview · Players Salary · Council & Board Assignment · Monthly Rankings · Salary Requests · Salary Records · Salary Settings): enables salary months (nothing can be submitted until the month is enabled), seats boards in the four councils by hand (never automatic), ranks each council's boards for a month and publishes the rankings (the board's allocation is the official funding of that council and rank), sets the salary distribution, reviews each board's request and approves or declines it, and sees every verified salary record.
+- **Board chairman** (Players Salary · Monthly Salary History · Player Salary Records): sees the council, rank and allocation, chooses players in the six categories, sees the automatically calculated salaries, and submits to IOCF. A declined request is corrected and resubmitted (a new version; the old one is kept).
+- **Money**: whole credits only. Council funding is the official table (1.20 crore a month, 14.40 crore a year) and cannot be edited by a board. IOCF has not set salaries per category, so there are none in the code: the administrator enters the **share of the allocation each category gets (it must total 100%)** in Salary Settings; players of a category share its part equally in multiples of 100; the rounding balance (and the part of a category with no players) goes to the Special Contract player so the whole allocation is used. Boards cannot submit until this is configured.
+- **Approval** credits virtual salaries: one transaction and one verified record per player, each inserted once under a fixed reference (`PSP-202701-<board>-<player>`), so repeating the approval never credits twice, and approved records are never changed. Board Credits (the sheet) are not touched.
+- **Data**: seven tables, `server/command/psp.sql` (also in `schema.sql`). Run it once in the Supabase SQL Editor. The rules are in `src/data/commandCenter/psp.mjs` (shared by server and browser), the server in `server/command/pspRoutes.mjs`.
+
 ## Player statistics (CSV exports)
 
 Per-player statistics come from STUMPS scorer exports kept in `All Assests/`:

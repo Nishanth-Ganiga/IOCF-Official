@@ -42,6 +42,13 @@
   "icon": "stadium"
  },
  {
+  "id": "iocf2",
+  "title": "IOCF 2.0",
+  "description": "The Official Player Salary Program: your monthly allocation, player salaries and verified salary history.",
+  "status": "active",
+  "icon": "credits"
+ },
+ {
   "id": "reports",
   "title": "Reports & Documents",
   "description": "Download official reports and board documents.",

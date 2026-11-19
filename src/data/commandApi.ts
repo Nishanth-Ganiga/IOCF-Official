@@ -53,7 +53,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
-export type DashboardInfo = { board: string; preview: boolean; chairmanName: string | null; modules: string[]; /** Series invitations waiting for this board. */ invitations: number };
+export type DashboardInfo = { board: string; preview: boolean; chairmanName: string | null; modules: string[]; /** Series invitations waiting for this board. */ invitations: number; /** IOCF 2.0 salary months waiting for this board to submit. */ salaryActions?: number };
 
 /** One Build a Stadium request (the level and the cost are always the server's: level 3, ₹30,000). */
 export type StadiumRequest = {
@@ -85,6 +85,43 @@ export type StadiumsInfo = {
 };
 export type AdminStadiums = { level: number; cost: number; pending: StadiumRequest[]; recent: StadiumRequest[] };
 
+/* ---------- IOCF 2.0: Player Salary Program ---------- */
+export type PspSchedule = { announce: string; submitFrom: string; submitUntil: string; verifyFrom: string; verifyUntil: string; deadlineAt: number };
+export type PspMonth = {
+  key: string; label: string; year: number; month: number; status: string; statusLabel: string; enabled: boolean; submissionOpen: boolean; activatedBy: string | null; activatedAt: number | null;
+  deadlineAt: number; deadlineMoved: boolean; note: string | null; rankingsPublished: boolean; rankingsPublishedAt: number | null; schedule: PspSchedule;
+};
+export type PspLine = { category: string; categoryLabel?: string; key: string; name?: string; designation?: string | null; umpire?: boolean; salary: number | null };
+export type PspRequest = {
+  id: string; month: string; monthLabel: string; board: string; boardName?: string; version: number; status: string; statusLabel: string; council: string | null; rank: number | null; allocation: number; total: number;
+  remaining: number; late: boolean; players: number; lines: PspLine[]; createdAt: number; submittedAt: number | null; submittedBy: string | null; reviewedAt: number | null; decidedAt: number | null; decidedBy: string | null;
+  reason: string | null; creditedAt: number | null;
+};
+export type PspRequestDetail = PspRequest & {
+  checks: { problems: string[]; umpireVerification: { name: string; category: string; umpire: boolean }[]; specialContractUmpire: boolean; eliteHasUmpire: boolean; officials: { name: string; designation: string; category: string }[]; multiplesOf100: boolean; totalMatchesAllocation: boolean; allRegistered: boolean };
+  breakdown: { category: string; weightBp: number; pool: number; players: number; share: number; leftover: number }[];
+  categoryTotals: { category: string; label: string; players: number; total: number }[];
+  versions: { id: string; version: number; status: string; statusLabel: string; submittedAt: number | null; decidedAt: number | null; reason: string | null }[];
+};
+export type PspRecord = { id: string; month: string; monthLabel: string; year: number; board: string; boardName: string; playerKey: string; player: string; designation: string | null; category: string; categoryLabel: string; salary: number; status: string; creditedAt: number; reference: string };
+export type PspOverview = {
+  year: number; month: string | null; years: number[]; monthlyFunding: number; annualFunding: number; assignedBoards: number; totalBoards: number; publishedMonths: number; boardsWithRankings: number; awaiting: number; submitted: number;
+  underReview: number; approved: number; rejected: number; credited: number; drafts: number; totalAllocated: number; totalDistributed: number; configComplete: boolean;
+  councils: { id: string; name: string; color: string; assigned: number; ranks: number; monthlyFunding: number; allocated: number; distributed: number; submitted: number; credited: number }[];
+  boards: { month: string; monthLabel: string; board: string; boardName: string; council: string; councilId: string; rank: number; funding: number; status: string; statusLabel: string; total: number; late: boolean }[];
+};
+export type PspBoardMonth = {
+  month: PspMonth; board: string; boardName: string; council: string | null; rank: number | null; allocation: number | null; configComplete: boolean; configProblem: string | null;
+  weights: Record<string, number> | null; state: { status: string | null; canEdit: boolean; code: string | null; message: string | null };
+  roster: { key: string; name: string; umpire: boolean; designation: string | null }[]; categories: { id: string; label: string; max: number | null }[]; request: PspRequest | null;
+  previous: { id: string; version: number; status: string; statusLabel: string; reason: string | null; decidedAt: number | null }[];
+};
+export type PspBoardList = {
+  board: string; boardName: string; council: string | null; configComplete: boolean; configProblem: string | null; canAct: boolean;
+  months: (PspMonth & { council: string | null; rank: number | null; allocation: number | null; request: { id: string; version: number; status: string; statusLabel: string; total: number; reason: string | null; submittedAt: number | null; decidedAt: number | null } | null })[];
+};
+export type PspPlayerRecords = { key: string; name: string; designation: string | null; umpire: boolean; records: PspRecord[]; verifiedMonths: number; consecutive: number; best: number; topClassReady: boolean };
+
 export type Overview = {
   totalBoards: number;
   totalAccounts: number;
@@ -94,6 +131,8 @@ export type Overview = {
   availableModules: number;
   /** Build a Stadium requests waiting for a decision. */
   pendingStadiumRequests?: number;
+  /** IOCF 2.0 salary requests waiting for a decision. */
+  pendingSalaryRequests?: number;
   /** Is the private mirror sheet set up on the server? */
   mirrorConfigured?: boolean;
   recentActivity: ActivityEntry[];
@@ -257,6 +296,29 @@ export const api = {
   withdrawStadium: (slug: string, id: string) => request<{ ok: true }>('DELETE', `/boards/${encodeURIComponent(slug)}/stadiums/${encodeURIComponent(id)}`),
   dismissStadium: (slug: string, id: string) => request<{ ok: true }>('POST', `/boards/${encodeURIComponent(slug)}/stadiums/${encodeURIComponent(id)}/dismiss`),
   mirrorNow: () => request<{ ok: true; tabs: number; rows: number; warnings: string[] }>('POST', '/admin/mirror'),
+  pspMonths: (year?: number) => request<{ years: number[]; year: number; statuses: { id: string; label: string }[]; months: (PspMonth & { requests: number; credited: number })[] }>('GET', `/admin/psp/months${year ? `?year=${year}` : ''}`),
+  pspAddYear: (year: number) => request<{ ok: true; year: number; added: number }>('POST', '/admin/psp/years', { year }),
+  pspEnableMonth: (key: string) => request<{ month: PspMonth }>('POST', `/admin/psp/months/${encodeURIComponent(key)}/enable`),
+  pspSetMonth: (key: string, body: { status?: string; deadlineAt?: number | null; note?: string }) => request<{ month: PspMonth }>('PUT', `/admin/psp/months/${encodeURIComponent(key)}`, body),
+  pspCouncils: () => request<{ councils: { id: string; name: string; color: string; ranks: number; monthlyFunding: number; seats: { seat: number; board: string | null; boardName: string | null }[] }[]; boards: { slug: string; name: string; council: string | null; seat: number | null }[]; monthlyFunding: number; annualFunding: number }>('GET', '/admin/psp/councils'),
+  pspSetSeat: (council: string, seat: number, board: string | null) => request<{ ok: true }>('PUT', `/admin/psp/councils/${council}/${seat}`, { board }),
+  pspRankings: (month: string) => request<{ month: PspMonth; councils: { id: string; name: string; color: string; boards: { slug: string; name: string }[]; ranks: { rank: number; funding: number; board: string | null; boardName: string | null }[] }[]; assignedBoards: number; rankedBoards: number; missing: string[]; complete: boolean; totalFunding: number }>('GET', `/admin/psp/rankings/${encodeURIComponent(month)}`),
+  pspSetRank: (month: string, council: string, rank: number, board: string | null, reason?: string) => request<{ ok: true; credits?: number }>('PUT', `/admin/psp/rankings/${encodeURIComponent(month)}/${council}/${rank}`, { board, reason }),
+  pspPublish: (month: string) => request<{ month: PspMonth }>('POST', `/admin/psp/rankings/${encodeURIComponent(month)}/publish`),
+  pspSettings: () => request<{ weights: Record<string, number> | null; percent: Record<string, number> | null; problem: string | null; complete: boolean; categories: { id: string; label: string; max: number | null }[]; councilFunding: { id: string; name: string; monthly: number }[]; monthlyFunding: number; annualFunding: number }>('GET', '/admin/psp/settings'),
+  pspSaveSettings: (percent: Record<string, string | number>) => request<{ ok: true }>('PUT', '/admin/psp/settings', { percent }),
+  pspRequests: (q: { month?: string; status?: string } = {}) => request<{ requests: PspRequest[] }>('GET', `/admin/psp/requests?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()}`).then((r) => r.requests),
+  pspRequest: (id: string) => request<{ request: PspRequestDetail }>('GET', `/admin/psp/requests/${encodeURIComponent(id)}`).then((r) => r.request),
+  pspReview: (id: string) => request<{ ok: true }>('POST', `/admin/psp/requests/${encodeURIComponent(id)}/review`),
+  pspApprove: (id: string) => request<{ request: PspRequest; already?: boolean }>('POST', `/admin/psp/requests/${encodeURIComponent(id)}/approve`),
+  pspDecline: (id: string, reason: string) => request<{ request: PspRequest }>('POST', `/admin/psp/requests/${encodeURIComponent(id)}/decline`, { reason }),
+  pspRecords: (q: { year?: string; month?: string; board?: string; q?: string } = {}) => request<{ records: PspRecord[]; total: number }>('GET', `/admin/psp/records?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()}`),
+  pspOverview: (year?: number, month?: string) => request<PspOverview>('GET', `/admin/psp/overview?${new URLSearchParams(Object.entries({ year: year ? String(year) : '', month: month ?? '' }).filter(([, v]) => v) as [string, string][]).toString()}`),
+  pspBoard: (slug: string) => request<PspBoardList>('GET', `/boards/${encodeURIComponent(slug)}/psp`),
+  pspBoardMonth: (slug: string, key: string) => request<PspBoardMonth>('GET', `/boards/${encodeURIComponent(slug)}/psp/months/${encodeURIComponent(key)}`),
+  pspSaveDraft: (slug: string, key: string, lines: { category: string; key: string }[]) => request<{ request: PspRequest }>('PUT', `/boards/${encodeURIComponent(slug)}/psp/months/${encodeURIComponent(key)}/draft`, { lines }),
+  pspSubmit: (slug: string, key: string, lines: { category: string; key: string }[]) => request<{ request: PspRequest }>('POST', `/boards/${encodeURIComponent(slug)}/psp/months/${encodeURIComponent(key)}/submit`, { lines }),
+  pspBoardRecords: (slug: string) => request<{ board: string; boardName: string; topClassMonths: number; records: number; players: PspPlayerRecords[] }>('GET', `/boards/${encodeURIComponent(slug)}/psp/records`),
   adminStadiums: () => request<AdminStadiums>('GET', '/admin/stadiums'),
   acceptStadium: (id: string) => request<{ request: StadiumRequest }>('POST', `/admin/stadiums/${encodeURIComponent(id)}/accept`),
   declineStadium: (id: string, reason?: string) => request<{ request: StadiumRequest }>('POST', `/admin/stadiums/${encodeURIComponent(id)}/decline`, { reason }),

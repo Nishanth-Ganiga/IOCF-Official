@@ -51,6 +51,7 @@ import { movesOf, updateState } from '../../src/data/commandCenter/rankMoves.mjs
 import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
 import { mirrorConfigured, runMirror } from '../mirror/mirror.mjs';
+import { handlePsp, pspAttention } from './pspRoutes.mjs';
 import { MAX_PENDING, STADIUM_COST, STADIUM_LEVEL, countryOf, newRequest, noticeFor, stadiumLists, takenNames, toApi as stadiumToApi, validateRequest } from './stadiums.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
@@ -99,6 +100,19 @@ const ACTIONS = {
   stadium_accepted: 'Stadium request accepted',
   stadium_declined: 'Stadium request declined',
   mirror_written: 'Backup sheet updated',
+  psp_year_added: 'Salary year added',
+  psp_month_enabled: 'Salary month enabled',
+  psp_month_changed: 'Salary month changed',
+  psp_seat_assigned: 'Council position assigned',
+  psp_seat_cleared: 'Council position cleared',
+  psp_rank_set: 'Monthly rank set',
+  psp_rank_cleared: 'Monthly rank cleared',
+  psp_rankings_published: 'Monthly rankings published',
+  psp_settings_changed: 'Salary settings changed',
+  psp_salary_submitted: 'Player salary submitted',
+  psp_review_started: 'Salary request review started',
+  psp_request_approved: 'Salary request approved and credited',
+  psp_request_declined: 'Salary request declined',
 };
 export const actionLabel = (a) => ACTIONS[a] ?? a;
 
@@ -171,13 +185,20 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
     return MODULES.filter((m) => m.status === 'active' && overrides.find((o) => o.module_id === m.id)?.enabled !== false).map((m) => m.id);
   };
 
+  // the IOCF sheet's dataset (boards, players, umpires) for the salary program, kept for a minute
+  let datasetCache = null;
+  const loadDataset = async () => {
+    if (datasetCache && now() - datasetCache.at < 60_000) return datasetCache.dataset;
+    const dataset = (await loadRankInput()).dataset;
+    datasetCache = { at: now(), dataset };
+    return dataset;
+  };
+
   /** Every stadium list the series rules use: the old sheet's stadiums plus every accepted request. */
   const stadiumsNow = async () => {
     try {
       return stadiumLists(await store.stadiumList());
     } catch (err) {
-      if (err?.code === 'mirror_no_access') return fail(502, 'mirror_no_access', err.message);
-      if (err?.code === 'mirror_not_configured') return fail(503, 'mirror_not_configured', err.message);
       if (err?.code === 'stadiums_missing') return STADIUMS; // the table is not set up yet: the old list alone
       throw err;
     }
@@ -334,6 +355,12 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         return json(200, { key: entry.key, name: entry.name, title: entry.title, uploadedAt: entry.uploaded_at, players: decodeStats(entry, BOARDS) });
       }
 
+      // IOCF 2.0: the Player Salary Program (server/command/pspRoutes.mjs)
+      if ((a === 'admin' && b === 'psp') || (a === 'boards' && b && c === 'psp')) {
+        const out = await handlePsp({ req, who, store, BOARDS, loadDataset, json, fail, audit, now });
+        if (out) return out;
+      }
+
       if (a === 'boards' && b && c === 'dashboard' && method === 'GET') {
         const board = BOARDS.find((x) => x.slug === b);
         if (!board) return fail(404, 'not_found', 'Board not found.');
@@ -345,6 +372,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           preview: who.role === 'admin',
           chairmanName: account?.chairman_name ?? null,
           modules: await enabledModules(board.slug),
+          // IOCF 2.0: salary months waiting for this board's submission (a badge on the module)
+          salaryActions: await pspAttention(store, { board: board.slug }),
           // series invitations waiting for this board (shown as a badge); 0 if the series table is not set up yet
           invitations: await (async () => {
             try {
@@ -543,6 +572,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             boardsWithoutAccount: BOARDS.length - boardAccounts.length,
             availableModules: MODULES.filter((m) => m.status === 'active').length,
             mirrorConfigured: mirrorConfigured(env),
+            pendingSalaryRequests: await pspAttention(store),
             pendingStadiumRequests: await store.stadiumList().then((rows) => rows.filter((x) => x.status === 'pending').length, () => 0),
             recentActivity: recent.map((r) => ({ at: r.at, action: r.action, label: actionLabel(r.action), actor: r.actor, target: r.target })),
           });
@@ -829,6 +859,9 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
       if (err?.code === 'stats_missing') return fail(503, 'stats_missing', 'Series statistics are not set up yet: the statistics tables have not been created in Supabase.');
       if (err?.code === 'credits_outdated') return fail(503, 'credits_outdated', 'Board Credits needs a database update: run the latest credits SQL in Supabase.');
       if (err?.code === 'credits_missing') return fail(503, 'credits_missing', 'Board Credits is not set up yet: the credits table has not been created in Supabase.');
+      if (err?.code === 'psp_missing') return fail(503, 'psp_missing', 'IOCF 2.0 is not set up yet: the salary program tables have not been created in Supabase (run psp.sql).');
+      if (err?.code === 'mirror_no_access') return fail(502, 'mirror_no_access', err.message);
+      if (err?.code === 'mirror_not_configured') return fail(503, 'mirror_not_configured', err.message);
       if (err?.code === 'stadiums_missing') return fail(503, 'stadiums_missing', 'Build a Stadium is not set up yet: the stadium table has not been created in Supabase (run stadiums.sql).');
       if (err?.code === 'series_missing') return fail(503, 'series_missing', 'Series Announcement is not set up yet: the series table has not been created in Supabase.');
       if (err?.code === 'unsupported') return fail(501, 'unsupported', err.message);

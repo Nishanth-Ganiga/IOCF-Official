@@ -6,6 +6,7 @@ import { store } from '../../data/store';
 import { EASE } from '../fx';
 import Mascot, { BoardFlag, ModuleIcon } from './Mascot';
 import SceneBackground from './SceneBackground';
+import BoardIocf2 from './Iocf2Board';
 import BuildStadium from './BuildStadium';
 import CreditsPanel from './CreditsPanel';
 import FixturesCalendar from './FixturesCalendar';
@@ -62,6 +63,7 @@ export default function BoardView({ slug, moduleId, sub, user, nav }: { slug: st
           <ModulePage theme={theme} module={module} enabled={state.data.modules.includes(moduleId)} onBack={() => nav(...base)}>
             {module?.id === 'credits' && <CreditsPanel theme={theme} />}
             {module?.id === 'stadiums' && <BuildStadium theme={theme} />}
+            {module?.id === 'iocf2' && <BoardIocf2 theme={theme} sub={sub} go={(next) => nav(...base, moduleId, ...(next ? [next] : []))} />}
             {module?.id === 'fixtures' && <FixturesCalendar theme={theme} />}
             {module?.id === 'series-announcement' && <SeriesAnnouncement theme={theme} sub={sub} go={(next) => nav(...base, moduleId, ...(next ? [next] : []))} />}
           </ModulePage>
@@ -126,7 +128,7 @@ export function Dashboard({ theme, data, chairman, onOpen }: { theme: BoardTheme
       <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {MODULES.map((m) => (
           <li key={m.id}>
-            <ModuleTile theme={theme} m={m} enabled={data.modules.includes(m.id)} waiting={m.id === 'series-announcement' ? data.invitations : 0} onOpen={() => onOpen(m.id)} />
+            <ModuleTile theme={theme} m={m} enabled={data.modules.includes(m.id)} waiting={m.id === 'series-announcement' ? data.invitations : m.id === 'iocf2' ? (data.salaryActions ?? 0) : 0} onOpen={() => onOpen(m.id)} />
           </li>
         ))}
       </ul>
@@ -137,7 +139,7 @@ export function Dashboard({ theme, data, chairman, onOpen }: { theme: BoardTheme
 function ModuleTile({ theme, m, enabled, waiting = 0, onOpen }: { theme: BoardTheme; m: ModuleDef; enabled: boolean; waiting?: number; onOpen: () => void }) {
   const pal = paletteOf(theme);
   const active = m.status === 'active' && enabled;
-  const badge = active && waiting > 0 ? `${waiting} WAITING` : active ? 'ACTIVE' : m.status === 'active' ? 'NOT ENABLED' : 'COMING SOON';
+  const badge = active && waiting > 0 ? `${waiting} ${m.id === 'iocf2' ? 'TO SUBMIT' : 'WAITING'}` : active ? 'ACTIVE' : m.status === 'active' ? 'NOT ENABLED' : 'COMING SOON';
   const body = (
     <>
       <span className="flex items-start justify-between gap-3">

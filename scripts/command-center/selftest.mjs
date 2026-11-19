@@ -138,7 +138,7 @@ check('a wrong password on an inactive account does NOT reveal it is inactive', 
 check('the administrator account cannot be deactivated', (await call('PATCH', `admin/accounts/${admin.accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } })).status === 400);
 check('admin reactivates India', (await call('PATCH', `admin/accounts/${cred('India').accountId}`, { cookie: adm.cookie, body: { status: 'active' } })).status === 200 && (await login('board', cred('India'))).r.status === 200);
 const ov = (await call('GET', 'admin/overview', { cookie: adm.cookie })).body;
-check('overview counts are right', ov.totalBoards === 25 && ov.totalAccounts === 26 && ov.activeBoardAccounts === 25 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 4);
+check('overview counts are right', ov.totalBoards === 25 && ov.totalAccounts === 26 && ov.activeBoardAccounts === 25 && ov.inactiveBoardAccounts === 0 && ov.availableModules === 5);
 await call('PATCH', `admin/accounts/${cred('Spain').accountId}`, { cookie: adm.cookie, body: { status: 'inactive' } });
 check('overview counts inactive boards', (await call('GET', 'admin/overview', { cookie: adm.cookie })).body.inactiveBoardAccounts === 1);
 const list = (await call('GET', 'admin/accounts', { cookie: adm.cookie })).body;
@@ -188,10 +188,10 @@ check('the account list now shows Japan as active and the others as having no lo
 console.log('\n— 7/8. modules —');
 const nz2 = await login('board', cred('New Zealand'));
 const dash = await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie });
-check('Series Announcement, Fixtures & Scheduling, Board Credits and Build a Stadium are the active modules', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement,fixtures,credits,stadiums' && dash.body.modules.join() === 'series-announcement,fixtures,credits,stadiums');
+check('Series Announcement, Fixtures & Scheduling, Board Credits, Build a Stadium and IOCF 2.0 are the active modules', MODULES.filter((m) => m.status === 'active').map((m) => m.id).join() === 'series-announcement,fixtures,credits,stadiums,iocf2' && dash.body.modules.join() === 'series-announcement,fixtures,credits,stadiums,iocf2');
 check('coming-soon modules cannot be switched on', (await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'squads', enabled: true } })).status === 400);
 await call('PUT', 'admin/boards/new-zealand/modules', { cookie: adm.cookie, body: { moduleId: 'series-announcement', enabled: false } });
-check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.join() === 'fixtures,credits,stadiums' && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 4);
+check('admin can switch a module off for one board only', (await call('GET', 'boards/new-zealand/dashboard', { cookie: nz2.cookie })).body.modules.join() === 'fixtures,credits,stadiums,iocf2' && (await call('GET', 'boards/india/dashboard', { cookie: (await login('board', cred('India'))).cookie })).body.modules.length === 5);
 
 console.log('\n— 10. password reset —');
 const before = cred('Pakistan');
@@ -334,7 +334,7 @@ check('admin table: the imported admin can sign in, and an e-mail style user id 
 const sqlAccounts = [...(await store.list())];
 sqlAccounts[3] = { ...sqlAccounts[3], chairman_name: "Pat O'Brien; drop table x; --" };
 const setupSql = buildSetupSql({ accounts: sqlAccounts, schemaSql: fs.readFileSync(path.join(process.cwd(), 'server/command/schema.sql'), 'utf8') });
-check('setup SQL: creates the 10 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 10 && (setupSql.match(/enable row level security/g) ?? []).length === 10);
+check('setup SQL: creates the 17 tables with Row Level Security on', (setupSql.match(/create table if not exists/g) ?? []).length === 17 && (setupSql.match(/enable row level security/g) ?? []).length === 17);
 check('setup SQL: drops only the four command_* tables', /drop table if exists public\.command_rate_limits, public\.command_audit_log, public\.command_board_modules, public\.command_accounts cascade;/.test(setupSql) && (setupSql.match(/^drop table/gm) ?? []).length === 1);
 check('setup SQL: has all 26 accounts and 25 module rows', (setupSql.match(/'IOCF-(ADM|BRD)-\d{3}'/g) ?? []).length === 26 && (setupSql.match(/'series-announcement', true\)/g) ?? []).length === 25);
 check('setup SQL: quotes in names cannot break out of the string', setupSql.includes("'Pat O''Brien; drop table x; --'") && (setupSql.match(/^drop table/gm) ?? []).length === 1 && !/^\s*(drop|delete|truncate)\b.*\bx\b/im.test(setupSql));
@@ -458,7 +458,7 @@ check('the admin overview works on the single table', ot_ov.totalBoards === 25 &
 const ot_setT = await ot_tcall('PUT', 'admin/boards/portugal/account', { cookie: ot_adm4.cookie, body: { username: 'portugal.boss', password: 'Admin-Set-1' } });
 check('Board Accounts (admin tile) can set a login in the table', ot_setT.status === 200 && (await ot_tlogin('board', 'portugal.boss', 'Admin-Set-1')).r.status === 200);
 check('module switches say they need the full setup instead of failing silently', (await ot_tcall('PUT', 'admin/boards/portugal/modules', { cookie: ot_adm4.cookie, body: { moduleId: 'series-announcement', enabled: false } })).status === 501);
-check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement,fixtures,credits,stadiums');
+check('board dashboards still load their modules', (await ot_tcall('GET', 'boards/portugal/dashboard', { cookie: ot_adm4.cookie })).body.modules.join() === 'series-announcement,fixtures,credits,stadiums,iocf2');
 
 // nothing configured
 const ot_empty = ot_makeSupabase({});
@@ -1440,6 +1440,244 @@ console.log('\n— The private mirror sheet —');
   const notSet = await pcall('POST', 'admin/mirror', { cookie: plainAdmin });
   const ovMirror = await mcall('GET', 'admin/overview', { cookie: mcookie });
   check('the overview says whether the mirror is set up, and the button is refused cleanly when it is not', ovMirror.body.mirrorConfigured === true && notSet.status === 503 && notSet.body.error.code === 'mirror_not_configured', JSON.stringify([ovMirror.status, ovMirror.body.mirrorConfigured, notSet.status, notSet.body]).slice(0, 200));
+}
+
+console.log('\n— IOCF 2.0: Player Salary Program (PSP 2027) —');
+{
+  const psp = await import('../../src/data/commandCenter/psp.mjs');
+  const { rosterOf } = await import('../../server/command/pspRoutes.mjs');
+  const { hashPassword } = await import('../../server/command/crypto.mjs');
+  const snap = JSON.parse(fs.readFileSync('src/data/snapshot.json', 'utf8'));
+
+  // ---- the official numbers and the pure rules
+  const sumLakh = (c) => psp.FUNDING_LAKH[c].reduce((n, l) => n + l, 0);
+  check('the official funding table: 7 / 6 / 6 / 6 ranks, 52.5 + 33 + 22.5 + 12 = 120 lakh a month (1.20 crore), 14.40 crore a year, in whole credits', psp.COUNCILS.map((c) => c.ranks).join() === '7,6,6,6' && [sumLakh('champions'), sumLakh('established'), sumLakh('challengers'), sumLakh('origins')].join() === '52.5,33,22.5,12' && psp.MONTHLY_FUNDING === 12000000 && psp.ANNUAL_FUNDING === 144000000 && psp.fundingFor('champions', 1) === 1200000 && psp.fundingFor('champions', 7) === 400000 && psp.fundingFor('origins', 4) === 180000 && psp.fundingFor('challengers', 2) === 450000 && psp.fundingFor('established', 7) === null);
+  check('the categories are in the official priority order with their limits (1, 2, 4, 4, 8, the rest)', psp.CATEGORIES.map((c) => `${c.id}:${c.max}`).join() === 'special_contract:1,elite:2,international:4,professional:4,developing:8,emerging:null');
+  const W = { special_contract: 2000, elite: 2000, international: 2000, professional: 1500, developing: 1500, emerging: 1000 };
+  check('weights must total exactly 100% (in hundredths of a percent), with a percentage for every category', psp.weightsProblem(W) === null && psp.weightsProblem({ ...W, emerging: 900 }) !== null && psp.weightsProblem(null) !== null && psp.weightsProblem({ ...W, special_contract: 0, emerging: 3000 }) !== null && psp.percentToBp('12.5') === 1250 && psp.percentToBp('12.345') === null && psp.percentToBp('101') === null);
+  const fake = (cat, n, from = 0) => Array.from({ length: n }, (_, i) => ({ category: cat, key: `${cat}${from + i}` }));
+  const lines26 = [...fake('special_contract', 1), ...fake('elite', 2), ...fake('international', 4), ...fake('professional', 4), ...fake('developing', 8), ...fake('emerging', 7)];
+  const calc = psp.calculate({ budget: 1200000, weights: W, lines: lines26 });
+  const sal = (cat) => calc.lines.filter((l) => l.category === cat).map((l) => l.salary);
+  check('the calculation: category parts of the budget, equal shares in multiples of 100, the rounding balance on the Special Contract, total = the whole budget, remaining 0', calc.ok && sal('special_contract')[0] === 240300 && sal('elite').join() === '120000,120000' && sal('international').every((x) => x === 60000) && sal('professional').every((x) => x === 45000) && sal('developing').every((x) => x === 22500) && sal('emerging').every((x) => x === 17100) && calc.remainder === 300 && calc.total === 1200000 && calc.remaining === 0 && calc.lines.every((l) => l.salary % 100 === 0));
+  const odd = psp.calculate({ budget: 1198900 + 1100, weights: W, lines: lines26 });
+  check('the rounding example: whatever is left after the shares goes to the Special Contract player, so the full allocation is used', odd.ok && odd.total === 1200000 && odd.lines.every((l) => l.salary % 100 === 0));
+  check('the calculation refuses an unconfigured setting, a budget that is not a multiple of 100, and a selection with no Special Contract player', !psp.calculate({ budget: 1200000, weights: null, lines: lines26 }).ok && !psp.calculate({ budget: 1200050, weights: W, lines: lines26 }).ok && !psp.calculate({ budget: 1200000, weights: W, lines: lines26.slice(1) }).ok);
+  const roster = [{ key: 'a', name: 'A', umpire: true }, { key: 'b', name: 'B', umpire: false }, { key: 'c', name: 'C', umpire: true }, { key: 'd', name: 'D', umpire: false }];
+  check('selection rules: only registered players, no duplicates, category limits, an umpire as Special Contract, and (on submit) an umpire among the Elite', selectionProblems2());
+  function selectionProblems2() {
+    const sp = psp.selectionProblems;
+    return sp([{ category: 'special_contract', key: 'a' }, { category: 'elite', key: 'c' }, { category: 'elite', key: 'b' }], roster, { complete: true }).length === 0
+      && sp([{ category: 'special_contract', key: 'b' }], roster).length === 1
+      && sp([{ category: 'special_contract', key: 'zzz' }], roster).length === 1
+      && sp([{ category: 'special_contract', key: 'a' }, { category: 'elite', key: 'a' }], roster).length === 1
+      && sp([{ category: 'special_contract', key: 'a' }, { category: 'special_contract', key: 'c' }], roster).length === 1
+      && sp([{ category: 'elite', key: 'a' }, { category: 'elite', key: 'c' }, { category: 'elite', key: 'b' }], roster).length === 1
+      && sp([{ category: 'special_contract', key: 'a' }, { category: 'elite', key: 'b' }, { category: 'elite', key: 'd' }], roster, { complete: true }).length === 1
+      && sp([{ category: 'elite', key: 'b' }], roster).length === 0 && sp([{ category: 'elite', key: 'b' }], roster, { complete: true }).length >= 1;
+  }
+  const mk = (...m) => psp.consecutiveMonths(m);
+  check('Top Class tracking: consecutive verified months (also across a year end), without granting anything', mk('2027-01', '2027-02', '2027-03').best === 3 && mk('2027-01', '2027-03').best === 1 && mk('2027-11', '2027-12', '2028-01').best === 3 && mk('2027-01', '2027-02', '2027-04').current === 1 && mk().best === 0 && psp.TOP_CLASS_MONTHS === 3);
+
+  // ---- the database layer: long tables are read in pages, credits are insert-only
+  const { KeyedRest } = await import('../../server/command/store.mjs');
+  const bigTable = Array.from({ length: 2500 }, (_, i) => ({ key: `k${String(i).padStart(5, '0')}` }));
+  const seen = [];
+  const fakeDb = async (url, init = {}) => {
+    seen.push({ url: String(url), method: init.method ?? 'GET', prefer: init.headers?.prefer });
+    const q = new URL(String(url));
+    const limit = Number(q.searchParams.get('limit') ?? 1000000);
+    const offset = Number(q.searchParams.get('offset') ?? 0);
+    const body = init.method === 'POST' ? '' : JSON.stringify(bigTable.slice(offset, offset + limit));
+    return { ok: true, status: 200, text: async () => body, json: async () => (body ? JSON.parse(body) : null) };
+  };
+  const kr = new KeyedRest({ url: 'https://x.supabase.co', serviceKey: 'sb_secret_x', fetchImpl: fakeDb, table: 'command_psp_records', missing: 'salary program', code: 'psp_missing' });
+  const everyRow = await kr.list();
+  await kr.insertMany([{ key: 'a' }]);
+  check('a long table is read page by page (Supabase returns at most 1000 rows a request), and salary rows are inserted without ever overwriting an existing one', everyRow.length === 2500 && seen.filter((c) => c.method === 'GET').length === 3 && seen.find((c) => c.method === 'POST').prefer.includes('ignore-duplicates'));
+
+  // ---- the server, end to end
+  const ps = new MemoryStore();
+  const mkAccount = async (id, role, slug, name, user, pass) => ps.create({ account_id: id, role, board_slug: slug, board_name: name, username: user, password_hash: await hashPassword(pass), status: 'active' });
+  await mkAccount('IOCF-ADM-001', 'admin', null, null, 'psp.admin', 'Psp-Admin-Pass-1');
+  await mkAccount('IOCF-BRD-901', 'board', 'pakistan', 'Pakistan', 'psp.pak', 'Psp-Pak-Pass-1');
+  await mkAccount('IOCF-BRD-902', 'board', 'india', 'India', 'psp.ind', 'Psp-Ind-Pass-1');
+  await mkAccount('IOCF-BRD-903', 'board', 'england', 'England', 'psp.eng', 'Psp-Eng-Pass-1');
+  let pclock = Date.UTC(2026, 11, 20, 8, 0, 0);
+  const ph = createHandler({ store: ps, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => pclock, rankInput: async () => ({ dataset: snap }) });
+  let pn = 0;
+  const pcall = (method, p, { body, cookie, query } = {}) => ph({ method, path: p.split('/').filter(Boolean).map(decodeURIComponent), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, query, ip: `6.6.${++pn % 250}.${pn % 250}` });
+  const plogin = async (role, user, pass) => `iocf_cc=${cookieOf(await pcall('POST', 'login', { body: { role, username: user, password: pass } }))}`;
+  const cA = await plogin('admin', 'psp.admin', 'Psp-Admin-Pass-1');
+  const cPak = await plogin('board', 'psp.pak', 'Psp-Pak-Pass-1');
+  const cInd = await plogin('board', 'psp.ind', 'Psp-Ind-Pass-1');
+  const cEng = await plogin('board', 'psp.eng', 'Psp-Eng-Pass-1');
+  const J = '2027-01';
+
+  // month activation
+  const bm = (await pcall('GET', 'boards/pakistan/psp', { cookie: cPak })).body;
+  const jan0 = bm.months.find((m) => m.key === J);
+  const detail0 = (await pcall('GET', `boards/pakistan/psp/months/${J}`, { cookie: cPak })).body;
+  check('January 2027 starts as Not Started: listed to the board but disabled, with the "not yet enabled" message, and a salary draft is refused', jan0 && jan0.status === 'not_started' && jan0.enabled === false && detail0.state.code === 'not_enabled' && /not yet enabled by IOCF Administration/.test(detail0.state.message) && (await pcall('PUT', `boards/pakistan/psp/months/${J}/draft`, { cookie: cPak, body: { lines: [] } })).status === 409 && (await pcall('POST', `boards/pakistan/psp/months/${J}/submit`, { cookie: cPak, body: { lines: [] } })).status === 409);
+  const adminMonths = (await pcall('GET', 'admin/psp/months', { cookie: cA, query: { year: '2027' } })).body;
+  check('the administrator sees all twelve months of 2027, all Not Started; years can be added without code changes', adminMonths.months.length === 12 && adminMonths.months.every((m) => m.status === 'not_started') && adminMonths.months[0].label === 'January 2027' && (await pcall('POST', 'admin/psp/years', { cookie: cA, body: { year: 2028 } })).status === 200 && (await pcall('GET', 'admin/psp/months', { cookie: cA, query: { year: '2028' } })).body.months[11].label === 'December 2028' && (await pcall('POST', 'admin/psp/years', { cookie: cA, body: { year: 1999 } })).status === 400);
+  check('a board cannot enable a month or open any admin route; signed out nobody can', (await pcall('POST', `admin/psp/months/${J}/enable`, { cookie: cPak })).status === 403 && (await pcall('GET', 'admin/psp/months', { cookie: cPak })).status === 403 && (await pcall('PUT', 'admin/psp/settings', { cookie: cPak, body: { percent: {} } })).status === 403 && (await pcall('GET', 'admin/psp/months')).status === 401);
+  const en = await pcall('POST', `admin/psp/months/${J}/enable`, { cookie: cA });
+  check('the administrator enables January 2027: Active, who and when recorded, no request approved by it; enabling again is refused', en.status === 200 && en.body.month.status === 'active' && en.body.month.activatedBy === 'psp.admin' && en.body.month.activatedAt === pclock && (await pcall('POST', `admin/psp/months/${J}/enable`, { cookie: cA })).status === 409 && (await ps.pspList('submissions')).length === 0);
+  check('once enabled the board sees the month as enabled, but still cannot submit: there are no published rankings and no settings yet', (await pcall('GET', `boards/pakistan/psp/months/${J}`, { cookie: cPak })).body.state.code === 'no_rankings');
+
+  // council seats
+  const seat = (council, n, board, cookie = cA) => pcall('PUT', `admin/psp/councils/${council}/${n}`, { cookie, body: { board } });
+  check('nothing is assigned automatically: every council seat starts empty', (await pcall('GET', 'admin/psp/councils', { cookie: cA })).body.councils.every((c) => c.seats.every((s) => s.board === null)));
+  check('the administrator seats boards in councils; a seat holds one board; a board holds one seat; only registered boards; a board cannot do it', (await seat('champions', 1, 'pakistan')).status === 200 && (await seat('champions', 1, 'india')).status === 409 && (await seat('champions', 2, 'pakistan')).status === 409 && (await seat('established', 1, 'pakistan')).status === 409 && (await seat('champions', 2, 'atlantis')).status === 400 && (await seat('champions', 8, 'india')).status === 404 && (await seat('champions', 2, 'india', cPak)).status === 403 && (await seat('champions', 2, 'india')).status === 200 && (await seat('established', 1, 'england')).status === 200);
+  const councils = (await pcall('GET', 'admin/psp/councils', { cookie: cA })).body;
+  check('the council view shows each council\'s seats and funding; unseated boards stay visible', councils.councils[0].seats[0].boardName === 'Pakistan' && councils.councils[0].monthlyFunding === 5250000 && councils.councils[3].monthlyFunding === 1200000 && councils.boards.find((b) => b.slug === 'canada').council === null && councils.boards.find((b) => b.slug === 'england').council === 'established');
+
+  // monthly rankings
+  const rank = (council, n, board, extra = {}, cookie = cA, month = J) => pcall('PUT', `admin/psp/rankings/${month}/${council}/${n}`, { cookie, body: { board, ...extra } });
+  const r1 = await rank('champions', 1, 'pakistan');
+  check('ranking Pakistan first in Champions fetches the official funding: 12,00,000 credits', r1.status === 200 && r1.body.credits === 1200000);
+  check('ranking rules: a board of another council, an unseated board, a second rank for one board, a taken rank, and a board making the change are all refused', (await rank('champions', 2, 'england')).status === 409 && (await rank('champions', 2, 'canada')).status === 409 && (await rank('champions', 3, 'pakistan')).status === 409 && (await rank('champions', 1, 'india')).status === 409 && (await rank('champions', 2, 'india', {}, cPak)).status === 403 && (await rank('champions', 8, 'india')).status === 404);
+  check('a partial ranking cannot be published (every seated board needs a rank); unranked boards get no allocation', (await rank('champions', 2, 'india')).status === 200 && (await pcall('POST', `admin/psp/rankings/${J}/publish`, { cookie: cA })).status === 409 && (await rank('established', 1, 'england')).body.credits === 800000 && (await pcall('GET', `boards/pakistan/psp/months/${J}`, { cookie: cPak })).body.allocation === null);
+  const view = (await pcall('GET', `admin/psp/rankings/${J}`, { cookie: cA })).body;
+  check('the ranking view lists the ranks of each council with their funding, the boards that can be chosen, and what is complete', view.councils[0].ranks.length === 7 && view.councils[0].ranks[0].funding === 1200000 && view.councils[0].ranks[1].boardName === 'India' && view.councils[0].boards.map((b) => b.slug).sort().join() === 'india,pakistan' && view.complete === true && view.totalFunding === 1200000 + 1000000 + 800000);
+  const pub = await pcall('POST', `admin/psp/rankings/${J}/publish`, { cookie: cA });
+  check('publishing the rankings makes each board\'s allocation visible to it (Pakistan: Champions, rank 1, 12,00,000); publishing twice is refused', pub.status === 200 && pub.body.month.rankingsPublished === true && (await pcall('POST', `admin/psp/rankings/${J}/publish`, { cookie: cA })).status === 409);
+  const d1 = (await pcall('GET', `boards/pakistan/psp/months/${J}`, { cookie: cPak })).body;
+  check('the board sees its council, rank and allocation from the published ranking; it still cannot submit until the settings exist; boards cannot alter their allocation', d1.council === 'Council of Champions' && d1.rank === 1 && d1.allocation === 1200000 && d1.state.code === 'not_configured' && (await rank('champions', 1, 'india', { reason: 'x' }, cPak)).status === 403);
+  { const c1 = await rank('champions', 1, null); const c2 = await rank('champions', 5, 'india', { reason: 'recheck' }); check('changing a published ranking needs a reason and is recorded', c1.status === 400 && c2.status === 409, JSON.stringify([c1.status, c1.body, c2.status, c2.body]).slice(0, 300)); }
+
+  // settings
+  const setPercent = (percent) => pcall('PUT', 'admin/psp/settings', { cookie: cA, body: { percent } });
+  check('the salary settings: nothing is configured to begin with; percentages must total 100% with at most two decimals; a board cannot change them', (await pcall('GET', 'admin/psp/settings', { cookie: cA })).body.complete === false && (await setPercent({ special_contract: 20, elite: 20, international: 20, professional: 15, developing: 15, emerging: 5 })).status === 400 && (await setPercent({ special_contract: 20, elite: 20, international: 20, professional: 15, developing: 15, emerging: 10.001 })).status === 400 && (await setPercent({ special_contract: 20, elite: 20, international: 20, professional: 15, developing: 15 })).status === 400 && (await pcall('PUT', 'admin/psp/settings', { cookie: cPak, body: { percent: {} } })).status === 403);
+  check('the administrator saves a complete setting (20 / 20 / 20 / 15 / 15 / 10)', (await setPercent({ special_contract: 20, elite: 20, international: 20, professional: 15, developing: 15, emerging: 10 })).status === 200 && (await pcall('GET', 'admin/psp/settings', { cookie: cA })).body.complete === true);
+
+  // category validation and calculation, as the board
+  const pakRoster = rosterOf(snap, 'pakistan').players;
+  const ump = pakRoster.filter((p) => p.umpire);
+  const non = pakRoster.filter((p) => !p.umpire);
+  const chairman = pakRoster.find((p) => p.designation === 'Chairman');
+  const ceo = pakRoster.find((p) => p.designation === 'CEO');
+  const L = (cat, ...ps) => ps.map((p) => ({ category: cat, key: p.key }));
+  const draft = (lines, cookie = cPak, slug = 'pakistan') => pcall('PUT', `boards/${slug}/psp/months/${J}/draft`, { cookie, body: { lines } });
+  const submit = (lines, cookie = cPak, slug = 'pakistan') => pcall('POST', `boards/${slug}/psp/months/${J}/submit`, { cookie, body: { lines } });
+  const d2 = (await pcall('GET', `boards/pakistan/psp/months/${J}`, { cookie: cPak })).body;
+  check('the board can now start: registered players only, with the Chairman and CEO shown by their designation and the umpire flag from the umpire records', d2.state.canEdit === true && d2.roster.length === pakRoster.length && chairman && ceo && d2.roster.find((p) => p.key === chairman.key).designation === 'Chairman' && d2.roster.find((p) => p.key === ceo.key).designation === 'CEO' && ump.length >= 3);
+  check('category rules on the server: Special Contract must be an active umpire; Elite needs an umpire (on submit); limits; no duplicates; no player of another board', (await draft(L('special_contract', non[0]))).status === 400 && (await submit([...L('special_contract', ump[0]), ...L('elite', non[0], non[1])])).status === 400 && (await draft([...L('special_contract', ump[0], ump[1])])).status === 400 && (await draft([...L('special_contract', ump[0]), ...L('elite', ump[0])])).status === 400 && (await draft([{ category: 'elite', key: 'notaplayeratall' }])).status === 400 && (await draft([...L('elite', ump[1], ump[2], non[0])])).status === 400 && (await draft([...L('international', ...non.slice(0, 5))])).status === 400 && (await draft([{ category: 'captain', key: non[0].key }])).status === 400);
+  const indRoster = rosterOf(snap, 'india').players;
+  check('a board cannot pick another board\'s player', (await draft(L('emerging', indRoster[0]))).status === 400);
+  // 26 players: Special (an umpire), Elite (an umpire + the CEO), International x4, Professional x4 (incl. the Chairman), Developing x8, Emerging x7
+  const used = new Set();
+  const pick = (n, pool) => pool.filter((p) => !used.has(p.key)).slice(0, n).map((p) => { used.add(p.key); return p; });
+  const sc = pick(1, [ump[0]]);
+  const el = [ump[1], ceo].filter((p, i, a) => a.indexOf(p) === i && !used.has(p.key)); el.forEach((p) => used.add(p.key));
+  const prof = [chairman, ...pick(3, non.filter((p) => p.key !== chairman.key && p.key !== ceo.key))]; prof.forEach((p) => used.add(p.key));
+  const intl = pick(4, non);
+  const dev = pick(8, pakRoster.filter((p) => !used.has(p.key)));
+  const emg = pick(7, pakRoster.filter((p) => !used.has(p.key)));
+  const full = [...L('special_contract', ...sc), ...L('elite', ...el), ...L('international', ...intl), ...L('professional', ...prof), ...L('developing', ...dev), ...L('emerging', ...emg)];
+  const dr = await draft(full.slice(0, 5));
+  check('a draft is saved without being submitted (nothing is sent to the administrator)', dr.status === 200 && dr.body.request.status === 'draft' && dr.body.request.version === 1 && (await pcall('GET', 'admin/psp/requests', { cookie: cA })).body.requests.length === 0);
+  const sb = await submit(full);
+  const req1 = sb.body.request;
+  const salOf = (cat) => req1.lines.filter((l) => l.category === cat).map((l) => l.salary);
+  check('submitting calculates every salary on the server with the configured weights: multiples of 100, rounding balance on the Special Contract, the whole 12,00,000 distributed, remaining 0', sb.status === 201 && req1.status === 'submitted' && req1.total === 1200000 && req1.remaining === 0 && req1.lines.length === 26 && req1.lines.every((l) => l.salary % 100 === 0) && salOf('special_contract')[0] === 240300 && salOf('elite').join() === '120000,120000' && salOf('international').every((x) => x === 60000) && salOf('professional').every((x) => x === 45000) && salOf('developing').every((x) => x === 22500) && salOf('emerging').every((x) => x === 17100) && req1.council === 'champions' && req1.rank === 1);
+  check('the Chairman and the CEO sit in their category positions (Professional and Elite) with no extra position; the total player count is the category total', req1.lines.find((l) => l.key === chairman.key).category === 'professional' && req1.lines.find((l) => l.key === ceo.key).category === 'elite' && req1.lines.find((l) => l.key === chairman.key).designation === 'Chairman' && new Set(req1.lines.map((l) => l.key)).size === 26);
+  check('a submitted request is locked: the board cannot edit or resubmit it, or sneak in a salary; another board cannot read it', (await draft(full.slice(0, 2))).status === 409 && (await submit(full)).status === 409 && (await pcall('GET', `boards/pakistan/psp/months/${J}`, { cookie: cInd })).status === 403 && (await draft(full, cInd, 'pakistan')).status === 403 && (await pcall('GET', 'boards/pakistan/psp/records', { cookie: cInd })).status === 403);
+  check('no player is credited before approval', (await ps.pspList('records')).length === 0 && (await ps.pspList('transactions')).length === 0);
+
+  check('the dashboards point at what needs attention: the administrator sees the requests waiting for a decision; a board sees the months waiting for its submission (none once it has submitted)', (await pcall('GET', 'admin/overview', { cookie: cA })).body.pendingSalaryRequests === 1 && (await pcall('GET', 'boards/england/dashboard', { cookie: cEng })).body.salaryActions >= 1 && (await pcall('GET', 'boards/pakistan/dashboard', { cookie: cPak })).body.salaryActions === 0, JSON.stringify([(await pcall('GET', 'admin/overview', { cookie: cA })).body.pendingSalaryRequests, (await pcall('GET', 'boards/england/dashboard', { cookie: cEng })).body.salaryActions, (await pcall('GET', 'boards/pakistan/dashboard', { cookie: cPak })).body.salaryActions]));
+
+  // the administrator reviews and approves
+  const list1 = (await pcall('GET', 'admin/psp/requests', { cookie: cA })).body.requests;
+  check('the request appears in Salary Requests with board, council, rank, allocation, players, submitted salary, remaining and status', list1.length === 1 && list1[0].boardName === 'Pakistan' && list1[0].council === 'champions' && list1[0].rank === 1 && list1[0].allocation === 1200000 && list1[0].players === 26 && list1[0].total === 1200000 && list1[0].remaining === 0 && list1[0].status === 'submitted');
+  const rid = req1.id;
+  const rd = (await pcall('GET', `admin/psp/requests/${encodeURIComponent(rid)}`, { cookie: cA })).body.request;
+  check('the review shows the whole distribution with the checks: umpire verification, Chairman/CEO, multiples of 100, category totals and the calculation breakdown', rd.lines.length === 26 && rd.checks.problems.length === 0 && rd.checks.specialContractUmpire === true && rd.checks.eliteHasUmpire === true && rd.checks.multiplesOf100 === true && rd.checks.totalMatchesAllocation === true && rd.checks.officials.map((o) => o.designation).sort().join() === 'CEO,Chairman' && rd.checks.umpireVerification.length === 3 && rd.categoryTotals.length === 6 && rd.breakdown.length === 6);
+  check('only the administrator can review, approve or decline', (await pcall('POST', `admin/psp/requests/${encodeURIComponent(rid)}/approve`, { cookie: cPak })).status === 403 && (await pcall('POST', `admin/psp/requests/${encodeURIComponent(rid)}/decline`, { cookie: cPak, body: { reason: 'no' } })).status === 403 && (await pcall('GET', 'admin/psp/requests', { cookie: cPak })).status === 403);
+  check('opening a request for review moves it to Under Review', (await pcall('POST', `admin/psp/requests/${encodeURIComponent(rid)}/review`, { cookie: cA })).status === 200 && (await pcall('GET', 'boards/pakistan/psp', { cookie: cPak })).body.months.find((m) => m.key === J).request.status === 'under_review');
+  pclock += 60000;
+  const ap = await pcall('POST', `admin/psp/requests/${encodeURIComponent(rid)}/approve`, { cookie: cA });
+  const recs = await ps.pspList('records');
+  const txs = await ps.pspList('transactions');
+  check('approving credits virtual salaries exactly once: one transaction and one verified record per player, the request becomes Credited', ap.status === 200 && ap.body.request.status === 'credited' && recs.length === 26 && txs.length === 26 && txs.reduce((n, x) => n + x.amount, 0) === 1200000 && recs.every((r) => r.status === 'credited' && r.transaction_ref.startsWith('PSP-202701-pakistan-')) && txs.every((x) => recs.some((r) => r.transaction_ref === x.key)));
+  const ap2 = await pcall('POST', `admin/psp/requests/${encodeURIComponent(rid)}/approve`, { cookie: cA });
+  await pcall('POST', `admin/psp/requests/${encodeURIComponent(rid)}/approve`, { cookie: cA });
+  check('approving again (or twice at once) creates no second credit', ap2.status === 200 && ap2.body.already === true && (await ps.pspList('records')).length === 26 && (await ps.pspList('transactions')).length === 26);
+  check('a credited request cannot be declined, edited or re-submitted; its records are not changed by a later attempt', (await pcall('POST', `admin/psp/requests/${encodeURIComponent(rid)}/decline`, { cookie: cA, body: { reason: 'too late' } })).status === 409 && (await draft(full.slice(0, 2))).status === 409 && JSON.stringify((await ps.pspList('records')).sort((x, y) => x.key.localeCompare(y.key))) === JSON.stringify(recs.sort((x, y) => x.key.localeCompare(y.key))));
+  check('an approved request cannot have its rank changed afterwards', (await rank('champions', 1, null, { reason: 'mistake' })).status === 409);
+  check('the board sees the approved salaries and its player records (category, salary, reference); the Top Class counter shows one verified month and grants nothing', await (async () => {
+    const r = (await pcall('GET', 'boards/pakistan/psp/records', { cookie: cPak })).body;
+    const p = r.players.find((x) => x.key === ceo.key);
+    return r.records === 26 && r.players.length === 26 && p.records[0].categoryLabel === 'Elite' && p.records[0].salary === 120000 && p.records[0].reference.startsWith('PSP-202701-pakistan-') && p.verifiedMonths === 1 && p.consecutive === 1 && p.topClassReady === false;
+  })());
+  check('the administrator sees salary records across boards, filtered by month, board and name', await (async () => {
+    const all = (await pcall('GET', 'admin/psp/records', { cookie: cA })).body;
+    const f = (await pcall('GET', 'admin/psp/records', { cookie: cA, query: { board: 'pakistan', q: ceo.name.split(' ')[0].toLowerCase(), month: J } })).body;
+    return all.total === 26 && all.records[0].boardName === 'Pakistan' && f.total >= 1 && f.records.every((r) => r.board === 'pakistan') && (await pcall('GET', 'admin/psp/records', { cookie: cA, query: { month: '2027-02' } })).body.total === 0;
+  })());
+
+  // rejection and resubmission (India)
+  const indUmp = indRoster.filter((p) => p.umpire);
+  const indNon = indRoster.filter((p) => !p.umpire);
+  const indLines = (extra = 0) => [...L('special_contract', indUmp[0]), ...L('elite', indUmp[1], indNon[0]), ...L('international', ...indNon.slice(1, 5)), ...L('professional', ...indNon.slice(5, 9)), ...L('developing', ...indNon.slice(9, 17 + extra))];
+  const iSub = await submit(indLines(), cInd, 'india');
+  check('India (Champions rank 2, 10,00,000) submits without Emerging players: the empty category\'s part goes to the Special Contract, the whole allocation is still distributed', iSub.status === 201 && iSub.body.request.allocation === 1000000 && iSub.body.request.total === 1000000 && iSub.body.request.lines.every((l) => l.salary % 100 === 0) && iSub.body.request.lines.find((l) => l.category === 'special_contract').salary === 300400);
+  const iid = iSub.body.request.id;
+  check('declining needs a reason; the administrator declines with one', (await pcall('POST', `admin/psp/requests/${encodeURIComponent(iid)}/decline`, { cookie: cA, body: {} })).status === 400 && (await pcall('POST', `admin/psp/requests/${encodeURIComponent(iid)}/decline`, { cookie: cA, body: { reason: 'Elite players need a re-check' } })).status === 200);
+  const iRej = (await pcall('GET', `boards/india/psp/months/${J}`, { cookie: cInd })).body;
+  check('the board sees the rejection reason and can correct it; no salary was credited', iRej.request.status === 'rejected' && iRej.request.reason === 'Elite players need a re-check' && iRej.state.canEdit === true && (await ps.pspList('records')).filter((r) => r.board === 'india').length === 0);
+  const iDraft = await draft(indLines(), cInd, 'india');
+  check('correcting starts a new version (the rejected one is kept); resubmitting sends version 2', iDraft.status === 200 && iDraft.body.request.version === 2 && iDraft.body.request.status === 'draft');
+  const iSub2 = await submit([...indLines(), ...L('emerging', ...indNon.slice(17, 20))], cInd, 'india');
+  check('the revised submission is accepted and can be approved; the old version stays in the history', iSub2.status === 201 && iSub2.body.request.version === 2 && iSub2.body.request.total === 1000000);
+  const iDetail = (await pcall('GET', `admin/psp/requests/${encodeURIComponent(iSub2.body.request.id)}`, { cookie: cA })).body.request;
+  check('the review lists every version with its status and reason', iDetail.versions.length === 2 && iDetail.versions[0].status === 'rejected' && iDetail.versions[0].reason === 'Elite players need a re-check' && iDetail.versions[1].status === 'submitted');
+  check('approving the revised request credits India once', (await pcall('POST', `admin/psp/requests/${encodeURIComponent(iSub2.body.request.id)}/approve`, { cookie: cA })).body.request.status === 'credited' && (await ps.pspList('records')).filter((r) => r.board === 'india').length === indLines().length + 3 && (await ps.pspList('transactions')).length === 26 + indLines().length + 3);
+
+  // security
+  check('boards cannot see each other: England cannot read Pakistan\'s records, month or draft; Pakistan cannot read England\'s', (await pcall('GET', 'boards/pakistan/psp', { cookie: cEng })).status === 403 && (await pcall('GET', 'boards/england/psp', { cookie: cPak })).status === 403 && (await pcall('GET', 'boards/england/psp/records', { cookie: cPak })).status === 403);
+  check('a board cannot bypass approval: there is no route that credits except the administrator\'s approve, and approving a draft or an unknown request fails', (await pcall('POST', `admin/psp/requests/${encodeURIComponent('2027-01:england:v1')}/approve`, { cookie: cA })).status === 404 && (await pcall('POST', `boards/england/psp/months/${J}/credit`, { cookie: cEng })).status === 404);
+
+  // the administrator overview, and a separate month
+  const ov = (await pcall('GET', 'admin/psp/overview', { cookie: cA, query: { year: '2027', month: J } })).body;
+  check('the administrator overview: funding 1.20 crore a month / 14.40 crore a year, assigned and ranked boards, request counts, allocated and distributed credits, council summaries and the board table', ov.monthlyFunding === 12000000 && ov.annualFunding === 144000000 && ov.assignedBoards === 3 && ov.boardsWithRankings === 3 && ov.credited === 2 && ov.submitted === 0 && ov.rejected === 0 && ov.awaiting === 1 && ov.totalAllocated === 3000000 && ov.totalDistributed === 2200000 && ov.councils.length === 4 && ov.councils[0].distributed === 2200000 && ov.boards.length === 3 && ov.boards.find((b) => b.board === 'england').status === 'not_submitted' && ov.configComplete === true, JSON.stringify({ a: ov.assignedBoards, b: ov.boardsWithRankings, c: ov.credited, s: ov.submitted, r: ov.rejected, w: ov.awaiting, al: ov.totalAllocated, di: ov.totalDistributed, c0: ov.councils[0].distributed, bl: ov.boards.length }));
+  check('February 2027 is a separate cycle: not started, no rankings, no allocation, no credits; January\'s records are untouched', (await pcall('GET', 'boards/pakistan/psp/months/2027-02', { cookie: cPak })).body.state.code === 'not_enabled' && (await pcall('POST', 'admin/psp/months/2027-02/enable', { cookie: cA })).status === 200 && (await pcall('GET', 'boards/pakistan/psp/months/2027-02', { cookie: cPak })).body.state.code === 'no_rankings' && (await ps.pspList('records')).filter((r) => r.month_key === J).length === 26 + indLines().length + 3);
+  check('the administrator can move a month through its statuses and extend the deadline; a closed month refuses salary actions; the dates of the cycle are shown', await (async () => {
+    const set = (body) => pcall('PUT', 'admin/psp/months/2027-03', { cookie: cA, body });
+    const ext = Date.UTC(2027, 2, 8, 12, 0, 0);
+    const a = await set({ status: 'submission_open', deadlineAt: ext, note: 'Delayed by a technical fault' });
+    const b = await set({ status: 'nonsense' });
+    const m = (await pcall('GET', 'admin/psp/months', { cookie: cA, query: { year: '2027' } })).body.months[2];
+    await pcall('POST', 'admin/psp/months/2027-02/enable', { cookie: cA });
+    await pcall('PUT', 'admin/psp/months/2027-02', { cookie: cA, body: { status: 'closed' } });
+    const closed = (await pcall('GET', 'boards/pakistan/psp/months/2027-02', { cookie: cPak })).body;
+    return a.status === 200 && a.body.month.status === 'submission_open' && a.body.month.deadlineAt === ext && a.body.month.deadlineMoved === true && b.status === 400 && m.schedule.announce === '2027-03-01' && m.schedule.submitFrom === '2027-03-02' && m.schedule.submitUntil === '2027-03-03' && m.schedule.verifyFrom === '2027-03-04' && m.schedule.verifyUntil === '2027-03-05' && m.note === 'Delayed by a technical fault' && closed.state.canEdit === false;
+  })());
+  check('late submissions are flagged (after the deadline) but kept: the original monthly history is not lost', await (async () => {
+    // England: seat is Established rank 1; submit on a clock past the deadline of January (the 3rd, 23:59 IST)
+    pclock = Date.UTC(2027, 0, 10, 8, 0, 0);
+    const cEng2 = await plogin('board', 'psp.eng', 'Psp-Eng-Pass-1'); // (the clock moved on: sign in again)
+    const engRoster = rosterOf(snap, 'england').players;
+    const eu = engRoster.filter((p) => p.umpire);
+    const en2 = engRoster.filter((p) => !p.umpire);
+    const r = await submit([...L('special_contract', eu[0]), ...L('elite', eu[1], en2[0])], cEng2, 'england');
+    return r.status === 201 && r.body.request.late === true && r.body.request.total === 800000;
+  })());
+  check('the audit log records the activation, seats, ranks, publishing, settings, submissions, approvals and rejections with who did them', await (async () => {
+    const acts = (await ps.listAudit(500)).map((x) => x.action);
+    return ['psp_month_enabled', 'psp_seat_assigned', 'psp_rank_set', 'psp_rankings_published', 'psp_settings_changed', 'psp_salary_submitted', 'psp_request_approved', 'psp_request_declined', 'psp_month_changed'].every((a) => acts.includes(a)) && (await ps.listAudit(500)).find((x) => x.action === 'psp_month_enabled').actor === 'psp.admin';
+  })());
+  check('a salary table that is not created yet gives a clear "not set up" answer instead of an error page', await (async () => {
+    const broken = new MemoryStore();
+    await broken.create({ account_id: 'IOCF-ADM-001', role: 'admin', board_slug: null, board_name: null, username: 'broken.admin', password_hash: await hashPassword('Broken-Admin-Pass-1'), status: 'active' });
+    broken.pspList = async () => { throw Object.assign(new Error('missing'), { code: 'psp_missing' }); };
+    const bh = createHandler({ store: broken, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, rankInput: async () => ({ dataset: snap }) });
+    const lg = await bh({ method: 'POST', path: ['login'], headers: H, body: { role: 'admin', username: 'broken.admin', password: 'Broken-Admin-Pass-1' }, ip: '5.5.5.5' });
+    const out = await bh({ method: 'GET', path: ['admin', 'psp', 'months'], headers: { ...H, cookie: `iocf_cc=${cookieOf(lg)}` }, body: null, ip: '5.5.5.5' });
+    if (out.status !== 503) console.log('DEBUG', out.status, JSON.stringify(out.body).slice(0, 200));
+    return out.status === 503 && out.body.error.code === 'psp_missing';
+  })());
 }
 
 console.log(`\n${failures.length ? '✗' : '✓'} ${passed} passed, ${failures.length} failed`);

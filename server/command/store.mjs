@@ -61,6 +61,36 @@ export class MemoryStore {
   async metaList() {
     return (this.data.meta ??= []).map((x) => ({ ...x }));
   }
+  /** The salary program's tables (see psp.sql): rows are keyed by `key` inside each table. */
+  async pspList(table) {
+    return ((this.data.psp ??= {})[table] ??= []).map((x) => ({ ...x }));
+  }
+  async pspGet(table, key) {
+    const r = ((this.data.psp ??= {})[table] ??= []).find((x) => x.key === key);
+    return r ? { ...r } : null;
+  }
+  async pspPut(table, row) {
+    const list = ((this.data.psp ??= {})[table] ??= []);
+    const i = list.findIndex((x) => x.key === row.key);
+    if (i >= 0) list[i] = { ...row };
+    else list.push({ ...row });
+    await this.persist();
+    return { ...row };
+  }
+  /** Adds rows whose key does not exist yet; an existing row is never overwritten. */
+  async pspInsertMany(table, rows) {
+    const list = ((this.data.psp ??= {})[table] ??= []);
+    for (const row of rows) if (!list.some((x) => x.key === row.key)) list.push({ ...row });
+    await this.persist();
+  }
+  async pspDelete(table, key) {
+    const list = ((this.data.psp ??= {})[table] ??= []);
+    const i = list.findIndex((x) => x.key === key);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    await this.persist();
+    return true;
+  }
   async stadiumList() {
     return (this.data.stadiums ??= []).map((x) => ({ ...x }));
   }
@@ -279,8 +309,19 @@ export class KeyedRest {
     const text = await res.text();
     return text ? JSON.parse(text) : null;
   }
+  /** Every row. Supabase returns at most 1000 rows a request, so a long table is read page by page. */
   async list(select = '*') {
-    return (await this.req('GET', `?select=${select}&order=key.asc`)) ?? [];
+    const PAGE = 1000;
+    const out = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const page = (await this.req('GET', `?select=${select}&order=key.asc&limit=${PAGE}&offset=${offset}`)) ?? [];
+      out.push(...page);
+      if (page.length < PAGE) return out;
+    }
+  }
+  /** Adds rows that do not exist yet, in one request; a row whose key exists is left exactly as it is (never overwritten). */
+  async insertMany(rows) {
+    if (rows.length) await this.req('POST', '?on_conflict=key', rows, { prefer: 'resolution=ignore-duplicates,return=minimal' });
   }
   async get(key) {
     return (await this.req('GET', `?select=*&key=eq.${encodeURIComponent(key)}&limit=1`))?.[0] ?? null;
@@ -302,6 +343,8 @@ export function keyedMethods(url, serviceKey, fetchImpl) {
   const meta = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_series_meta', missing: 'series details' });
   const rank = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_rank_state', missing: 'rankings' });
   const stadiums = new KeyedRest({ url, serviceKey, fetchImpl, table: 'command_stadiums', missing: 'stadium requests', code: 'stadiums_missing' });
+  const psp = {};
+  const pspTable = (t) => (psp[t] ??= new KeyedRest({ url, serviceKey, fetchImpl, table: `command_psp_${t}`, missing: 'salary program', code: 'psp_missing' }));
   return {
     statsList: ({ summary = false } = {}) => stats.list(summary ? 'key,kind,name,title,tour,players,uploaded_at,uploaded_by' : '*'),
     statsGet: (key) => stats.get(key),
@@ -313,6 +356,11 @@ export function keyedMethods(url, serviceKey, fetchImpl) {
     rankList: () => rank.list(),
     rankGet: (key) => rank.get(key),
     rankPutMany: (rows) => rank.putMany(rows),
+    pspList: (t) => pspTable(t).list(),
+    pspGet: (t, key) => pspTable(t).get(key),
+    pspPut: (t, row) => pspTable(t).put(row),
+    pspInsertMany: (t, rows) => pspTable(t).insertMany(rows),
+    pspDelete: (t, key) => pspTable(t).delete(key),
     stadiumList: () => stadiums.list(),
     stadiumGet: (key) => stadiums.get(key),
     stadiumPut: (row) => stadiums.put(row),

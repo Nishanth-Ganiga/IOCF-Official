@@ -59,6 +59,7 @@ export function commandCenterRequestListener({ store = productionStoreFromEnv(),
       path: path.split('/').filter(Boolean).map(decodeURIComponent),
       headers: req.headers,
       body,
+      query: Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'p')),
       ip: clientIp(req),
     });
     res.writeHead(out.status, out.headers);
