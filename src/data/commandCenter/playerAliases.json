@@ -12,19 +12,16 @@
   ]
  },
  {
-  "name": "Partha Pratim Bora",
+  "name": "Partha Pratim Das",
   "board": "bangladesh",
   "aliases": [
    {
-    "name": "Partha Pratim Das",
-    "boards": [
-     "bangladesh"
-    ]
+    "name": "Partha Pratim Bora"
    }
   ]
  },
  {
-  "name": "Princhi Pratim Bora",
+  "name": "Princhi Bora",
   "board": "bangladesh",
   "aliases": [
    {
@@ -32,18 +29,18 @@
     "boards": [
      "bangladesh"
     ]
+   },
+   {
+    "name": "Princhi Pratim Bora"
    }
   ]
  },
  {
-  "name": "Rahees Ashiq",
+  "name": "Raees Ashiq",
   "board": "bangladesh",
   "aliases": [
    {
-    "name": "Raees Ashiq",
-    "boards": [
-     "bangladesh"
-    ]
+    "name": "Rahees Ashiq"
    }
   ]
  },
@@ -244,11 +241,11 @@
   ]
  },
  {
-  "name": "Abdullah Jutt",
+  "name": "Jani Jutt",
   "board": "nepal",
   "aliases": [
    {
-    "name": "Jani Jutt",
+    "name": "Abdullah Jutt",
     "boards": [
      "nepal"
     ]
@@ -531,14 +528,13 @@
   ]
  },
  {
-  "name": "Srinidhi",
+  "name": "Srinidhi K",
   "board": "south-africa",
   "aliases": [
    {
-    "name": "Srinidhi K",
+    "name": "Srinidhi",
     "boards": [
-     "south-africa",
-     "australia"
+     "south-africa"
     ]
    }
   ]
@@ -576,11 +572,11 @@
   ]
  },
  {
-  "name": "Adithya Mahajan",
+  "name": "Aditya Mahajan",
   "board": "south-africa",
   "aliases": [
    {
-    "name": "Aditya Mahajan"
+    "name": "Adithya Mahajan"
    }
   ]
  },
@@ -698,7 +694,7 @@
   ]
  },
  {
-  "name": "Allabux Kapri",
+  "name": "Allahbux Kapri",
   "board": "bangladesh",
   "aliases": [
    {
@@ -707,11 +703,14 @@
      "bangladesh",
      "canada"
     ]
+   },
+   {
+    "name": "Allabux Kapri"
    }
   ]
  },
  {
-  "name": "Ishita Sharma",
+  "name": "Ishita Sarma",
   "board": "bangladesh",
   "aliases": [
    {
@@ -719,6 +718,9 @@
     "boards": [
      "bangladesh"
     ]
+   },
+   {
+    "name": "Ishita Sharma"
    }
   ]
  },
@@ -1107,11 +1109,14 @@
   ]
  },
  {
-  "name": "Shaila",
+  "name": "Shailamma Joseph",
   "board": "nepal",
   "aliases": [
    {
-    "name": "Shailamma Joseph"
+    "name": "Shaila",
+    "boards": [
+     "nepal"
+    ]
    }
   ]
  },
@@ -1987,6 +1992,54 @@
    },
    {
     "name": "Rima Roy"
+   }
+  ]
+ },
+ {
+  "name": "Mohammad Fadil",
+  "board": "nepal",
+  "aliases": [
+   {
+    "name": "Mohammed Fadil",
+    "boards": [
+     "nepal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Najeebullah Kapri",
+  "board": "nepal",
+  "aliases": [
+   {
+    "name": "Najibullah",
+    "boards": [
+     "nepal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Jabir Chockly",
+  "board": "nepal",
+  "aliases": [
+   {
+    "name": "Jabir",
+    "boards": [
+     "nepal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Ishak Farid",
+  "board": "bangladesh",
+  "aliases": [
+   {
+    "name": "Ishaq Farid",
+    "boards": [
+     "bangladesh"
+    ]
    }
   ]
  }

@@ -5,9 +5,9 @@
 export const TRANSFERS = [
   { name: 'Bhavin Kumar', from: 'Pakistan', to: 'South Africa' },
   // Adithya Mahajan ("Aditya" in the scorer exports) played for these boards and is on South Africa's roster (he went to the USA and came back)
-  { name: 'Adithya Mahajan', from: 'Bangladesh', to: 'South Africa' },
-  { name: 'Adithya Mahajan', from: 'Qatar', to: 'South Africa' },
-  { name: 'Adithya Mahajan', from: 'USA', to: 'South Africa' },
+  { name: 'Adithya Mahajan', from: 'Bangladesh', to: 'South Africa', into: 'Aditya Mahajan' },
+  { name: 'Adithya Mahajan', from: 'Qatar', to: 'South Africa', into: 'Aditya Mahajan' },
+  { name: 'Adithya Mahajan', from: 'USA', to: 'South Africa', into: 'Aditya Mahajan' },
   { name: 'Siddharth V Jain', from: 'South Africa', to: 'Bangladesh' },
   { name: 'Karthik Varma', from: 'Ireland', to: 'England', into: 'Karthik Verma' },
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
@@ -61,7 +61,8 @@ export const MERGES = [
   { board: "Australia", keep: "Anand Ajikumar", drop: ["Anandan Ajikumar"] },
   { board: "Australia", keep: "Muhammad Noor", drop: ["Mohammaed Noor"] },
   { board: "Bangladesh", keep: "Tanusri Dutta", drop: ["Tansuri Dutta"] },
-  { board: "Bangladesh", keep: "Princhi Pratim Bora", drop: ["Princhi Bora", "Princhi"] },
+  { board: "Bangladesh", keep: "Princhi Bora", drop: ["Princhi Pratim Bora", "Princhi", "Ppb"] },
+  { board: "South Africa", keep: "Aditya Mahajan", drop: ["Adithya Mahajan"] },
   { board: "Canada", keep: "Shahnawaz Ms", drop: ["Sahnavaz"] },
   { board: "India", keep: "Farhan", drop: ["Farhaan"] },
   { board: "Italy", keep: "Subaida Subi", drop: ["Subi"] },
