@@ -265,14 +265,11 @@
   ]
  },
  {
-  "name": "Hasan Musabir",
+  "name": "Hasan Musabbir",
   "board": "new-zealand",
   "aliases": [
    {
-    "name": "Hasan Musabbir",
-    "boards": [
-     "new-zealand"
-    ]
+    "name": "Hasan Musabir"
    }
   ]
  },
@@ -289,14 +286,11 @@
   ]
  },
  {
-  "name": "Nithin Poojary",
+  "name": "Nithin Poojari",
   "board": "new-zealand",
   "aliases": [
    {
-    "name": "Nithin Poojari",
-    "boards": [
-     "new-zealand"
-    ]
+    "name": "Nithin Poojary"
    }
   ]
  },
@@ -581,12 +575,9 @@
   ]
  },
  {
-  "name": "Ashutosh Jha",
+  "name": "Aashutosh Jha",
   "board": "new-zealand",
   "aliases": [
-   {
-    "name": "Aashutosh Jha"
-   },
    {
     "name": "Ashutosh",
     "boards": [
@@ -598,6 +589,9 @@
     "boards": [
      "new-zealand"
     ]
+   },
+   {
+    "name": "Ashutosh Jha"
    }
   ]
  },
@@ -632,15 +626,11 @@
   ]
  },
  {
-  "name": "Aniket Gavit",
+  "name": "Aniket",
   "board": "new-zealand",
   "aliases": [
    {
-    "name": "Aniket",
-    "boards": [
-     "new-zealand",
-     "england"
-    ]
+    "name": "Aniket Gavit"
    }
   ]
  },
@@ -944,11 +934,14 @@
   ]
  },
  {
-  "name": "Akshay",
+  "name": "Akshay Dileep",
   "board": "ireland",
   "aliases": [
    {
-    "name": "Akshay Dileep"
+    "name": "Akshay",
+    "boards": [
+     "ireland"
+    ]
    }
   ]
  },
@@ -1202,15 +1195,6 @@
   ]
  },
  {
-  "name": "Gokul G",
-  "board": "new-zealand",
-  "aliases": [
-   {
-    "name": "Gokul G Nair"
-   }
-  ]
- },
- {
   "name": "Pranjal",
   "board": "papua-new-guinea",
   "aliases": [
@@ -1238,16 +1222,9 @@
   ]
  },
  {
-  "name": "Rashid M",
+  "name": "Rashid",
   "board": "portugal",
-  "aliases": [
-   {
-    "name": "Rashid",
-    "boards": [
-     "portugal"
-    ]
-   }
-  ]
+  "aliases": []
  },
  {
   "name": "Abdul Haseeb",
@@ -1688,23 +1665,20 @@
   ]
  },
  {
-  "name": "Ashwini",
+  "name": "Ashwini Raam",
   "board": "new-zealand",
   "aliases": [
    {
-    "name": "Ashwini Raam"
+    "name": "Ashwini"
    }
   ]
  },
  {
-  "name": "Kishore Gowda",
+  "name": "Kishore",
   "board": "new-zealand",
   "aliases": [
    {
-    "name": "Kishore",
-    "boards": [
-     "new-zealand"
-    ]
+    "name": "Kishore Gowda"
    }
   ]
  },
@@ -1789,11 +1763,14 @@
   ]
  },
  {
-  "name": "Khair Mohammad",
+  "name": "Khair Muhammad",
   "board": "ireland",
   "aliases": [
    {
     "name": "Khair Mohammed"
+   },
+   {
+    "name": "Khair Mohammad"
    }
   ]
  },
@@ -2040,6 +2017,72 @@
     "boards": [
      "bangladesh"
     ]
+   }
+  ]
+ },
+ {
+  "name": "Sayandeep Ghosh (WK)",
+  "board": "ireland",
+  "aliases": [
+   {
+    "name": "Sayandeep Ghosh"
+   }
+  ]
+ },
+ {
+  "name": "Akash A S",
+  "board": "portugal",
+  "aliases": [
+   {
+    "name": "Akash",
+    "boards": [
+     "portugal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Anoop S",
+  "board": "portugal",
+  "aliases": [
+   {
+    "name": "Anoop",
+    "boards": [
+     "portugal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Akshay spider",
+  "board": "portugal",
+  "aliases": [
+   {
+    "name": "Spider",
+    "boards": [
+     "portugal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Hannimon",
+  "board": "portugal",
+  "aliases": [
+   {
+    "name": "Hanimion",
+    "boards": [
+     "portugal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Toby Jospeh",
+  "board": "new-zealand",
+  "aliases": [
+   {
+    "name": "Toby Joseph"
    }
   ]
  }

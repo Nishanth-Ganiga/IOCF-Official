@@ -42,15 +42,16 @@ export const TRANSFERS = [
   { name: 'Kashif Ramzan', from: 'Nepal', to: 'Afghanistan' },
   { name: 'Farhan Mallick', from: 'Qatar', to: 'Afghanistan' },
   { name: 'Malik Zubair', from: 'Qatar', to: 'Australia' },
-  { name: 'Toby Joseph', from: 'England', to: 'New Zealand' },
+  { name: 'Toby Joseph', from: 'England', to: 'New Zealand', into: 'Toby Jospeh' }, // (the sheet spells him "Jospeh" on New Zealand's list)
   { name: 'Saubhagya Gupta', from: 'Australia', to: 'South Africa' },
   { name: 'Anand Kumar', from: 'Australia', to: 'Mexico' },
   // (the two Abhijiths, on England and on the UAE, are two different people)
   { name: 'Marami', from: 'Netherlands', to: 'USA' },
   { name: 'Marami Ahmed', from: 'Netherlands', to: 'USA', into: 'Marami' },
   { name: 'Anas Asim', from: 'Qatar', to: 'Spain' }, // already on Spain's list; his Qatar entry is an earlier board
-  { name: 'Waqas Mughal', from: 'Bangladesh', to: 'Nepal' },
-  { name: 'Waqas Mughal', from: 'Australia', to: 'Nepal' }, // his Australia entry is an earlier board
+  // Waqas Mughal went Bangladesh → Nepal and came back ("Waqas to Bangladesh" in Nepal's trades): he is on Bangladesh's roster now
+  { name: 'Waqas Mughal', from: 'Nepal', to: 'Bangladesh' },
+  { name: 'Waqas Mughal', from: 'Australia', to: 'Bangladesh' }, // his Australia entry is an earlier board
   { name: 'Rima Naskar Sona', from: 'Pakistan', to: 'Australia' },
   { name: 'Rima Roy', from: 'Pakistan', to: 'Australia', into: 'Rima Naskar Sona' },
 ];
