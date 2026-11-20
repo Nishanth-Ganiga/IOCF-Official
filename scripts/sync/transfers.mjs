@@ -12,8 +12,8 @@ export const TRANSFERS = [
   // Karthik Verma ("Karthik Varma" in the scorer exports) played for England and joined Ireland (England's tab marks him "Removed")
   { name: 'Karthik Verma', from: 'England', to: 'Ireland' },
   { name: 'Karthik Varma', from: 'England', to: 'Ireland', into: 'Karthik Verma' },
-  // Shib Asis ("Shibasis" on South Africa's list) moved from New Zealand to South Africa ("Shibasis to SA: 5000")
-  { name: 'Shib Asis', from: 'New Zealand', to: 'South Africa', into: 'Shibasis' },
+  // Shib Asis ("Shibasis" on South Africa's list) is on New Zealand's list only; his South Africa entry is merged into it
+  { name: 'Shibasis', from: 'South Africa', to: 'New Zealand', into: 'Shib Asis' },
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
   { name: 'Aniket Gavit', from: 'England', to: 'New Zealand' },
   { name: 'Mudasir Ali', from: 'Qatar', to: 'Pakistan' },
