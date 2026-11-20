@@ -878,7 +878,7 @@
  },
  {
   "name": "Karthik Verma",
-  "board": "england",
+  "board": "ireland",
   "aliases": [
    {
     "name": "Karthik Varma"
@@ -2083,6 +2083,18 @@
   "aliases": [
    {
     "name": "Toby Joseph"
+   }
+  ]
+ },
+ {
+  "name": "Muhammed Noufal",
+  "board": "portugal",
+  "aliases": [
+   {
+    "name": "Noufal",
+    "boards": [
+     "portugal"
+    ]
    }
   ]
  }

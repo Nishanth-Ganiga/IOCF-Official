@@ -9,7 +9,11 @@ export const TRANSFERS = [
   { name: 'Adithya Mahajan', from: 'Qatar', to: 'South Africa', into: 'Aditya Mahajan' },
   { name: 'Adithya Mahajan', from: 'USA', to: 'South Africa', into: 'Aditya Mahajan' },
   { name: 'Siddharth V Jain', from: 'South Africa', to: 'Bangladesh' },
-  { name: 'Karthik Varma', from: 'Ireland', to: 'England', into: 'Karthik Verma' },
+  // Karthik Verma ("Karthik Varma" in the scorer exports) played for England and joined Ireland (England's tab marks him "Removed")
+  { name: 'Karthik Verma', from: 'England', to: 'Ireland' },
+  { name: 'Karthik Varma', from: 'England', to: 'Ireland', into: 'Karthik Verma' },
+  // Shib Asis ("Shibasis" on South Africa's list) moved from New Zealand to South Africa ("Shibasis to SA: 5000")
+  { name: 'Shib Asis', from: 'New Zealand', to: 'South Africa', into: 'Shibasis' },
   { name: 'Sai Naveen', from: 'Australia', to: 'Bangladesh' },
   { name: 'Aniket Gavit', from: 'England', to: 'New Zealand' },
   { name: 'Mudasir Ali', from: 'Qatar', to: 'Pakistan' },
