@@ -3,6 +3,7 @@ import { api, ApiError, type Series, type SeriesInput, type SeriesOverview } fro
 import { BOARD_THEMES, paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
 import cfg from '../../data/commandCenter/series.json';
 import { buildFixtures, dateProblem, stadiumBoards } from '../../data/commandCenter/fixtures.mjs';
+import { limitsText, squadLimits, squadProblem } from '../../data/commandCenter/squads.mjs';
 import SeriesHistory, { ItemCard, NO_EXTRAS, SourceNote, recordItems, type Extras } from './SeriesHistory';
 import SeriesPlayerStats from './SeriesPlayerStats';
 
@@ -17,7 +18,7 @@ const formatLabel = (s: Series) => (s.clubFormat ? `Club · ${s.clubFormat}` : s
 
 /** The match dates of a series: its own list, or (for a reply without one) the dates of its scheduled matches. */
 const datesOf = (s: Series): string[] => s.dates ?? s.fixtures.filter((f) => !f.final).map((f) => f.date ?? '');
-const EMPTY: SeriesInput = { name: '', type: '', opponents: [], matches: 0, stadiums: [], dates: [], bet: 0, format: '' };
+const EMPTY: SeriesInput = { name: '', type: '', opponents: [], matches: 0, stadiums: [], dates: [], bet: 0, format: '', squad: [] };
 
 /** Today's date in India (YYYY-MM-DD): match dates cannot be earlier. */
 const todayIst = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
@@ -132,6 +133,7 @@ export function Facts({ s, you, full }: { s: Series; you: string; full?: boolean
     [s.opponents.length > 1 ? 'Opponents' : 'Opponent', s.opponents.map((o) => (s.status !== 'accepted' && s.opponents.length > 1 ? `${o.name}${o.accepted ? ' ✓' : ''}` : o.name)).join(', ')],
     ['Matches', String(s.matches)],
     ...(s.perDay === 2 ? ([['Matches per day', '2 (a pair of matches each day)']] as [string, string][]) : []),
+    ...Object.entries(s.squads ?? {}).map(([slug, list]): [string, string] => [`Squad · ${slug === s.host.slug ? s.host.name : (s.opponents.find((o) => o.slug === slug)?.name ?? slug)}`, `${list.length} players: ${list.map((p) => p.name).join(', ')}`]),
     ['Bet amount', money(s.bet)],
     ['Format', formatLabel(s)],
     ...(s.result ? ([['Result', `${s.result.winner ? `${s.result.winner.name} won the series` : 'Series drawn'}${s.result.note ? ` · ${s.result.note}` : ''}`]] as [string, string][]) : []),
@@ -238,6 +240,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
   const pal = paletteOf(theme);
   const [busy, setBusy] = useState('');
   const [declining, setDeclining] = useState('');
+  const [squads, setSquads] = useState<Record<string, string[]>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const decline = async (s: Series) => {
     setBusy(s.id);
@@ -257,7 +260,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
     setBusy(s.id);
     setMsg(null);
     try {
-      await api.acceptSeries(theme.slug, s.id);
+      await api.acceptSeries(theme.slug, s.id, squads[s.id] ?? []);
       await reload();
       setMsg({ ok: true, text: `You accepted “${s.name}”. It is now confirmed.` });
     } catch (e) {
@@ -279,6 +282,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
         steps={[
           <>Series that other boards have announced to <b>{theme.name}</b> are listed below. The Series Announcement page shows how many are waiting.</>,
           <>Read every detail: the type, the opponents, the number of matches, the schedule with each match’s stadium and date, the <b>bet amount</b> and the <b>format</b>.</>,
+          <>Announce <b>your squad</b>: choose your players one by one from your registered players. The squad size depends on the format (Club 4–5 overs 7 to 8 players, Club 6–8 overs 9 to 10, T10 11 to 12, T20 13 to 15, ODI 15 to 18, Test and L4I 15 to 20). <b>Accept the Series</b> stays disabled until the squad is complete.</>,
           <>If you agree, press <b>Accept the Series</b>. The series is then confirmed and appears in Upcoming Series for all boards.</>,
           <>If you do not want it, press <b>Decline</b>. The hosting board is told straight away and can announce again. If you do nothing, it is declined automatically at the deadline.</>,
         ]}
@@ -302,6 +306,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
                 ANNOUNCED BY {s.host.name.toUpperCase()}
               </p>
               <Facts s={s} you="invitation" />
+              {data.canAct && declining !== s.id && <SquadPicker hl={pal.highlight} roster={data.roster} value={squads[s.id] ?? []} onChange={(keys) => setSquads({ ...squads, [s.id]: keys })} format={s.format} clubFormat={s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined} label={`SQUAD ANNOUNCEMENT · ${theme.name.toUpperCase()}`} />}
               {data.canAct && (
                 declining === s.id ? (
                   <div role="alertdialog" aria-label={`Decline ${s.name}`} className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-crimson/50 px-4 py-3">
@@ -315,7 +320,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
                   </div>
                 ) : (
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <button type="button" onClick={() => void accept(s)} disabled={busy === s.id} className="rounded-lg px-6 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: pal.highlight }}>
+                    <button type="button" onClick={() => void accept(s)} disabled={busy === s.id || Boolean(squadProblem(squads[s.id] ?? [], data.roster, squadLimits(s.format, s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined)))} className="rounded-lg px-6 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: pal.highlight }}>
                       {busy === s.id ? 'ACCEPTING…' : 'ACCEPT THE SERIES'}
                     </button>
                     <button type="button" onClick={() => setDeclining(s.id)} className="rounded-lg border border-white/25 px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-mist transition hover:border-crimson/60 hover:text-crimson-2">
@@ -333,6 +338,64 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
 }
 
 /* ---------- announce / edit ---------- */
+
+/** Squad Announcement: the board names its squad one player at a time from its registered players; the size depends on the format. */
+export function SquadPicker({ hl, roster, value, onChange, format, clubFormat, label = 'SQUAD ANNOUNCEMENT' }: { hl: string; roster: { key: string; name: string }[]; value: string[]; onChange: (keys: string[]) => void; format?: string; clubFormat?: string; label?: string }) {
+  const limits = squadLimits(format, clubFormat);
+  const problem = squadProblem(value, roster, limits);
+  const byKey = new Map(roster.map((p) => [p.key, p.name]));
+  const left = roster.filter((p) => !value.includes(p.key)).sort((a, b) => a.name.localeCompare(b.name));
+  const full = limits !== null && value.length >= limits.max;
+  return (
+    <fieldset className="mt-6 rounded-2xl border border-white/10 p-4" style={{ ['--hl' as string]: hl }}>
+      <legend className="px-2 text-[11px] font-semibold tracking-[0.2em] text-mist">{label}</legend>
+      <p className="text-xs text-mist">
+        {limits ? (
+          <>
+            {format === 'Club' ? `Club · ${cfg.clubFormats.find((c) => c.id === clubFormat)?.label}` : format} squad: <b className="text-bone">{limitsText(limits)}</b>. Choose the players one by one from your registered players.
+          </>
+        ) : (
+          'Choose the format (and the club format for a Club series) first: the squad size depends on it.'
+        )}
+      </p>
+      <p className="mt-2 text-sm" style={{ color: problem ? '#e9b44c' : '#6fcf8e' }}>
+        {limits ? `${value.length} of ${limits.min}–${limits.max} players${problem ? ` · ${problem}` : ' · squad complete ✓'}` : ''}
+      </p>
+      {value.length > 0 && (
+        <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+          {value.map((k, i) => (
+            <li key={k} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-bone">
+              <span>
+                <span className="mr-2 text-smoke">{i + 1}.</span>
+                {byKey.get(k) ?? k}
+              </span>
+              <button type="button" onClick={() => onChange(value.filter((x) => x !== k))} aria-label={`Remove ${byKey.get(k) ?? k} from the squad`} className="text-xs font-semibold text-mist hover:text-crimson-2">
+                ✕
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <label className="mt-3 block max-w-md">
+        <span className="text-[11px] font-semibold tracking-[0.16em] text-smoke">ADD A PLAYER</span>
+        <select
+          value=""
+          disabled={!limits || full || !left.length}
+          onChange={(e) => e.target.value && onChange([...value, e.target.value])}
+          className={field}
+          aria-label="Add a player to the squad"
+        >
+          <option value="">{!limits ? 'Choose the format first' : full ? 'The squad is full' : left.length ? 'Choose a player…' : 'No more registered players'}</option>
+          {left.map((p) => (
+            <option key={p.key} value={p.key}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    </fieldset>
+  );
+}
 
 function Pills<T extends string | number>({ label, value, options, onPick, show, hl }: { label: string; value: T | undefined; options: T[]; onPick: (v: T) => void; show?: (v: T) => string; hl: string }) {
 return (
@@ -384,14 +447,14 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
   const startEdit = (s: Series) => {
     setEditing(s);
     setMsg(null);
-    setForm({ perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: datesOf(s), bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ squad: (s.squads?.[s.host.slug] ?? []).map((p) => p.key), perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: datesOf(s), bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const startAgain = (s: Series) => {
     setEditing(null);
     setMsg(null);
-    setForm({ perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: [], bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ squad: (s.squads?.[s.host.slug] ?? []).map((p) => p.key), perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: [], bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -416,7 +479,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
   };
 
   const ready =
-    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] > todayIst()) && !dateProblem(scheduled, scheduled.map((_, i) => form.dates[i] ?? ''), perDay) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
+    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] > todayIst()) && !dateProblem(scheduled, scheduled.map((_, i) => form.dates[i] ?? ''), perDay) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat) && !squadProblem(form.squad ?? [], data.roster, squadLimits(form.format, form.clubFormat));
 
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
@@ -440,6 +503,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           <><b>Matches per day</b> (quadrilateral only) — choose <b>1 game per day</b> (every match has its own date) or <b>2 games per day</b> (matches 1 and 2 share a date, then 3 and 4, and so on; the two matches of a day are always between four different teams, so no team plays twice on one day).</>,
           <><b>Bet amount</b> — choose one of ₹1,000 · 2,000 · 3,000 · 4,000 · 5,000 · 10,000 · 20,000 · 50,000.</>,
           <><b>Format</b> — Club, T10, T20, TEST, ODI or L4I. If you choose <b>Club</b>, also choose the club format: 4 overs 4 wickets up to 9 overs 9 wickets.</>,
+          <><b>Squad announcement</b> — choose your squad one player at a time from your registered players. The size depends on the format: Club 4 or 5 overs 7 to 8 players, Club 6, 7 or 8 overs 9 to 10, T10 11 to 12, T20 13 to 15, ODI 15 to 18, Test and L4I 15 to 20. <b>Send</b> stays disabled until the squad is complete.</>,
           <>Press <b>Send</b>. The series goes straight to your opponent’s “Accept the Series” tile.</>,
         ]}
         rules={[
@@ -540,6 +604,8 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           <Pills hl={pal.highlight} label="BET AMOUNT" value={form.bet || undefined} options={cfg.bets} onPick={(v) => set({ bet: v })} show={money} />
           <Pills hl={pal.highlight} label="FORMAT" value={form.format || undefined} options={cfg.formats} onPick={(v) => set({ format: v, ...(v === 'Club' ? {} : { clubFormat: undefined }) })} />
           {form.format === 'Club' && <Pills hl={pal.highlight} label="CLUB FORMAT" value={form.clubFormat} options={cfg.clubFormats.filter((c) => !(c as { retired?: boolean }).retired || c.id === form.clubFormat).map((c) => c.id)} onPick={(v) => set({ clubFormat: v })} show={(id) => cfg.clubFormats.find((c) => c.id === id)!.label} />}
+
+          <SquadPicker hl={pal.highlight} roster={data.roster} value={form.squad ?? []} onChange={(squad) => set({ squad })} format={form.format} clubFormat={form.clubFormat} />
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <button type="submit" disabled={!ready || busy} className="rounded-lg px-8 py-3 text-sm font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" style={{ background: pal.highlight }}>

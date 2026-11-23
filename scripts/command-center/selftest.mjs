@@ -479,9 +479,24 @@ console.log('\n— Series Announcement —');
   const sCreds = await provision({ store: sStore, home: sHome });
   const sc = (b) => sCreds.find((c) => c.board === b);
   let t0 = Date.UTC(2026, 5, 10, 8, 0, 0); // 13:30 IST
-  const sh = createHandler({ store: sStore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => t0 });
+  const sSnap = JSON.parse(fs.readFileSync('src/data/snapshot.json', 'utf8'));
+  const sh = createHandler({ store: sStore, env: { COMMAND_CENTER_SESSION_SECRET: 'test-secret-test-secret-test-secret-1234' }, now: () => t0, rankInput: async () => ({ dataset: sSnap }) });
   let n = 0;
-  const sCall = (method, p, { body, cookie } = {}) => sh({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: `7.7.${++n % 250}.${n % 250}` });
+  const { rosterOf: sRoster } = await import('../../server/command/pspRoutes.mjs');
+  const { squadLimits: sLimits } = await import('../../src/data/commandCenter/squads.mjs');
+  /** A valid squad for a board and format: the first players of its registered list, as many as the format needs at least. */
+  const squadFor = (slug, format, clubFormat) => sRoster(sSnap, slug).players.slice(0, (sLimits(format, clubFormat) ?? { min: 15 }).min).map((p) => p.key);
+  const sRaw = (method, p, { body, cookie } = {}) => sh({ method, path: p.split('/').filter(Boolean), headers: { ...H, ...(cookie ? { cookie } : {}) }, body: body ?? null, ip: `7.7.${++n % 250}.${n % 250}` });
+  // (every series request carries a squad, as the form does, unless a test sends its own with `squad` or uses sRaw)
+  const sCall = async (method, p, { body, cookie } = {}) => {
+    const m = /^boards\/([^/]+)\/series(?:\/([^/]+)(?:\/(accept))?)?$/.exec(p);
+    if (m && body !== undefined && body !== null && ((method === 'POST' && !m[2]) || (method === 'PUT' && m[2] && !m[3])) && body.squad === undefined && body.format) body = { ...body, squad: squadFor(m[1], body.format, body.clubFormat) };
+    if (m && m[3] && method === 'POST' && (body === undefined || body === null || body.squad === undefined)) {
+      const cur = await sStore.seriesGet(m[2]);
+      if (cur) body = { ...(body ?? {}), squad: squadFor(m[1], cur.format, cur.club_format) };
+    }
+    return sRaw(method, p, { body, cookie });
+  };
   const sLogin = async (role, c) => { const r = await sCall('POST', 'login', { body: { role, username: c.username, password: c.password } }); return `iocf_cc=${cookieOf(r)}`; };
   let [cIndia, cAus, cEng, cNz, cPak, cAdm, cMexico] = await Promise.all([sLogin('board', sc('India')), sLogin('board', sc('Australia')), sLogin('board', sc('England')), sLogin('board', sc('New Zealand')), sLogin('board', sc('Pakistan')), sLogin('admin', sCreds.find((c) => c.username === 'iocf.admin')), sLogin('board', sc('Mexico'))]);
   const good = (o = {}) => {
@@ -633,6 +648,38 @@ console.log('\n— Series Announcement —');
       const edited = await sCall('PUT', `boards/england/series/${two.body.series.id}`, { cookie: cEng, body: quad({ perDay: 1, name: 'Two A Day Cup', dates: ['2027-03-20', '2027-03-21', '2027-03-22', '2027-03-23', '2027-03-24', '2027-03-25'] }) });
       check('a series set to 2 matches a day can be edited back to 1 a day (and the other way) until an opponent accepts', edited.status === 200 && edited.body.series.perDay === 1 && (await sCall('PUT', `boards/england/series/${two.body.series.id}`, { cookie: cEng, body: quad({ perDay: 2, dates: pairDates }) })).body.series.perDay === 2);
       check('the calendar of a confirmed 2-a-day series lists both matches of each day on the same date', await (async () => { const { calendarEntries } = await import('../../server/command/series.mjs'); const row = { id: 'x', name: 'Cal', series_type: 'quadrilateral', host: 'england', opponents: ['italy', 'spain', 'portugal'], accepted: ['italy', 'spain', 'portugal'], matches: 7, stadiums: stad, dates: pairDates, bet: 5000, format: 'T20', status: 'accepted' }; const e = calendarEntries(row, BOARDS); return e.filter((m) => m.date === '2027-03-10').length === 2 && e.length >= 6; })());
+    }
+    // ---- Squad Announcement
+    {
+      const { squadLimits: lim, squadProblem: sp, limitsText } = await import('../../src/data/commandCenter/squads.mjs');
+      const L = (f, c) => { const x = lim(f, c); return x ? `${x.min}-${x.max}` : null; };
+      check('squad sizes by format: Club 4/4 and 5/5 7–8, Club 6/6, 7/7 and 8/8 9–10, T10 11–12, T20 and 100 13–15, ODI 15–18, Test and L4I 15–20', L('Club', '4-4') === '7-8' && L('Club', '5-5') === '7-8' && L('Club', '6-6') === '9-10' && L('Club', '7-7') === '9-10' && L('Club', '8-8') === '9-10' && L('T10') === '11-12' && L('T20') === '13-15' && L('100') === '13-15' && L('ODI') === '15-18' && L('TEST') === '15-20' && L('L4I') === '15-20' && L('Club') === null && L('Chess') === null && limitsText(lim('T10')) === '11 to 12 players');
+      const ros = Array.from({ length: 20 }, (_, n) => ({ key: `p${n}`, name: `P${n}` }));
+      const ks = (n) => ros.slice(0, n).map((p) => p.key);
+      check('a squad is complete only inside its limits, with distinct registered players', sp(ks(13), ros, lim('T20')) === null && sp(ks(15), ros, lim('T20')) === null && sp(ks(12), ros, lim('T20')) !== null && sp(ks(16), ros, lim('T20')) !== null && sp(['p1', 'p1', ...ks(12).slice(2)], ros, lim('T20')) !== null && sp([...ks(12), 'stranger'], ros, lim('T20')) !== null && sp(ks(7), ros, null) !== null && sp(ks(5), ros.slice(0, 5), lim('Club', '4-4')) !== null);
+      const sq = (slug, fmt, club) => squadFor(slug, fmt, club);
+      const base = (o = {}) => good({ name: 'Squad Cup', opponents: ['uae'], stadiums: [STADIUMS['sri-lanka'][0]], dates: ['2027-05-05'], format: 'T20', ...o });
+      const send = (body, cookie = cSl, slug = 'sri-lanka') => sRaw('POST', `boards/${slug}/series`, { cookie, body });
+      const cSl = await sLogin('board', sc('Sri Lanka'));
+      const info = (await sCall('GET', 'boards/sri-lanka/series', { cookie: cSl })).body;
+      check('the series page gives the board\'s registered players for the squad dropdown', Array.isArray(info.roster) && info.roster.length === sRoster(sSnap, 'sri-lanka').players.length && info.roster.every((p) => p.key && p.name));
+      check('a series cannot be announced without a squad, with too few or too many players, with duplicates, or with another board\'s players', (await send(base())).status === 400 && (await send(base({ squad: sq('sri-lanka', 'T20').slice(0, 12) }))).status === 400 && (await send(base({ squad: sRoster(sSnap, 'sri-lanka').players.slice(0, 16).map((p) => p.key) }))).status === 400 && (await send(base({ squad: [...sq('sri-lanka', 'T20').slice(0, 12), sq('sri-lanka', 'T20')[0]] }))).status === 400 && (await send(base({ squad: sq('uae', 'T20') }))).status === 400);
+      const ok = await send(base({ squad: sq('sri-lanka', 'T20') }));
+      check('with a squad of 13 the T20 series is announced; the squad (names) comes back with the series', ok.status === 201 && ok.body.series.squads['sri-lanka'].length === 13 && ok.body.series.squads['sri-lanka'].every((p) => p.key && p.name) && Object.keys(ok.body.series.squads).join() === 'sri-lanka');
+      check('the limits follow the format: a Club 4/4 series needs 7 to 8 (9 is too many), Test needs 15 to 20 (13 is too few)', (await send(base({ name: 'Club Squad', format: 'Club', clubFormat: '4-4', dates: ['2027-05-06'], squad: sq('sri-lanka', 'Club', '4-4') }))).status === 201 && (await send(base({ name: 'Club Big', format: 'Club', clubFormat: '4-4', dates: ['2027-05-09'], squad: sRoster(sSnap, 'sri-lanka').players.slice(0, 9).map((p) => p.key) }))).status === 400 && (await send(base({ name: 'Test Small', format: 'TEST', dates: ['2027-05-10'], squad: sq('sri-lanka', 'T20') }))).status === 400);
+      const sid2 = ok.body.series.id;
+      check('the opponent cannot accept without its squad, with too few players, or with players of another board', (await sRaw('POST', `boards/uae/series/${sid2}/accept`, { cookie: await sLogin('board', sc('UAE')) })).status === 400 && (await sRaw('POST', `boards/uae/series/${sid2}/accept`, { cookie: await sLogin('board', sc('UAE')), body: { squad: sq('uae', 'T20').slice(0, 12) } })).status === 400 && (await sRaw('POST', `boards/uae/series/${sid2}/accept`, { cookie: await sLogin('board', sc('UAE')), body: { squad: sq('sri-lanka', 'T20') } })).status === 400 && (await sStore.seriesGet(sid2)).accepted.length === 0);
+      const cPt = await sLogin('board', sc('UAE'));
+      const acceptOk = await sRaw('POST', `boards/uae/series/${sid2}/accept`, { cookie: cPt, body: { squad: sq('uae', 'T20') } });
+      check('with its own squad of 13 the opponent accepts; both squads are kept with the confirmed series', acceptOk.status === 200 && acceptOk.body.series.status === 'accepted' && acceptOk.body.series.squads['sri-lanka'].length === 13 && acceptOk.body.series.squads.uae.length === 13);
+      const sc3 = await send(base({ name: 'Tri Squad', type: 'trilateral', opponents: ['uae', 'south-africa'], matches: 4, stadiums: [STADIUMS.uae[0], STADIUMS['sri-lanka'][0], STADIUMS['south-africa'][0]], dates: ['2027-05-20', '2027-05-21', '2027-05-22'], format: 'T10', squad: sq('sri-lanka', 'T10') }));
+      const cNepal2 = await sLogin('board', sc('South Africa'));
+      const firstAccept = await sRaw('POST', `boards/uae/series/${sc3.body.series?.id}/accept`, { cookie: cPt, body: { squad: sq('uae', 'T10') } });
+      const secondAccept = await sRaw('POST', `boards/south-africa/series/${sc3.body.series?.id}/accept`, { cookie: cNepal2, body: { squad: sq('south-africa', 'T10') } });
+      check('in a trilateral series every opponent announces its own squad (11 to 12 for T10); it is confirmed when all have', sc3.status === 201 && firstAccept.status === 200 && firstAccept.body.series.status === 'pending' && secondAccept.status === 200 && secondAccept.body.series.status === 'accepted' && Object.keys(secondAccept.body.series.squads).sort().join() === 'south-africa,sri-lanka,uae' && secondAccept.body.series.squads['south-africa'].length === 11);
+      const open = await send(base({ name: 'Edit Squad', dates: ['2027-05-27'], squad: sq('sri-lanka', 'T20') }));
+      check('editing keeps the squad rule: a series cannot be saved without a valid squad, and changing the format to one that needs more players needs a bigger squad', (await sRaw('PUT', `boards/sri-lanka/series/${open.body.series.id}`, { cookie: cSl, body: base({ name: 'Edit Squad', dates: ['2027-05-27'] }) })).status === 400 && (await sRaw('PUT', `boards/sri-lanka/series/${open.body.series.id}`, { cookie: cSl, body: base({ name: 'Edit Squad', dates: ['2027-05-27'], format: 'ODI', squad: sq('sri-lanka', 'T20') }) })).status === 400 && (await sRaw('PUT', `boards/sri-lanka/series/${open.body.series.id}`, { cookie: cSl, body: base({ name: 'Edit Squad', dates: ['2027-05-27'], format: 'ODI', squad: sq('sri-lanka', 'ODI') }) })).body.series.squads['sri-lanka'].length === 15);
+      check('the administrator announcing for a board uses that board\'s own players', (await sRaw('POST', 'boards/sri-lanka/series', { cookie: cAdm, body: base({ name: 'Admin Squad', dates: ['2027-05-28'], squad: sq('sri-lanka', 'T20') }) })).status === 201 && (await sRaw('POST', 'boards/sri-lanka/series', { cookie: cAdm, body: base({ name: 'Admin Wrong', dates: ['2027-05-29'], squad: sq('india', 'T20') }) })).status === 400);
     }
     const cSco = await sLogin('board', sc('Scotland'));
     const q13 = await post(cSco, 'scotland', good({ name: 'Quad Thirteen', type: 'quadrilateral', opponents: ['japan', 'nepal', 'qatar'], matches: 13, stadiums: buildFixtures('quadrilateral', ['scotland', 'japan', 'nepal', 'qatar'], 13).filter((f) => !f.final).map((f) => STADIUMS[f.teams[0]][0]) }));

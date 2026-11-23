@@ -100,6 +100,7 @@ alter table public.command_series add column if not exists declined_by text;
 alter table public.command_series add column if not exists declined_at bigint;
 alter table public.command_series add column if not exists credits_applied_at bigint;
 alter table public.command_series add column if not exists matches_per_day integer not null default 1;
+alter table public.command_series add column if not exists squads jsonb not null default '{}';
 alter table public.command_series enable row level security;
 revoke all on public.command_series from anon, authenticated;
 -- (no policies on purpose: only the server's service-role key can reach this table)

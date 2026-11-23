@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { buildFixtures, dateProblem, perDayChoices, stadiumBoards } from '../../src/data/commandCenter/fixtures.mjs';
+import { squadLimits, squadProblem } from '../../src/data/commandCenter/squads.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 export const SERIES_CFG = read('../../src/data/commandCenter/series.json');
@@ -65,7 +66,7 @@ const validDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.pars
  * `keepClubFormat`: the club format a series being edited already has. A retired format (series.json: "retired") is kept on the series that
  * were announced with it, but it can no longer be chosen for a new one.
  */
-export function validateSeries(input, host, boards, t = Date.now(), keepClubFormat = null, stadiums = STADIUMS) {
+export function validateSeries(input, host, boards, t = Date.now(), keepClubFormat = null, stadiums = STADIUMS, roster = null) {
   const i = input && typeof input === 'object' ? input : {};
   const name = clean(i.name);
   if (name.length < 3 || name.length > 60) return { error: 'Enter the name of the series (3 to 60 characters).' };
@@ -107,7 +108,16 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
     clubFormat = SERIES_CFG.clubFormats.find((c) => c.id === i.clubFormat && (!c.retired || c.id === keepClubFormat))?.id;
     if (!clubFormat) return { error: 'Choose the club format (overs and wickets).' };
   }
-  return { value: { name, series_type: type.id, opponents, matches, stadiums: chosen, dates, bet, format: i.format, club_format: clubFormat, ...(perDay === 2 ? { matches_per_day: 2 } : {}) } };
+  // the host's squad announcement (checked against the host's registered players; skipped only where no roster is given, e.g. a direct call)
+  let squads = undefined;
+  if (roster) {
+    const keys = Array.isArray(i.squad) ? i.squad.map(String) : [];
+    const problem = squadProblem(keys, roster, squadLimits(i.format, clubFormat));
+    if (problem) return { error: `Squad announcement: ${problem}` };
+    const byKey = new Map(roster.map((p) => [p.key, p.name]));
+    squads = { [host]: keys.map((key) => ({ key, name: byKey.get(key) })) };
+  }
+  return { value: { name, series_type: type.id, opponents, matches, stadiums: chosen, dates, bet, format: i.format, club_format: clubFormat, ...(perDay === 2 ? { matches_per_day: 2 } : {}), ...(squads ? { squads } : {}) } };
 }
 
 export function newSeries(fields, host, t) {
@@ -128,6 +138,8 @@ export function toApi(s, boards, t) {
     stadiums: s.stadiums,
     dates: s.dates ?? [],
     perDay: s.matches_per_day ?? 1,
+    // the squads announced so far, by board: [{ key, name }]
+    squads: s.squads ?? {},
     fixtures,
     bet: s.bet,
     format: s.format,

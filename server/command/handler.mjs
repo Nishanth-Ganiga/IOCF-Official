@@ -51,7 +51,8 @@ import { movesOf, updateState } from '../../src/data/commandCenter/rankMoves.mjs
 import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
 import { mirrorConfigured, runMirror } from '../mirror/mirror.mjs';
-import { handlePsp, pspAttention } from './pspRoutes.mjs';
+import { handlePsp, pspAttention, rosterOf } from './pspRoutes.mjs';
+import { squadLimits, squadProblem } from '../../src/data/commandCenter/squads.mjs';
 import { MAX_PENDING, STADIUM_COST, STADIUM_LEVEL, countryOf, newRequest, noticeFor, stadiumLists, takenNames, toApi as stadiumToApi, validateRequest } from './stadiums.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
@@ -482,6 +483,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             canAct: own,
             stadiums: (await stadiumsNow())[board.slug] ?? [],
             allStadiums: await stadiumsNow(),
+            // the board's registered players, for the squad announcement
+            roster: rosterOf(await loadDataset(), board.slug).players.map((p) => ({ key: p.key, name: p.name })),
             announced: all.filter((x) => x.host === board.slug && (isLive(x, t) || declinedVisibleTo(x, board.slug, t))).map((x) => toApi(x, BOARDS, t)),
             invitations: live.filter((x) => x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).map((x) => toApi(x, BOARDS, t)),
             completed: live.filter((x) => x.status === 'accepted' && x.result_winner).sort((p, q) => (q.result_at ?? 0) - (p.result_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
@@ -492,7 +495,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         if (!d && method === 'POST') {
           const no = mustOwn();
           if (no) return no;
-          const v = validateSeries(req.body, board.slug, BOARDS, t, null, await stadiumsNow());
+          const v = validateSeries(req.body, board.slug, BOARDS, t, null, await stadiumsNow(), rosterOf(await loadDataset(), board.slug).players);
           if (v.error) return fail(400, 'invalid', v.error);
           const all = await store.seriesList();
           // a board can be in 2 series at a time: a new one is refused only if 2 others are on at the same time (it may start the day after one ends)
@@ -513,7 +516,7 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (cur.status === 'declined') return fail(409, 'declined', 'This series was declined and can no longer be edited. Announce it again instead.');
           if (cur.status !== 'pending' || cur.accepted.length > 0) return fail(409, 'locked', 'This series has been accepted and can no longer be edited.');
           if (t > cur.deadline_at) return fail(409, 'expired', 'The deadline for this series has passed.');
-          const v = validateSeries(req.body, board.slug, BOARDS, t, cur.club_format, await stadiumsNow());
+          const v = validateSeries(req.body, board.slug, BOARDS, t, cur.club_format, await stadiumsNow(), rosterOf(await loadDataset(), board.slug).players);
           if (v.error) return fail(400, 'invalid', v.error);
           const all = await store.seriesList();
           const range = rangeOf(v.value.dates);
@@ -537,9 +540,16 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const all = await store.seriesList();
           // accepting is checked against the dates of THIS series: a board with 2 series can accept one that starts the day after one of them ends
           if (busyOn(all, board.slug, t, rangeOf(cur.dates), cur.id) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
+          // the accepting board announces its squad too: the size depends on the series' format
+          const roster = rosterOf(await loadDataset(), board.slug).players;
+          const keys = Array.isArray(req.body?.squad) ? req.body.squad.map(String) : [];
+          const squadIssue = squadProblem(keys, roster, squadLimits(cur.format, cur.club_format));
+          if (squadIssue) return fail(400, 'squad', `Squad announcement: ${squadIssue}`);
+          const names = new Map(roster.map((p) => [p.key, p.name]));
+          const squads = { ...(cur.squads ?? {}), [board.slug]: keys.map((key) => ({ key, name: names.get(key) })) };
           const accepted = [...cur.accepted, board.slug];
           const done = cur.opponents.every((o) => accepted.includes(o));
-          const row = await store.seriesUpdate(cur.id, { accepted, status: done ? 'accepted' : 'pending', accepted_at: done ? t : null, updated_at: t });
+          const row = await store.seriesUpdate(cur.id, { accepted, squads, status: done ? 'accepted' : 'pending', accepted_at: done ? t : null, updated_at: t });
           await audit('series_accepted', who, cur.id, req, { name: row.name });
           return json(200, { series: toApi(row, BOARDS, t) });
         }
