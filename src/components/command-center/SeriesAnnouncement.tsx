@@ -478,8 +478,25 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
     setBusy(false);
   };
 
-  const ready =
-    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] > todayIst()) && !dateProblem(scheduled, scheduled.map((_, i) => form.dates[i] ?? ''), perDay) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat) && !squadProblem(form.squad ?? [], data.roster, squadLimits(form.format, form.clubFormat));
+  // everything still needed before Send can be pressed (shown under the button, so it is never a mystery why it is disabled)
+  const dates = scheduled.map((_, i) => form.dates[i] ?? '');
+  const squadIssue = squadProblem(form.squad ?? [], data.roster, squadLimits(form.format, form.clubFormat));
+  const missing = [
+    form.name.trim().length < 3 && 'Enter the name of the series (at least 3 characters).',
+    !form.type && 'Choose the series type.',
+    form.type && !(form.opponents.length === need && form.opponents.every(Boolean)) && `Choose ${need === 1 ? 'the opponent board' : 'all the opponent boards'}.`,
+    form.type && new Set(form.opponents).size !== need && form.opponents.every(Boolean) && 'Each opponent board can only be chosen once.',
+    form.type && !(form.matches > 0) && 'Choose the number of matches.',
+    teamsReady && form.matches > 0 && scheduled.some((_, i) => !form.stadiums[i]) && 'Choose the stadium of every match.',
+    teamsReady && form.matches > 0 && scheduled.some((_, i) => !form.dates[i]) && 'Choose the date of every match.',
+    teamsReady && form.matches > 0 && scheduled.every((_, i) => form.dates[i]) && scheduled.some((_, i) => form.dates[i] <= todayIst()) && 'Every match date must be after today.',
+    teamsReady && form.matches > 0 && scheduled.every((_, i) => form.dates[i]) && dateProblem(scheduled, dates, perDay),
+    !(form.bet > 0) && 'Choose the bet amount.',
+    !form.format && 'Choose the format.',
+    form.format === 'Club' && !form.clubFormat && 'Choose the club format.',
+    form.format && (form.format !== 'Club' || form.clubFormat) && squadIssue && `Squad announcement: ${squadIssue}`,
+  ].filter(Boolean) as string[];
+  const ready = missing.length === 0;
 
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
@@ -617,6 +634,13 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
               </button>
             )}
           </div>
+          {!ready && (
+            <ul className="mt-3 list-disc space-y-0.5 pl-5 text-xs text-[#e9b44c]" aria-label="What is still needed">
+              {missing.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          )}
         </form>
       )}
 
