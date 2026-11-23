@@ -174,11 +174,20 @@
   ]
  },
  {
-  "name": "Arun Ozil",
+  "name": "Arunkrishnan 9895",
   "board": "japan",
   "aliases": [
    {
-    "name": "Arunkrishnan 9895",
+    "name": "Arun Ozil"
+   }
+  ]
+ },
+ {
+  "name": "Hashir Kuttu",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Hashir",
     "boards": [
      "japan"
     ]
@@ -186,23 +195,11 @@
   ]
  },
  {
-  "name": "Hashir",
+  "name": "Machu",
   "board": "japan",
   "aliases": [
    {
-    "name": "Hashir Kuttu",
-    "boards": [
-     "japan"
-    ]
-   }
-  ]
- },
- {
-  "name": "Ahmed Mahsoof",
-  "board": "japan",
-  "aliases": [
-   {
-    "name": "Machu"
+    "name": "Ahmed Mahsoof"
    }
   ],
   "squadEntries": [
@@ -229,14 +226,11 @@
   ]
  },
  {
-  "name": "Moh Murshi",
+  "name": "Murshi",
   "board": "japan",
   "aliases": [
    {
-    "name": "Murshi",
-    "boards": [
-     "japan"
-    ]
+    "name": "Moh Murshi"
    }
   ]
  },
@@ -358,26 +352,20 @@
   ]
  },
  {
-  "name": "Asthu Mohammad",
+  "name": "Asthu Mohammed",
   "board": "scotland",
   "aliases": [
    {
-    "name": "Asthu Mohammed",
-    "boards": [
-     "scotland"
-    ]
+    "name": "Asthu Mohammad"
    }
   ]
  },
  {
-  "name": "Huzain Muhammad",
+  "name": "Huzain Muhammed",
   "board": "scotland",
   "aliases": [
    {
-    "name": "Huzain Muhammed",
-    "boards": [
-     "scotland"
-    ]
+    "name": "Huzain Muhammad"
    }
   ]
  },
@@ -614,7 +602,7 @@
   ]
  },
  {
-  "name": "Anish Babu Koni",
+  "name": "Anish Babu Konni",
   "board": "west-indies",
   "aliases": [
    {
@@ -622,6 +610,9 @@
     "boards": [
      "west-indies"
     ]
+   },
+   {
+    "name": "Anish Babu Koni"
    }
   ]
  },
@@ -1018,20 +1009,26 @@
   ]
  },
  {
-  "name": "Machan",
+  "name": "Machan Abd",
   "board": "japan",
   "aliases": [
    {
-    "name": "Machan Abd"
+    "name": "Machan",
+    "boards": [
+     "japan"
+    ]
    }
   ]
  },
  {
-  "name": "Mahir",
+  "name": "Maahir Mahi",
   "board": "japan",
   "aliases": [
    {
-    "name": "Maahir Mahi"
+    "name": "Mahir",
+    "boards": [
+     "japan"
+    ]
    }
   ]
  },
@@ -1045,38 +1042,50 @@
   ]
  },
  {
-  "name": "Akash",
+  "name": "Akash Sky",
   "board": "japan",
   "aliases": [
    {
-    "name": "Akash Sky"
+    "name": "Akash",
+    "boards": [
+     "japan"
+    ]
    }
   ]
  },
  {
-  "name": "Alimsha",
+  "name": "Alimsha Srt",
   "board": "japan",
   "aliases": [
    {
-    "name": "Alimsha Srt"
+    "name": "Alimsha",
+    "boards": [
+     "japan"
+    ]
    }
   ]
  },
  {
-  "name": "Aswin",
+  "name": "Aswin Aravind",
   "board": "japan",
   "aliases": [
    {
-    "name": "Aswin Aravind"
+    "name": "Aswin",
+    "boards": [
+     "japan"
+    ]
    }
   ]
  },
  {
-  "name": "Ajeeb",
+  "name": "Ajeeb Pa",
   "board": "japan",
   "aliases": [
    {
-    "name": "Ajeeb Pa"
+    "name": "Ajeeb",
+    "boards": [
+     "japan"
+    ]
    }
   ]
  },
@@ -1390,11 +1399,11 @@
   ]
  },
  {
-  "name": "Amith Kumar",
+  "name": "Amith Kumar Krishnan",
   "board": "west-indies",
   "aliases": [
    {
-    "name": "Amith Kumar Krishnan"
+    "name": "Amith Kumar"
    }
   ]
  },
@@ -1565,11 +1574,11 @@
   ]
  },
  {
-  "name": "Mashoodh",
+  "name": "Mashood",
   "board": "japan",
   "aliases": [
    {
-    "name": "Mashood",
+    "name": "Mashoodh",
     "boards": [
      "japan"
     ]
@@ -1732,20 +1741,29 @@
   ]
  },
  {
-  "name": "Ajmal",
+  "name": "Ajmal Sunaif BP",
   "board": "west-indies",
   "aliases": [
    {
     "name": "Ajmal Sunaif"
+   },
+   {
+    "name": "Ajmal",
+    "boards": [
+     "west-indies"
+    ]
    }
   ]
  },
  {
-  "name": "Sreeraj",
+  "name": "Sreeraj R Kaimal",
   "board": "west-indies",
   "aliases": [
    {
-    "name": "Sreeraj R Kaimal"
+    "name": "Sreeraj",
+    "boards": [
+     "west-indies"
+    ]
    }
   ]
  },
@@ -2094,6 +2112,144 @@
     "name": "Noufal",
     "boards": [
      "portugal"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Abhi VK18",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Abhi VK"
+   }
+  ]
+ },
+ {
+  "name": "Alan Shahudeen",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Alan",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Midlaj",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Midhlaj",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Sarath Krishnan",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Sarath",
+    "boards": [
+     "japan"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Vishnu Sagav",
+  "board": "japan",
+  "aliases": [
+   {
+    "name": "Vishnu Saghav"
+   }
+  ]
+ },
+ {
+  "name": "Ajay Paul",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Ajay",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Aneesh Kannur",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Aneesh",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Athul P",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Athul",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Falah Mancheri",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Falah",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Jaseel Vavad",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Jaseel",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Kannan Balakrishnan",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Kannan",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Nihal Maxi",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Nihal",
+    "boards": [
+     "west-indies"
     ]
    }
   ]
