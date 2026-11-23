@@ -154,6 +154,8 @@ export type BoardAccount = {
 export type AccountsInfo = { admin: { accountId: string; username: string; status: string; lastLoginAt: string | null } | null; boards: BoardAccount[] };
 
 export type SeriesInput = {
+  /** Matches a day: 1 (default) or 2 (quadrilateral series only). */
+  perDay?: number;
   name: string;
   type: string;
   opponents: string[];
@@ -175,6 +177,8 @@ export type Series = {
   matches: number;
   stadiums: string[];
   dates: string[];
+  /** Matches played on one day: 1, or 2 in a quadrilateral series. */
+  perDay?: number;
   /** The full schedule; the final has no teams or stadium yet. */
   fixtures: { no: number; final: boolean; teams: string[] | null; stadium: string | null; date: string | null }[];
   bet: number;

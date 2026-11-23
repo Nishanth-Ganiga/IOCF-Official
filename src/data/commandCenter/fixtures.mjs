@@ -28,5 +28,48 @@ export function buildFixtures(type, teams, matches) {
   return out;
 }
 
+/**
+ * How many matches of a series may be played on one day. Every series plays one a day; a quadrilateral series may also play two a day,
+ * which is always two matches between four different teams (the league matches come in such pairs: 1 & 2, 3 & 4, 5 & 6 …).
+ */
+export const PER_DAY_CHOICES = { quadrilateral: [1, 2] };
+export const perDayChoices = (type) => PER_DAY_CHOICES[type] ?? [1];
+
+/** The scheduled (league) matches grouped into match days: [[fixture, …], …]. */
+export function matchDays(scheduled, perDay = 1) {
+  const days = [];
+  for (let i = 0; i < scheduled.length; i += perDay) days.push(scheduled.slice(i, i + perDay));
+  return days;
+}
+
+/**
+ * Checks the dates of the scheduled matches (one date per match, in match order). Returns the problem as a sentence, or null when fine.
+ *   one match a day  : every match has its own date, each later than the one before
+ *   two matches a day: the two matches of a day have the same date, each day is later than the one before, and no team plays twice on a day
+ */
+export function dateProblem(scheduled, dates, perDay = 1) {
+  if (perDay === 1) {
+    if (dates.some((d, k) => k > 0 && d === dates[k - 1])) return 'Two matches of the same series cannot be on the same date. Give each match its own date.';
+    if (dates.some((d, k) => k > 0 && d < dates[k - 1])) return 'Match dates must be in order: a match cannot be earlier than the one before it.';
+    return null;
+  }
+  const days = matchDays(scheduled, perDay);
+  let i = 0;
+  let previous = null;
+  for (const day of days) {
+    const ds = day.map((_, k) => dates[i + k]);
+    if (ds.some((d) => d !== ds[0])) return `Matches ${day.map((f) => f.no).join(' and ')} are played on the same day: give them the same date.`;
+    if (previous !== null && !(ds[0] > previous)) return 'Each match day must be later than the one before it: the days must be in order and cannot share a date.';
+    const seen = new Set();
+    for (const f of day) for (const t of f.teams ?? []) {
+      if (seen.has(t)) return 'A team cannot play two matches on the same day. Choose a different schedule.';
+      seen.add(t);
+    }
+    previous = ds[0];
+    i += day.length;
+  }
+  return null;
+}
+
 /** The stadiums a match may be played at: the host's for a bilateral series, either team's otherwise. */
 export const stadiumBoards = (type, fixture, host) => (type === 'bilateral' ? [host] : fixture.teams);

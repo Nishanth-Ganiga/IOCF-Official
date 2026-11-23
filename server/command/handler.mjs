@@ -520,7 +520,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (busyOn(all, board.slug, t, range, cur.id) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
           const full = v.value.opponents.map((o) => BOARDS.find((x) => x.slug === o)).find((o) => busyOn(all, o.slug, t, range, cur.id) >= SERIES_CFG.maxSeriesPerBoard);
           if (full) return fail(409, 'series_limit', limitMsg(full.name, false));
-          const row = await store.seriesUpdate(cur.id, { ...v.value, updated_at: t });
+          // (a series that was set to two matches a day and is changed back to one: the column is reset; the column is otherwise only written when used)
+          const row = await store.seriesUpdate(cur.id, { ...v.value, ...((cur.matches_per_day ?? 1) === 2 && !v.value.matches_per_day ? { matches_per_day: 1 } : {}), updated_at: t });
           await audit('series_edited', who, cur.id, req, { name: row.name });
           return json(200, { series: toApi(row, BOARDS, t) });
         }

@@ -6,7 +6,7 @@
 //   • a board can be in at most 2 series at a time
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { buildFixtures, stadiumBoards } from '../../src/data/commandCenter/fixtures.mjs';
+import { buildFixtures, dateProblem, perDayChoices, stadiumBoards } from '../../src/data/commandCenter/fixtures.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 export const SERIES_CFG = read('../../src/data/commandCenter/series.json');
@@ -76,6 +76,8 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
   if (new Set(opponents).size !== opponents.length) return { error: 'Each opponent board can only be chosen once.' };
   if (opponents.some((o) => o === host)) return { error: 'You cannot play a series against your own board.' };
   if (opponents.some((o) => !boards.some((b) => b.slug === o))) return { error: 'Choose opponent boards from the list.' };
+  const perDay = i.perDay === undefined || i.perDay === null || i.perDay === '' ? 1 : Number(i.perDay);
+  if (!perDayChoices(type.id).includes(perDay)) return { error: perDay === 2 ? 'Two matches a day can be chosen for a quadrilateral series only.' : 'Choose one match a day or two matches a day.' };
   const matches = Number(i.matches);
   if (!type.matchOptions.includes(matches)) return { error: `Choose how many matches: ${type.matchOptions.join(' or ')}.` };
   // every scheduled match needs a stadium of one of the boards allowed to host it (the final is not scheduled)
@@ -95,8 +97,8 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
   if (dates.some((d) => d < today)) return { error: 'A match date cannot be in the past.' };
   if (dates.some((d) => d === today)) return { error: 'A series cannot start on the day it is announced. Choose a later date for the first match.' };
   if (dates.some((d) => d > last)) return { error: 'A match date cannot be more than a year away.' };
-  if (dates.some((d, k) => k > 0 && d === dates[k - 1])) return { error: 'Two matches of the same series cannot be on the same date. Give each match its own date.' };
-  if (dates.some((d, k) => k > 0 && d < dates[k - 1])) return { error: 'Match dates must be in order: a match cannot be earlier than the one before it.' };
+  const dayProblem = dateProblem(fixtures, dates, perDay);
+  if (dayProblem) return { error: dayProblem };
   const bet = Number(i.bet);
   if (!SERIES_CFG.bets.includes(bet)) return { error: 'Choose the bet amount from the list.' };
   if (!SERIES_CFG.formats.includes(i.format)) return { error: 'Choose the format.' };
@@ -105,7 +107,7 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
     clubFormat = SERIES_CFG.clubFormats.find((c) => c.id === i.clubFormat && (!c.retired || c.id === keepClubFormat))?.id;
     if (!clubFormat) return { error: 'Choose the club format (overs and wickets).' };
   }
-  return { value: { name, series_type: type.id, opponents, matches, stadiums: chosen, dates, bet, format: i.format, club_format: clubFormat } };
+  return { value: { name, series_type: type.id, opponents, matches, stadiums: chosen, dates, bet, format: i.format, club_format: clubFormat, ...(perDay === 2 ? { matches_per_day: 2 } : {}) } };
 }
 
 export function newSeries(fields, host, t) {
@@ -125,6 +127,7 @@ export function toApi(s, boards, t) {
     matches: s.matches,
     stadiums: s.stadiums,
     dates: s.dates ?? [],
+    perDay: s.matches_per_day ?? 1,
     fixtures,
     bet: s.bet,
     format: s.format,

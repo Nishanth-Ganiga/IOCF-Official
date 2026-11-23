@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError, type Series, type SeriesInput, type SeriesOverview } from '../../data/commandApi';
 import { BOARD_THEMES, paletteOf, type BoardTheme } from '../../data/commandCenter/boardConfig';
 import cfg from '../../data/commandCenter/series.json';
-import { buildFixtures, stadiumBoards } from '../../data/commandCenter/fixtures.mjs';
+import { buildFixtures, dateProblem, stadiumBoards } from '../../data/commandCenter/fixtures.mjs';
 import SeriesHistory, { ItemCard, NO_EXTRAS, SourceNote, recordItems, type Extras } from './SeriesHistory';
 import SeriesPlayerStats from './SeriesPlayerStats';
 
@@ -10,6 +10,7 @@ type Go = (sub?: string) => void;
 
 const TYPES = cfg.types;
 const money = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+const dayLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const ist = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
 const typeLabel = (id: string) => TYPES.find((t) => t.id === id)?.label ?? id;
 const formatLabel = (s: Series) => (s.clubFormat ? `Club · ${s.clubFormat}` : s.format);
@@ -130,6 +131,7 @@ export function Facts({ s, you, full }: { s: Series; you: string; full?: boolean
     ['Hosted by', s.host.name],
     [s.opponents.length > 1 ? 'Opponents' : 'Opponent', s.opponents.map((o) => (s.status !== 'accepted' && s.opponents.length > 1 ? `${o.name}${o.accepted ? ' ✓' : ''}` : o.name)).join(', ')],
     ['Matches', String(s.matches)],
+    ...(s.perDay === 2 ? ([['Matches per day', '2 (a pair of matches each day)']] as [string, string][]) : []),
     ['Bet amount', money(s.bet)],
     ['Format', formatLabel(s)],
     ...(s.result ? ([['Result', `${s.result.winner ? `${s.result.winner.name} won the series` : 'Series drawn'}${s.result.note ? ` · ${s.result.note}` : ''}`]] as [string, string][]) : []),
@@ -367,9 +369,11 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
   const scheduled = schedule.filter((f) => !f.final);
   const stadiumsFor = (f: (typeof schedule)[number]) => [...new Set(stadiumBoards(form.type, f, theme.slug).flatMap((b) => data.allStadiums[b] ?? []))];
 
+  const perDay = form.type === 'quadrilateral' && form.perDay === 2 ? 2 : 1;
+  const pickPerDay = (n: number) => set({ perDay: n, stadiums: form.stadiums, dates: scheduled.map((_, i) => (n === 2 ? (form.dates[i - (i % 2)] ?? '') : i % 2 === 1 ? '' : (form.dates[i] ?? ''))) });
   const pickType = (id: string) => {
     const t = TYPES.find((x) => x.id === id)!;
-    set({ type: id, opponents: Array.from({ length: t.opponents }, (_, i) => form.opponents[i] ?? ''), matches: t.matchOptions.includes(form.matches) ? form.matches : 0, stadiums: [], dates: form.dates });
+    set({ perDay: id === 'quadrilateral' ? form.perDay : 1, type: id, opponents: Array.from({ length: t.opponents }, (_, i) => form.opponents[i] ?? ''), matches: t.matchOptions.includes(form.matches) ? form.matches : 0, stadiums: [], dates: form.dates });
   };
   const pickOpponent = (i: number, slug: string) => set({ opponents: form.opponents.map((x, j) => (j === i ? slug : x)), stadiums: [] });
   const pickMatches = (n: number) => set({ matches: n });
@@ -380,21 +384,21 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
   const startEdit = (s: Series) => {
     setEditing(s);
     setMsg(null);
-    setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: datesOf(s), bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: datesOf(s), bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const startAgain = (s: Series) => {
     setEditing(null);
     setMsg(null);
-    setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: [], bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: [], bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const send = async () => {
     setBusy(true);
     setMsg(null);
-    const body: SeriesInput = { ...form, stadiums: scheduled.map((_, i) => form.stadiums[i] ?? ''), dates: scheduled.map((_, i) => form.dates[i] ?? ''), ...(form.format === 'Club' ? {} : { clubFormat: undefined }) };
+    const body: SeriesInput = { ...form, perDay, stadiums: scheduled.map((_, i) => form.stadiums[i] ?? ''), dates: scheduled.map((_, i) => form.dates[i] ?? ''), ...(form.format === 'Club' ? {} : { clubFormat: undefined }) };
     try {
       if (editing) await api.editSeries(theme.slug, editing.id, body);
       else await api.announceSeries(theme.slug, body);
@@ -412,7 +416,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
   };
 
   const ready =
-    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] > todayIst() && (i === 0 || form.dates[i] > form.dates[i - 1])) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
+    form.name.trim().length >= 3 && form.type && form.opponents.length === need && form.opponents.every(Boolean) && new Set(form.opponents).size === need && teamsReady && form.matches > 0 && scheduled.length > 0 && scheduled.every((_, i) => form.stadiums[i] && form.dates[i] && form.dates[i] > todayIst()) && !dateProblem(scheduled, scheduled.map((_, i) => form.dates[i] ?? ''), perDay) && form.bet > 0 && form.format && (form.format !== 'Club' || form.clubFormat);
 
   return (
     <div style={{ ['--hl' as string]: pal.highlight }}>
@@ -433,6 +437,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           <><b>Opponent board(s)</b> — pick them from the list of the other 25 boards. A board can only be chosen once.</>,
           <><b>Number of matches</b> — Bilateral: 1, 3, 5 or 7. Trilateral: 4 or 7. Quadrilateral: 7 or 13.</>,
           <><b>Stadium and date for each match</b> — in a bilateral series choose your home stadium and the date for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium and a date for each one; the stadium comes from the stadiums of the two teams playing it. A series cannot start on the day you announce it, so the first match must be on a later date. Each match needs its own date: two matches of the same series cannot be on the same day, and each match must be after the one before it. Dates cannot be more than a year away. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled, so it has no stadium or date.</>,
+          <><b>Matches per day</b> (quadrilateral only) — choose <b>1 game per day</b> (every match has its own date) or <b>2 games per day</b> (matches 1 and 2 share a date, then 3 and 4, and so on; the two matches of a day are always between four different teams, so no team plays twice on one day).</>,
           <><b>Bet amount</b> — choose one of ₹1,000 · 2,000 · 3,000 · 4,000 · 5,000 · 10,000 · 20,000 · 50,000.</>,
           <><b>Format</b> — Club, T10, T20, TEST, ODI or L4I. If you choose <b>Club</b>, also choose the club format: 4 overs 4 wickets up to 9 overs 9 wickets.</>,
           <>Press <b>Send</b>. The series goes straight to your opponent’s “Accept the Series” tile.</>,
@@ -485,6 +490,10 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           )}
 
           {form.type && <Pills hl={pal.highlight} label="HOW MANY MATCHES IN THE SERIES?" value={form.matches || undefined} options={matchOptions} onPick={pickMatches} />}
+          {form.type === 'quadrilateral' && form.matches > 0 && (
+            <Pills hl={pal.highlight} label="MATCHES PER DAY" value={perDay} options={[1, 2]} onPick={pickPerDay} show={(n) => (n === 1 ? '1 game per day' : '2 games per day')} />
+          )}
+          {form.type === 'quadrilateral' && perDay === 2 && <p className="mt-2 text-xs text-smoke">Two games a day: matches 1 and 2 are on the same day, then 3 and 4, and so on. The two matches of a day are always between four different teams, so no team plays twice on one day.</p>}
           {form.type && form.type !== 'bilateral' && <p className="mt-2 text-xs text-smoke">The last match is the final. Its teams are only known after the league matches, so it does not need a stadium or a schedule.</p>}
 
           {form.matches > 0 && !teamsReady && <p className="mt-5 text-sm text-mist">Choose {need === 1 ? 'the opponent board' : 'all the opponent boards'} to prepare the match schedule.</p>}
@@ -512,10 +521,14 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
                             ))}
                           </select>
                         </label>
-                        <label className="block">
-                          <span className="sr-only">Date of match {f.no}</span>
-                          <input type="date" value={form.dates[f.no - 1] ?? ''} min={f.no > 1 && form.dates[f.no - 2] && form.dates[f.no - 2] > todayIst() ? nextDay(form.dates[f.no - 2]) : nextDay(todayIst())} max={lastDay()} onChange={(e) => set({ dates: scheduled.map((_, i) => (i === f.no - 1 ? e.target.value : (form.dates[i] ?? ''))) })} className={`${field} mt-0`} />
-                        </label>
+                        {perDay === 2 && f.no % 2 === 0 ? (
+                          <span className="text-xs text-mist">Same day as match {f.no - 1}: {form.dates[f.no - 2] ? dayLabel(form.dates[f.no - 2]) : '—'}</span>
+                        ) : (
+                          <label className="block">
+                            <span className="sr-only">Date of {perDay === 2 ? `matches ${f.no} and ${f.no + 1}` : `match ${f.no}`}</span>
+                            <input type="date" value={form.dates[f.no - 1] ?? ''} min={f.no > 1 && form.dates[f.no - 2] && form.dates[f.no - 2] > todayIst() ? nextDay(form.dates[f.no - 2]) : nextDay(todayIst())} max={lastDay()} onChange={(e) => set({ dates: scheduled.map((_, i) => (i === f.no - 1 || (perDay === 2 && i === f.no) ? e.target.value : (form.dates[i] ?? ''))) })} className={`${field} mt-0`} />
+                          </label>
+                        )}
                       </>
                     )}
                   </li>
