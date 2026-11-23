@@ -306,7 +306,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
                 ANNOUNCED BY {s.host.name.toUpperCase()}
               </p>
               <Facts s={s} you="invitation" />
-              {data.canAct && declining !== s.id && <SquadPicker hl={pal.highlight} roster={data.roster} value={squads[s.id] ?? []} onChange={(keys) => setSquads({ ...squads, [s.id]: keys })} format={s.format} clubFormat={s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined} label={`SQUAD ANNOUNCEMENT · ${theme.name.toUpperCase()}`} />}
+              {data.canAct && declining !== s.id && <SquadPicker hl={pal.highlight} roster={data.roster} busy={data.busy} value={squads[s.id] ?? []} onChange={(keys) => setSquads({ ...squads, [s.id]: keys })} format={s.format} clubFormat={s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined} label={`SQUAD ANNOUNCEMENT · ${theme.name.toUpperCase()}`} />}
               {data.canAct && (
                 declining === s.id ? (
                   <div role="alertdialog" aria-label={`Decline ${s.name}`} className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-crimson/50 px-4 py-3">
@@ -340,11 +340,13 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
 /* ---------- announce / edit ---------- */
 
 /** Squad Announcement: the board names its squad one player at a time from its registered players; the size depends on the format. */
-export function SquadPicker({ hl, roster, value, onChange, format, clubFormat, label = 'SQUAD ANNOUNCEMENT' }: { hl: string; roster: { key: string; name: string }[]; value: string[]; onChange: (keys: string[]) => void; format?: string; clubFormat?: string; label?: string }) {
+export function SquadPicker({ hl, roster, busy = [], value, onChange, format, clubFormat, label = 'SQUAD ANNOUNCEMENT' }: { hl: string; roster: { key: string; name: string }[]; /** Players already in another series squad: not offered. */ busy?: { key: string; seriesName: string }[]; value: string[]; onChange: (keys: string[]) => void; format?: string; clubFormat?: string; label?: string }) {
   const limits = squadLimits(format, clubFormat);
   const problem = squadProblem(value, roster, limits);
   const byKey = new Map(roster.map((p) => [p.key, p.name]));
-  const left = roster.filter((p) => !value.includes(p.key)).sort((a, b) => a.name.localeCompare(b.name));
+  const taken = new Map(busy.map((b) => [b.key, b.seriesName]));
+  const left = roster.filter((p) => !value.includes(p.key) && !taken.has(p.key)).sort((a, b) => a.name.localeCompare(b.name));
+  const away = roster.filter((p) => taken.has(p.key) && !value.includes(p.key));
   const full = limits !== null && value.length >= limits.max;
   return (
     <fieldset className="mt-6 rounded-2xl border border-white/10 p-4" style={{ ['--hl' as string]: hl }}>
@@ -376,6 +378,8 @@ export function SquadPicker({ hl, roster, value, onChange, format, clubFormat, l
           ))}
         </ol>
       )}
+      {limits && value.length + left.length < limits.min && <p className="mt-2 text-xs text-[#e9b44c]">Only {value.length + left.length} of your players are free for this series: the others are in the squad of another series that is still on, and this format needs {limits.min}.</p>}
+      {away.length > 0 && <p className="mt-2 text-xs text-smoke">{away.length} player{away.length === 1 ? ' is' : 's are'} in the squad of another series that is still on and cannot be added here: {away.map((p) => `${p.name} (${taken.get(p.key)})`).join(', ')}.</p>}
       <label className="mt-3 block max-w-md">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-smoke">ADD A PLAYER</span>
         <select
@@ -622,7 +626,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           <Pills hl={pal.highlight} label="FORMAT" value={form.format || undefined} options={cfg.formats} onPick={(v) => set({ format: v, ...(v === 'Club' ? {} : { clubFormat: undefined }) })} />
           {form.format === 'Club' && <Pills hl={pal.highlight} label="CLUB FORMAT" value={form.clubFormat} options={cfg.clubFormats.filter((c) => !(c as { retired?: boolean }).retired || c.id === form.clubFormat).map((c) => c.id)} onPick={(v) => set({ clubFormat: v })} show={(id) => cfg.clubFormats.find((c) => c.id === id)!.label} />}
 
-          <SquadPicker hl={pal.highlight} roster={data.roster} value={form.squad ?? []} onChange={(squad) => set({ squad })} format={form.format} clubFormat={form.clubFormat} />
+          <SquadPicker hl={pal.highlight} roster={data.roster} busy={data.busy.filter((b) => b.seriesId !== editing?.id)} value={form.squad ?? []} onChange={(squad) => set({ squad })} format={form.format} clubFormat={form.clubFormat} />
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <button type="submit" disabled={!ready || busy} className="rounded-lg px-8 py-3 text-sm font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" style={{ background: pal.highlight }}>

@@ -201,7 +201,7 @@ export type Series = {
   editable: boolean;
 };
 
-export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; allStadiums: Record<string, string[]>; /** The board's registered players (for the squad announcement). */ roster: { key: string; name: string }[]; completed: Series[]; announced: Series[]; invitations: Series[]; upcoming: Series[] };
+export type SeriesOverview = { limit: number; active: number; canAct: boolean; stadiums: string[]; allStadiums: Record<string, string[]>; /** The board's registered players (for the squad announcement). */ roster: { key: string; name: string }[]; /** Players already in the squad of a series that is still on (with its dates), so they can be left out of a series on the same days. */ busy: { key: string; seriesId: string; seriesName: string; from: string | null; to: string | null }[]; completed: Series[]; announced: Series[]; invitations: Series[]; upcoming: Series[] };
 
 export type CalendarMatch = {
   seriesId: string;

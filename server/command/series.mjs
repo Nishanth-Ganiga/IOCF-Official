@@ -31,6 +31,33 @@ const involves = (s, slug) => s.host === slug || s.opponents.includes(slug);
 /** The series this board is in: accepted ones, ones it hosts that are still open, and ones it has accepted; not the finished ones. */
 const counts = (s, slug, t, exceptId) => s.id !== exceptId && isLive(s, t) && involves(s, slug) && !s.result_winner && (s.status === 'accepted' || s.host === slug || s.accepted.includes(slug));
 
+/**
+ * The players of board `slug` who are already in the squad of another series that is on at the same time: Map(player key → { id, name, from, to }
+ * of that series). A series is still on while it is live (accepted, or waiting within its deadline), has no result yet and its last match date
+ * has not passed. A player cannot be in two squads of series that overlap; one whose dates do not overlap (`range` = { from, to } of the new
+ * series) is free. `exceptId` is the series being edited (its own squad does not count). With no `range`, every running series counts.
+ */
+export function busyPlayers(all, slug, t, range, exceptId) {
+  const today = istDay(t);
+  const out = new Map();
+  for (const s of all) {
+    if (s.id === exceptId || !involves(s, slug) || !isLive(s, t) || s.result_winner) continue;
+    const r = rangeOf(s.dates);
+    if (r && r.to < today) continue;
+    if (range && r && !(r.from <= range.to && range.from <= r.to)) continue; // not at the same time
+    for (const p of s.squads?.[slug] ?? []) out.set(p.key, { id: s.id, name: s.name, from: r?.from ?? null, to: r?.to ?? null });
+  }
+  return out;
+}
+
+/** A sentence naming the squad players who are busy in another series, or null. */
+export function busyProblem(keys, busy, nameOf) {
+  const hit = keys.filter((k) => busy.has(k));
+  if (!hit.length) return null;
+  const shown = hit.slice(0, 3).map((k) => `${nameOf(k)} (in the squad of “${busy.get(k).name}”)`).join(', ');
+  return `${shown}${hit.length > 3 ? ` and ${hit.length - 3} more` : ''} ${hit.length === 1 ? 'is' : 'are'} already in the squad of another series that is on at the same time. A player cannot be in two squads whose series overlap.`;
+}
+
 /** First and last match date of a series ({ from, to }, as YYYY-MM-DD), or null for an old series without dates. */
 export function rangeOf(dates) {
   const d = (dates ?? []).filter(Boolean).sort();

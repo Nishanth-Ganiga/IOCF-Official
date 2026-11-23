@@ -45,7 +45,7 @@
 // Every permission check below runs on the server for every request. The browser's own state is never trusted.
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { SERIES_CFG, STADIUMS, activeCount, busyOn, rangeOf, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
+import { SERIES_CFG, STADIUMS, busyPlayers, busyProblem, activeCount, busyOn, rangeOf, declinedVisibleTo, adminView, calendarEntries, todayIst, validateResult, isLive, newSeries, toApi, validateSeries } from './series.mjs';
 import { computeAllRankings } from '../../src/data/commandCenter/rankingsCompute.mjs';
 import { movesOf, updateState } from '../../src/data/commandCenter/rankMoves.mjs';
 import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUpload } from './seriesStats.mjs';
@@ -128,7 +128,8 @@ const publicUser = (a) => ({ accountId: a.account_id, role: a.role, username: a.
 
 const RANK_REFRESH_MS = 10 * 60 * 1000;
 
-export function createHandler({ store, env = process.env, now = () => Date.now(), rankInput, mirrorFetch = fetch }) {
+/** `allowSquadOverlap` switches off the "one squad at a time" rule: for tests of other series rules only, never set in production. */
+export function createHandler({ store, env = process.env, now = () => Date.now(), rankInput, mirrorFetch = fetch, allowSquadOverlap = false }) {
   const secret = env.COMMAND_CENTER_SESSION_SECRET || randomBytes(32).toString('hex'); // a per-process secret still works for dev/tests
   const production = Boolean(env.COMMAND_CENTER_SESSION_SECRET);
 
@@ -474,6 +475,13 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
         const mustOwn = () => (own ? null : fail(403, 'forbidden', 'Only the board chairman or the administrator can do this.'));
         const limitMsg = (name, you) => `${you ? 'Your board is' : `${name} is`} already in ${SERIES_CFG.maxSeriesPerBoard} series on those dates. A board can play at most ${SERIES_CFG.maxSeriesPerBoard} series at a time; a new series can start the day after one of them ends.`;
 
+        /** A sentence if a squad (the list of { key, name }) names a player who is already in the squad of another series that is still on, else null. */
+        const squadBusy = (list, all, dates, exceptId) => {
+          if (allowSquadOverlap) return null;
+          const names = new Map(list.map((p) => [p.key, p.name]));
+          return busyProblem(list.map((p) => p.key), busyPlayers(all, board.slug, t, rangeOf(dates), exceptId), (k) => names.get(k) ?? k);
+        };
+
         if (!d && method === 'GET') {
           const all = await store.seriesList();
           const live = all.filter((x) => isLive(x, t));
@@ -485,6 +493,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
             allStadiums: await stadiumsNow(),
             // the board's registered players, for the squad announcement
             roster: rosterOf(await loadDataset(), board.slug).players.map((p) => ({ key: p.key, name: p.name })),
+            // players already in the squad of another series that is still on (they are not offered again)
+            busy: [...busyPlayers(all, board.slug, t)].map(([key, v]) => ({ key, seriesId: v.id, seriesName: v.name, from: v.from, to: v.to })),
             announced: all.filter((x) => x.host === board.slug && (isLive(x, t) || declinedVisibleTo(x, board.slug, t))).map((x) => toApi(x, BOARDS, t)),
             invitations: live.filter((x) => x.status === 'pending' && x.opponents.includes(board.slug) && !x.accepted.includes(board.slug)).map((x) => toApi(x, BOARDS, t)),
             completed: live.filter((x) => x.status === 'accepted' && x.result_winner).sort((p, q) => (q.result_at ?? 0) - (p.result_at ?? 0)).map((x) => toApi(x, BOARDS, t)),
@@ -503,6 +513,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (busyOn(all, board.slug, t, range) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
           const full = v.value.opponents.map((o) => BOARDS.find((x) => x.slug === o)).find((o) => busyOn(all, o.slug, t, range) >= SERIES_CFG.maxSeriesPerBoard);
           if (full) return fail(409, 'series_limit', limitMsg(full.name, false));
+          const busyIssue = squadBusy(v.value.squads?.[board.slug] ?? [], all, v.value.dates);
+          if (busyIssue) return fail(400, 'invalid', `Squad announcement: ${busyIssue}`);
           const row = await store.seriesInsert(newSeries(v.value, board.slug, t));
           await audit('series_announced', who, row.id, req, { name: row.name, ...(who.role === 'admin' ? { forBoard: board.slug } : {}) });
           return json(201, { series: toApi(row, BOARDS, t) });
@@ -523,6 +535,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           if (busyOn(all, board.slug, t, range, cur.id) >= SERIES_CFG.maxSeriesPerBoard) return fail(409, 'series_limit', limitMsg(board.name, true));
           const full = v.value.opponents.map((o) => BOARDS.find((x) => x.slug === o)).find((o) => busyOn(all, o.slug, t, range, cur.id) >= SERIES_CFG.maxSeriesPerBoard);
           if (full) return fail(409, 'series_limit', limitMsg(full.name, false));
+          const busyIssue = squadBusy(v.value.squads?.[board.slug] ?? [], all, v.value.dates, cur.id);
+          if (busyIssue) return fail(400, 'invalid', `Squad announcement: ${busyIssue}`);
           // (a series that was set to two matches a day and is changed back to one: the column is reset; the column is otherwise only written when used)
           const row = await store.seriesUpdate(cur.id, { ...v.value, ...((cur.matches_per_day ?? 1) === 2 && !v.value.matches_per_day ? { matches_per_day: 1 } : {}), updated_at: t });
           await audit('series_edited', who, cur.id, req, { name: row.name });
@@ -546,6 +560,8 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const squadIssue = squadProblem(keys, roster, squadLimits(cur.format, cur.club_format));
           if (squadIssue) return fail(400, 'squad', `Squad announcement: ${squadIssue}`);
           const names = new Map(roster.map((p) => [p.key, p.name]));
+          const busyIssue = squadBusy(keys.map((key) => ({ key, name: names.get(key) })), all, cur.dates, cur.id);
+          if (busyIssue) return fail(400, 'squad', `Squad announcement: ${busyIssue}`);
           const squads = { ...(cur.squads ?? {}), [board.slug]: keys.map((key) => ({ key, name: names.get(key) })) };
           const accepted = [...cur.accepted, board.slug];
           const done = cur.opponents.every((o) => accepted.includes(o));
