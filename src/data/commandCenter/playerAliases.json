@@ -2253,5 +2253,26 @@
     ]
    }
   ]
+ },
+ {
+  "name": "Abhishek S M",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Abhishek Vava"
+   }
+  ]
+ },
+ {
+  "name": "Mohammed Shibili M",
+  "board": "west-indies",
+  "aliases": [
+   {
+    "name": "Shibili",
+    "boards": [
+     "west-indies"
+    ]
+   }
+  ]
  }
 ]
