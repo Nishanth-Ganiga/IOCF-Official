@@ -124,6 +124,7 @@ export function toApi(s, boards, t) {
     opponents: s.opponents.map((slug) => ({ slug, name: nameOf(slug), accepted: s.accepted.includes(slug) })),
     matches: s.matches,
     stadiums: s.stadiums,
+    dates: s.dates ?? [],
     fixtures,
     bet: s.bet,
     format: s.format,

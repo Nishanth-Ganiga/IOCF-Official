@@ -528,7 +528,7 @@ console.log('\n— Series Announcement —');
     const look = (await sCall('GET', 'boards/india/series', { cookie: cAdm })).body;
     const made = await post(cAdm, 'india', good({ name: 'Admin Test Cup', dates: ['2026-11-20'] }));
     const removed = made.status === 201 && (await sCall('DELETE', `admin/series/${made.body.series.id}`, { cookie: cAdm })).status === 200;
-    return look.canAct === true && made.status === 201 && removed;
+    return look.canAct === true && made.status === 201 && removed && Array.isArray(made.body.series.dates) && made.body.series.dates.join() === '2026-11-20';
   })());
   check('a board cannot read another board\'s series page', (await sCall('GET', 'boards/india/series', { cookie: cAus })).status === 403);
   check('series need a signed-in session', (await sCall('GET', 'boards/india/series')).status === 401);

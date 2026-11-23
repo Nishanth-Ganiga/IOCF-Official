@@ -14,6 +14,8 @@ const ist = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { timeZone:
 const typeLabel = (id: string) => TYPES.find((t) => t.id === id)?.label ?? id;
 const formatLabel = (s: Series) => (s.clubFormat ? `Club · ${s.clubFormat}` : s.format);
 
+/** The match dates of a series: its own list, or (for a reply without one) the dates of its scheduled matches. */
+const datesOf = (s: Series): string[] => s.dates ?? s.fixtures.filter((f) => !f.final).map((f) => f.date ?? '');
 const EMPTY: SeriesInput = { name: '', type: '', opponents: [], matches: 0, stadiums: [], dates: [], bet: 0, format: '' };
 
 /** Today's date in India (YYYY-MM-DD): match dates cannot be earlier. */
@@ -378,7 +380,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
   const startEdit = (s: Series) => {
     setEditing(s);
     setMsg(null);
-    setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: s.dates, bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: datesOf(s), bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
