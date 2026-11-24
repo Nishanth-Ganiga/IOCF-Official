@@ -627,25 +627,25 @@ console.log('\n— Series Announcement —');
 
   // trilateral: every opponent must accept
   t0 += 60_000;
-  const tri = await post(cIndia, 'india', good({ name: 'Tri Series', type: 'trilateral', opponents: ['england', 'australia'], matches: 4, stadiums: [STADIUMS.india[0], STADIUMS.india[1], STADIUMS.australia[0]] }));
+  const tri = await post(cIndia, 'india', good({ name: 'Tri Series', type: 'trilateral', opponents: ['england', 'australia'], matches: 4, stadiums: [STADIUMS.india[0], STADIUMS.india[1], STADIUMS.india[2]] }));
   check('a trilateral series needs two opponents and 4 or 7 matches; the 4th match is the final and needs no stadium', tri.status === 201 && tri.body.series.fixtures.length === 4 && tri.body.series.fixtures[3].final && tri.body.series.stadiums.length === 3 && (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england'] }))).status === 400 && (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england', 'australia'], matches: 5, stadiums: Array(4).fill(STADIUMS.india[0]) }))).status === 400);
   check('trilateral schedule: India v England, India v Australia, England v Australia, then the final', tri.body.series.fixtures.slice(0, 3).map((f) => f.teams.join(' v ')).join('; ') === 'India v England; India v Australia; England v Australia');
-  check('a stadium for a match may belong to either team in it, not to a board outside it', (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england', 'australia'], matches: 4, stadiums: [STADIUMS.england[0], STADIUMS.india[0], STADIUMS.australia[0]] }))).status === 409 /* India is full: the point is the next check */ || true);
+  check('an opponent stadium cannot be chosen in a trilateral series', (await post(cIndia, 'india', good({ type: 'trilateral', opponents: ['england', 'australia'], matches: 4, stadiums: [STADIUMS.england[0], STADIUMS.india[0], STADIUMS.india[0]] }))).status === 400);
   const tid = tri.body.series.id;
   await sCall('POST', `boards/england/series/${tid}/accept`, { cookie: cEng });
   check('it stays open until every opponent has accepted — and is locked once one has', (await view(cIndia, 'india')).announced.find((x) => x.id === tid).status === 'pending' && !(await view(cIndia, 'india')).announced.find((x) => x.id === tid).editable && (await view(cEng, 'england')).invitations.every((x) => x.id !== tid));
   await sCall('POST', `boards/australia/series/${tid}/accept`, { cookie: cAus });
   {
-    const q = await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 7, stadiums: [STADIUMS.england[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.zimbabwe[0], STADIUMS.canada[0]] }));
+    const q = await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 7, stadiums: Array(6).fill(STADIUMS.england[0]) }));
     check('a quadrilateral series: 7 matches = 6 scheduled + the final; options are 7 or 13', q.status === 201 && q.body.series.fixtures.length === 7 && q.body.series.fixtures[6].final && q.body.series.fixtures.slice(0, 6).map((f) => f.teams.join('-')).join() === 'England-Canada,Ireland-Zimbabwe,England-Ireland,Canada-Zimbabwe,England-Zimbabwe,Canada-Ireland' && (await post(cEng, 'england', good({ name: 'Quad Cup', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 9, stadiums: [] }))).status === 400);
     check('a quadrilateral series reaches all three opponents (invitation list and badge), and nobody else', await (async () => { for (const [c, slug] of [[await sLogin('board', sc('Canada')), 'canada'], [await sLogin('board', sc('Ireland')), 'ireland'], [await sLogin('board', sc('Zimbabwe')), 'zimbabwe']]) { if (!(await view(c, slug)).invitations.some((x) => x.id === q.body.series.id) || (await sCall('GET', `boards/${slug}/dashboard`, { cookie: c })).body.invitations < 1) return false; } return !(await view(await sLogin('board', sc('Australia')), 'australia')).invitations.some((x) => x.id === q.body.series.id); })());
-    check('a stadium must belong to one of the two teams in that match', (await post(cEng, 'england', good({ name: 'Quad Two', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 7, stadiums: [STADIUMS.pakistan[0], STADIUMS.ireland[0], STADIUMS.england[1], STADIUMS.canada[0], STADIUMS.zimbabwe[0], STADIUMS.canada[0]] }))).status === 400);
+    check('only the hosting board own stadiums can be chosen, even in a quadrilateral series, not a playing opponent', (await post(cEng, 'england', good({ name: 'Quad Two', type: 'quadrilateral', opponents: ['canada', 'ireland', 'zimbabwe'], matches: 7, stadiums: [STADIUMS.pakistan[0], ...Array(5).fill(STADIUMS.england[0])] }))).status === 400);
     // two matches a day (quadrilateral series only)
     {
       const { dateProblem, buildFixtures: bf } = await import('../../src/data/commandCenter/fixtures.mjs');
       const teams = ['england', 'italy', 'spain', 'portugal'];
       const fx = bf('quadrilateral', teams, 7).filter((f) => !f.final);
-      const stad = fx.map((f) => STADIUMS[f.teams[0]][0]);
+      const stad = fx.map(() => STADIUMS.england[0]);
       const quad = (extra = {}) => ({ name: 'Two A Day Cup', type: 'quadrilateral', opponents: ['italy', 'spain', 'portugal'], matches: 7, stadiums: stad, bet: 5000, format: 'T20', ...extra });
       const pairDates = ['2027-03-10', '2027-03-10', '2027-03-11', '2027-03-11', '2027-03-12', '2027-03-12'];
       const two = await post(cEng, 'england', quad({ perDay: 2, dates: pairDates }));
@@ -683,7 +683,7 @@ console.log('\n— Series Announcement —');
       const cPt = await sLogin('board', sc('UAE'));
       const acceptOk = await sRawS('POST', `boards/uae/series/${sid2}/accept`, { cookie: cPt, body: { squad: sq('uae', 'T20') } });
       check('with its own squad of 13 the opponent accepts; both squads are kept with the confirmed series', acceptOk.status === 200 && acceptOk.body.series.status === 'accepted' && acceptOk.body.series.squads['sri-lanka'].length === 13 && acceptOk.body.series.squads.uae.length === 13);
-      const sc3 = await send(base({ name: 'Tri Squad', type: 'trilateral', opponents: ['uae', 'south-africa'], matches: 4, stadiums: [STADIUMS.uae[0], STADIUMS['sri-lanka'][0], STADIUMS['south-africa'][0]], dates: ['2027-05-20', '2027-05-21', '2027-05-22'], format: 'T10', squad: sq('sri-lanka', 'T10') }));
+      const sc3 = await send(base({ name: 'Tri Squad', type: 'trilateral', opponents: ['uae', 'south-africa'], matches: 4, stadiums: Array(3).fill(STADIUMS['sri-lanka'][0]), dates: ['2027-05-20', '2027-05-21', '2027-05-22'], format: 'T10', squad: sq('sri-lanka', 'T10') }));
       const cNepal2 = await sLogin('board', sc('South Africa'));
       const firstAccept = await sRawS('POST', `boards/uae/series/${sc3.body.series?.id}/accept`, { cookie: cPt, body: { squad: sq('uae', 'T10') } });
       const secondAccept = await sRawS('POST', `boards/south-africa/series/${sc3.body.series?.id}/accept`, { cookie: cNepal2, body: { squad: sq('south-africa', 'T10') } });
@@ -719,7 +719,7 @@ console.log('\n— Series Announcement —');
       check('accepting names a squad too, and its players are then busy for the accepting board: the same players cannot be named in its next series', afAcc.status === 200 && afOtherNew.status === 400 && /already in the squad of another series/.test(afOtherNew.body.error.message));
     }
     const cSco = await sLogin('board', sc('Scotland'));
-    const q13 = await post(cSco, 'scotland', good({ name: 'Quad Thirteen', type: 'quadrilateral', opponents: ['japan', 'nepal', 'qatar'], matches: 13, stadiums: buildFixtures('quadrilateral', ['scotland', 'japan', 'nepal', 'qatar'], 13).filter((f) => !f.final).map((f) => STADIUMS[f.teams[0]][0]) }));
+    const q13 = await post(cSco, 'scotland', good({ name: 'Quad Thirteen', type: 'quadrilateral', opponents: ['japan', 'nepal', 'qatar'], matches: 13, stadiums: buildFixtures('quadrilateral', ['scotland', 'japan', 'nepal', 'qatar'], 13).filter((f) => !f.final).map(() => STADIUMS.scotland[0]) }));
     check('13 matches = 12 scheduled (each pair twice) + the final', q13.status === 201 && q13.body.series.fixtures.filter((f) => !f.final).length === 12 && q13.body.series.fixtures[12].final);
   }
   check('…then it becomes upcoming', (await view(cPak, 'pakistan')).upcoming.some((x) => x.id === tid));
@@ -883,7 +883,7 @@ console.log('\n— Series Announcement —');
     const cPor = await sLogin('board', sc('Portugal'));
     const cJp = await sLogin('board', sc('Japan'));
     const cNp = await sLogin('board', sc('Nepal'));
-    const tri2 = await post(cPor, 'portugal', good({ name: 'Three Way', type: 'trilateral', opponents: ['japan', 'nepal'], matches: 4, stadiums: [STADIUMS.portugal[0], STADIUMS.portugal[0], STADIUMS.nepal[0]] }));
+    const tri2 = await post(cPor, 'portugal', good({ name: 'Three Way', type: 'trilateral', opponents: ['japan', 'nepal'], matches: 4, stadiums: [STADIUMS.portugal[0], STADIUMS.portugal[0], STADIUMS.portugal[0]] }));
     const t2 = tri2.body.series.id;
     await sCall('POST', `boards/nepal/series/${t2}/accept`, { cookie: cNp });
     check('a board that has accepted cannot decline', (await sCall('POST', `boards/nepal/series/${t2}/decline`, { cookie: cNp })).status === 409);

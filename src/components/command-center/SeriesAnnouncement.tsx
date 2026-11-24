@@ -520,7 +520,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           <><b>Series type</b> — choose Bilateral (you and one opponent), Trilateral (you and two opponents) or Quadrilateral (you and three opponents).</>,
           <><b>Opponent board(s)</b> — pick them from the list of the other 25 boards. A board can only be chosen once.</>,
           <><b>Number of matches</b> — Bilateral: 1, 3, 5 or 7. Trilateral: 4 or 7. Quadrilateral: 7 or 13.</>,
-          <><b>Stadium and date for each match</b> — in a bilateral series choose your home stadium and the date for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium and a date for each one; the stadium comes from the stadiums of the two teams playing it. A series cannot start on the day you announce it, so the first match must be on a later date. Each match needs its own date: two matches of the same series cannot be on the same day, and each match must be after the one before it. Dates cannot be more than a year away. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled, so it has no stadium or date.</>,
+          <><b>Stadium and date for each match</b> — in a bilateral series choose your home stadium and the date for each match. In a trilateral or quadrilateral series the form lists every match (“Match 1: Team vs Team”); choose a stadium and a date for each one; the stadium is always one of your own (the hosting board’s) stadiums. A series cannot start on the day you announce it, so the first match must be on a later date. Each match needs its own date: two matches of the same series cannot be on the same day, and each match must be after the one before it. Dates cannot be more than a year away. The <b>last match is the final</b>: its teams are only known after the league matches, so it is not scheduled, so it has no stadium or date.</>,
           <><b>Matches per day</b> (quadrilateral only) — choose <b>1 game per day</b> (every match has its own date) or <b>2 games per day</b> (matches 1 and 2 share a date, then 3 and 4, and so on; the two matches of a day are always between four different teams, so no team plays twice on one day).</>,
           <><b>Bet amount</b> — choose one of ₹1,000 · 2,000 · 3,000 · 4,000 · 5,000 · 10,000 · 20,000 · 50,000.</>,
           <><b>Format</b> — Club, T10, T20, TEST, ODI or L4I. If you choose <b>Club</b>, also choose the club format: 4 overs 4 wickets up to 9 overs 9 wickets.</>,
@@ -547,7 +547,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           className={`${card} mt-4`}
           noValidate
         >
-          {!data.stadiums.length && <p className="mb-3 text-sm text-crimson-2">No stadium is registered for your board yet. A bilateral series cannot be announced until one is added; in a trilateral or quadrilateral series you can use your opponents’ stadiums.</p>}
+          {!data.stadiums.length && <p className="mb-3 text-sm text-crimson-2">No stadium is registered for your board yet. A series cannot be announced until one is added: only the hosting board’s own stadiums can be chosen.</p>}
           {editing && <p className="mb-3 text-xs font-semibold tracking-[0.2em]" style={{ color: pal.highlight }}>EDITING “{editing.name.toUpperCase()}”</p>}
           <label className="block text-[11px] font-semibold tracking-[0.2em] text-mist">
             NAME OF THE SERIES

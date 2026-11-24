@@ -71,5 +71,5 @@ export function dateProblem(scheduled, dates, perDay = 1) {
   return null;
 }
 
-/** The stadiums a match may be played at: the host's for a bilateral series, either team's otherwise. */
-export const stadiumBoards = (type, fixture, host) => (type === 'bilateral' ? [host] : fixture.teams);
+/** The stadiums a match may be played at: always the hosting (announcing) board's own, whatever the series type. */
+export const stadiumBoards = (type, fixture, host) => [host];

@@ -111,8 +111,7 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
   // every scheduled match needs a stadium of one of the boards allowed to host it (the final is not scheduled)
   const fixtures = buildFixtures(type.id, [host, ...opponents], matches).filter((f) => !f.final);
   const chosen = Array.isArray(i.stadiums) ? i.stadiums.map(String) : [];
-  if (!(stadiums[host] ?? []).length && type.id === 'bilateral') return { error: 'No stadium is registered for your board yet, so a series cannot be announced. Contact the IOCF administrator.' };
-  if (fixtures.some((f) => !stadiumBoards(type.id, f, host).some((b) => (stadiums[b] ?? []).length))) return { error: 'No stadium is registered for the boards in one of the matches. Contact the IOCF administrator.' };
+  if (!(stadiums[host] ?? []).length) return { error: 'No stadium is registered for your board yet, so a series cannot be announced. Build a stadium first or contact the IOCF administrator.' };
   if (chosen.length !== fixtures.length || fixtures.some((f, k) => !stadiumBoards(type.id, f, host).some((b) => (stadiums[b] ?? []).includes(chosen[k])))) {
     return { error: fixtures.length === 1 ? 'Choose the stadium for the match.' : `Choose a stadium for each of the ${fixtures.length} scheduled matches.` };
   }
