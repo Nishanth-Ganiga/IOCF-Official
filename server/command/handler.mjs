@@ -52,7 +52,7 @@ import { FORMAT_CHOICES, KEY_RE, TOURNAMENT_IDS, aggregate, decodeStats, parseUp
 import { pendingOf, ledger, settleSeries, validateAdjustment } from './credits.mjs';
 import { mirrorConfigured, runMirror } from '../mirror/mirror.mjs';
 import { handlePsp, pspAttention, rosterOf } from './pspRoutes.mjs';
-import { squadLimits, squadProblem } from '../../src/data/commandCenter/squads.mjs';
+import { leadersProblem, squadEntries, squadLimits, squadProblem } from '../../src/data/commandCenter/squads.mjs';
 import { MAX_PENDING, STADIUM_COST, STADIUM_LEVEL, countryOf, newRequest, noticeFor, stadiumLists, takenNames, toApi as stadiumToApi, validateRequest } from './stadiums.mjs';
 import { dummyHash, hashPassword, parseCookies, signSession, verifyPassword, verifySession } from './crypto.mjs';
 
@@ -559,10 +559,14 @@ export function createHandler({ store, env = process.env, now = () => Date.now()
           const keys = Array.isArray(req.body?.squad) ? req.body.squad.map(String) : [];
           const squadIssue = squadProblem(keys, roster, squadLimits(cur.format, cur.club_format));
           if (squadIssue) return fail(400, 'squad', `Squad announcement: ${squadIssue}`);
+          const captain = req.body?.captain ? String(req.body.captain) : null;
+          const vice = req.body?.viceCaptain ? String(req.body.viceCaptain) : null;
+          const leadIssue = leadersProblem(keys, captain, vice);
+          if (leadIssue) return fail(400, 'squad', `Squad announcement: ${leadIssue}`);
           const names = new Map(roster.map((p) => [p.key, p.name]));
           const busyIssue = squadBusy(keys.map((key) => ({ key, name: names.get(key) })), all, cur.dates, cur.id);
           if (busyIssue) return fail(400, 'squad', `Squad announcement: ${busyIssue}`);
-          const squads = { ...(cur.squads ?? {}), [board.slug]: keys.map((key) => ({ key, name: names.get(key) })) };
+          const squads = { ...(cur.squads ?? {}), [board.slug]: squadEntries(keys, names, captain, vice) };
           const accepted = [...cur.accepted, board.slug];
           const done = cur.opponents.every((o) => accepted.includes(o));
           const row = await store.seriesUpdate(cur.id, { accepted, squads, status: done ? 'accepted' : 'pending', accepted_at: done ? t : null, updated_at: t });

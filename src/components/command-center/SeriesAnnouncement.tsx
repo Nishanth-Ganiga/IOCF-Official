@@ -133,7 +133,7 @@ export function Facts({ s, you, full }: { s: Series; you: string; full?: boolean
     [s.opponents.length > 1 ? 'Opponents' : 'Opponent', s.opponents.map((o) => (s.status !== 'accepted' && s.opponents.length > 1 ? `${o.name}${o.accepted ? ' ✓' : ''}` : o.name)).join(', ')],
     ['Matches', String(s.matches)],
     ...(s.perDay === 2 ? ([['Matches per day', '2 (a pair of matches each day)']] as [string, string][]) : []),
-    ...Object.entries(s.squads ?? {}).map(([slug, list]): [string, string] => [`Squad · ${slug === s.host.slug ? s.host.name : (s.opponents.find((o) => o.slug === slug)?.name ?? slug)}`, `${list.length} players: ${list.map((p) => p.name).join(', ')}`]),
+    ...Object.entries(s.squads ?? {}).map(([slug, list]): [string, string] => [`Squad · ${slug === s.host.slug ? s.host.name : (s.opponents.find((o) => o.slug === slug)?.name ?? slug)}`, `${list.length} players: ${list.map((p) => p.name + (p.role === 'captain' ? ' (C)' : p.role === 'vice-captain' ? ' (VC)' : '')).join(', ')}`]),
     ['Bet amount', money(s.bet)],
     ['Format', formatLabel(s)],
     ...(s.result ? ([['Result', `${s.result.winner ? `${s.result.winner.name} won the series` : 'Series drawn'}${s.result.note ? ` · ${s.result.note}` : ''}`]] as [string, string][]) : []),
@@ -240,7 +240,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
   const pal = paletteOf(theme);
   const [busy, setBusy] = useState('');
   const [declining, setDeclining] = useState('');
-  const [squads, setSquads] = useState<Record<string, string[]>>({});
+  const [squads, setSquads] = useState<Record<string, { keys: string[]; captain?: string; vice?: string }>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const decline = async (s: Series) => {
     setBusy(s.id);
@@ -260,7 +260,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
     setBusy(s.id);
     setMsg(null);
     try {
-      await api.acceptSeries(theme.slug, s.id, squads[s.id] ?? []);
+      await api.acceptSeries(theme.slug, s.id, squads[s.id]?.keys ?? [], squads[s.id]?.captain, squads[s.id]?.vice);
       await reload();
       setMsg({ ok: true, text: `You accepted “${s.name}”. It is now confirmed.` });
     } catch (e) {
@@ -306,7 +306,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
                 ANNOUNCED BY {s.host.name.toUpperCase()}
               </p>
               <Facts s={s} you="invitation" />
-              {data.canAct && declining !== s.id && <SquadPicker hl={pal.highlight} roster={data.roster} busy={data.busy} value={squads[s.id] ?? []} onChange={(keys) => setSquads({ ...squads, [s.id]: keys })} format={s.format} clubFormat={s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined} label={`SQUAD ANNOUNCEMENT · ${theme.name.toUpperCase()}`} />}
+              {data.canAct && declining !== s.id && <SquadPicker hl={pal.highlight} roster={data.roster} busy={data.busy} value={squads[s.id]?.keys ?? []} captain={squads[s.id]?.captain} vice={squads[s.id]?.vice} onChange={(keys, captain, vice) => setSquads({ ...squads, [s.id]: { keys, captain, vice } })} format={s.format} clubFormat={s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined} label={`SQUAD ANNOUNCEMENT · ${theme.name.toUpperCase()}`} />}
               {data.canAct && (
                 declining === s.id ? (
                   <div role="alertdialog" aria-label={`Decline ${s.name}`} className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-crimson/50 px-4 py-3">
@@ -320,7 +320,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
                   </div>
                 ) : (
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <button type="button" onClick={() => void accept(s)} disabled={busy === s.id || Boolean(squadProblem(squads[s.id] ?? [], data.roster, squadLimits(s.format, s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined)))} className="rounded-lg px-6 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: pal.highlight }}>
+                    <button type="button" onClick={() => void accept(s)} disabled={busy === s.id || Boolean(squadProblem(squads[s.id]?.keys ?? [], data.roster, squadLimits(s.format, s.clubFormat ? cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id : undefined)))} className="rounded-lg px-6 py-2.5 text-xs font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:opacity-50" style={{ background: pal.highlight }}>
                       {busy === s.id ? 'ACCEPTING…' : 'ACCEPT THE SERIES'}
                     </button>
                     <button type="button" onClick={() => setDeclining(s.id)} className="rounded-lg border border-white/25 px-5 py-2.5 text-xs font-bold tracking-[0.2em] text-mist transition hover:border-crimson/60 hover:text-crimson-2">
@@ -340,7 +340,7 @@ export function Accept({ theme, data, reload }: { theme: BoardTheme; data: Serie
 /* ---------- announce / edit ---------- */
 
 /** Squad Announcement: the board names its squad one player at a time from its registered players; the size depends on the format. */
-export function SquadPicker({ hl, roster, busy = [], value, onChange, format, clubFormat, label = 'SQUAD ANNOUNCEMENT' }: { hl: string; roster: { key: string; name: string }[]; /** Players already in another series squad: not offered. */ busy?: { key: string; seriesName: string }[]; value: string[]; onChange: (keys: string[]) => void; format?: string; clubFormat?: string; label?: string }) {
+export function SquadPicker({ hl, roster, busy = [], value, captain, vice, onChange, format, clubFormat, label = 'SQUAD ANNOUNCEMENT' }: { hl: string; roster: { key: string; name: string }[]; /** Players already in another series squad: not offered. */ busy?: { key: string; seriesName: string }[]; value: string[]; /** Optional leaders (keys of squad players). */ captain?: string; vice?: string; onChange: (keys: string[], captain?: string, vice?: string) => void; format?: string; clubFormat?: string; label?: string }) {
   const limits = squadLimits(format, clubFormat);
   const problem = squadProblem(value, roster, limits);
   const byKey = new Map(roster.map((p) => [p.key, p.name]));
@@ -363,6 +363,7 @@ export function SquadPicker({ hl, roster, busy = [], value, onChange, format, cl
       <p className="mt-2 text-sm" style={{ color: problem ? '#e9b44c' : '#6fcf8e' }}>
         {limits ? `${value.length} of ${limits.min}–${limits.max} players${problem ? ` · ${problem}` : ' · squad complete ✓'}` : ''}
       </p>
+      {value.length > 0 && <p className="mt-2 text-xs text-smoke">Press <b>C</b> beside a player to make him captain and <b>VC</b> for vice-captain (optional). Captain: <b className="text-bone">{captain ? byKey.get(captain) : 'not chosen'}</b> · Vice-captain: <b className="text-bone">{vice ? byKey.get(vice) : 'not chosen'}</b></p>}
       {value.length > 0 && (
         <ol className="mt-3 grid gap-2 sm:grid-cols-2">
           {value.map((k, i) => (
@@ -371,9 +372,13 @@ export function SquadPicker({ hl, roster, busy = [], value, onChange, format, cl
                 <span className="mr-2 text-smoke">{i + 1}.</span>
                 {byKey.get(k) ?? k}
               </span>
-              <button type="button" onClick={() => onChange(value.filter((x) => x !== k))} aria-label={`Remove ${byKey.get(k) ?? k} from the squad`} className="text-xs font-semibold text-mist hover:text-crimson-2">
+              <span className="flex items-center gap-1.5">
+                <button type="button" onClick={() => onChange(value, captain === k ? undefined : k, vice === k ? undefined : vice)} aria-pressed={captain === k} aria-label={`Make ${byKey.get(k) ?? k} captain`} title="Captain" className="rounded border px-1.5 py-0.5 text-[10px] font-bold" style={captain === k ? { background: hl, color: '#0b0b0f', borderColor: hl } : { borderColor: 'rgba(255,255,255,0.25)', color: '#a8a8b3' }}>C</button>
+                <button type="button" onClick={() => onChange(value, captain === k ? undefined : captain, vice === k ? undefined : k)} aria-pressed={vice === k} aria-label={`Make ${byKey.get(k) ?? k} vice-captain`} title="Vice-captain" className="rounded border px-1.5 py-0.5 text-[10px] font-bold" style={vice === k ? { background: hl, color: '#0b0b0f', borderColor: hl } : { borderColor: 'rgba(255,255,255,0.25)', color: '#a8a8b3' }}>VC</button>
+              <button type="button" onClick={() => onChange(value.filter((x) => x !== k), captain === k ? undefined : captain, vice === k ? undefined : vice)} aria-label={`Remove ${byKey.get(k) ?? k} from the squad`} className="text-xs font-semibold text-mist hover:text-crimson-2">
                 ✕
               </button>
+              </span>
             </li>
           ))}
         </ol>
@@ -385,7 +390,7 @@ export function SquadPicker({ hl, roster, busy = [], value, onChange, format, cl
         <select
           value=""
           disabled={!limits || full || !left.length}
-          onChange={(e) => e.target.value && onChange([...value, e.target.value])}
+          onChange={(e) => e.target.value && onChange([...value, e.target.value], captain, vice)}
           className={field}
           aria-label="Add a player to the squad"
         >
@@ -451,14 +456,14 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
   const startEdit = (s: Series) => {
     setEditing(s);
     setMsg(null);
-    setForm({ squad: (s.squads?.[s.host.slug] ?? []).map((p) => p.key), perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: datesOf(s), bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ squad: (s.squads?.[s.host.slug] ?? []).map((p) => p.key), captain: s.squads?.[s.host.slug]?.find((p) => p.role === 'captain')?.key, viceCaptain: s.squads?.[s.host.slug]?.find((p) => p.role === 'vice-captain')?.key, perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: datesOf(s), bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const startAgain = (s: Series) => {
     setEditing(null);
     setMsg(null);
-    setForm({ squad: (s.squads?.[s.host.slug] ?? []).map((p) => p.key), perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: [], bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
+    setForm({ squad: (s.squads?.[s.host.slug] ?? []).map((p) => p.key), captain: s.squads?.[s.host.slug]?.find((p) => p.role === 'captain')?.key, viceCaptain: s.squads?.[s.host.slug]?.find((p) => p.role === 'vice-captain')?.key, perDay: s.perDay ?? 1, name: s.name, type: s.type, opponents: s.opponents.map((o) => o.slug), matches: s.matches, stadiums: s.stadiums, dates: [], bet: s.bet, format: s.format, clubFormat: cfg.clubFormats.find((c) => c.label === s.clubFormat)?.id });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -626,7 +631,7 @@ export function Announce({ theme, data, reload }: { theme: BoardTheme; data: Ser
           <Pills hl={pal.highlight} label="FORMAT" value={form.format || undefined} options={cfg.formats} onPick={(v) => set({ format: v, ...(v === 'Club' ? {} : { clubFormat: undefined }) })} />
           {form.format === 'Club' && <Pills hl={pal.highlight} label="CLUB FORMAT" value={form.clubFormat} options={cfg.clubFormats.filter((c) => !(c as { retired?: boolean }).retired || c.id === form.clubFormat).map((c) => c.id)} onPick={(v) => set({ clubFormat: v })} show={(id) => cfg.clubFormats.find((c) => c.id === id)!.label} />}
 
-          <SquadPicker hl={pal.highlight} roster={data.roster} busy={data.busy.filter((b) => b.seriesId !== editing?.id)} value={form.squad ?? []} onChange={(squad) => set({ squad })} format={form.format} clubFormat={form.clubFormat} />
+          <SquadPicker hl={pal.highlight} roster={data.roster} busy={data.busy.filter((b) => b.seriesId !== editing?.id)} value={form.squad ?? []} captain={form.captain} vice={form.viceCaptain} onChange={(squad, captain, viceCaptain) => set({ squad, captain, viceCaptain })} format={form.format} clubFormat={form.clubFormat} />
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <button type="submit" disabled={!ready || busy} className="rounded-lg px-8 py-3 text-sm font-bold tracking-[0.2em] text-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" style={{ background: pal.highlight }}>

@@ -27,6 +27,20 @@ export function squadLimits(format, clubFormat) {
 /** "11 to 12 players" */
 export const limitsText = (l) => (l ? `${l.min} to ${l.max} players` : '');
 
+/** The captain and the vice-captain are optional; when named they must be squad players, and not the same player. Returns a sentence or null. */
+export function leadersProblem(keys, captain, viceCaptain) {
+  const list = Array.isArray(keys) ? keys : [];
+  if (captain && !list.includes(captain)) return 'The captain must be one of the squad players.';
+  if (viceCaptain && !list.includes(viceCaptain)) return 'The vice-captain must be one of the squad players.';
+  if (captain && captain === viceCaptain) return 'The captain and the vice-captain must be two different players.';
+  return null;
+}
+
+/** The squad as stored: [{ key, name }] with role 'captain' / 'vice-captain' on the leaders. */
+export function squadEntries(keys, names, captain, viceCaptain) {
+  return (Array.isArray(keys) ? keys : []).map((key) => ({ key, name: names.get(key), ...(key === captain ? { role: 'captain' } : key === viceCaptain ? { role: 'vice-captain' } : {}) }));
+}
+
 /**
  * Checks a squad: `keys` are the chosen players' keys, `roster` the board's registered players ([{ key, name }]).
  * Returns a sentence about the first problem, or null when the squad is complete.

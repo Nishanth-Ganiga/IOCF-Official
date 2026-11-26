@@ -156,6 +156,9 @@ export type AccountsInfo = { admin: { accountId: string; username: string; statu
 export type SeriesInput = {
   /** The squad announcement: the keys of the chosen players (from the board's registered players). */
   squad?: string[];
+  /** Optional: the captain and the vice-captain (keys of two different squad players). */
+  captain?: string;
+  viceCaptain?: string;
   /** Matches a day: 1 (default) or 2 (quadrilateral series only). */
   perDay?: number;
   name: string;
@@ -182,7 +185,7 @@ export type Series = {
   /** Matches played on one day: 1, or 2 in a quadrilateral series. */
   perDay?: number;
   /** The squad each board has announced so far, by board slug. */
-  squads?: Record<string, { key: string; name: string }[]>;
+  squads?: Record<string, { key: string; name: string; role?: 'captain' | 'vice-captain' }[]>;
   /** The full schedule; the final has no teams or stadium yet. */
   fixtures: { no: number; final: boolean; teams: string[] | null; stadium: string | null; date: string | null }[];
   bet: number;
@@ -288,7 +291,7 @@ export const api = {
   series: (slug: string) => request<SeriesOverview>('GET', `/boards/${encodeURIComponent(slug)}/series`),
   announceSeries: (slug: string, input: SeriesInput) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series`, input),
   editSeries: (slug: string, id: string, input: SeriesInput) => request<{ series: Series }>('PUT', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}`, input),
-  acceptSeries: (slug: string, id: string, squad: string[]) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/accept`, { squad }),
+  acceptSeries: (slug: string, id: string, squad: string[], captain?: string, viceCaptain?: string) => request<{ series: Series }>('POST', `/boards/${encodeURIComponent(slug)}/series/${encodeURIComponent(id)}/accept`, { squad, captain, viceCaptain }),
   adminSeries: () => request<{ series: Series[] }>('GET', '/admin/series').then((r) => r.series),
   deleteSeries: (id: string) => request<{ ok: true }>('DELETE', `/admin/series/${encodeURIComponent(id)}`),
   fixtures: (slug: string) => request<{ today: string; matches: CalendarMatch[] }>('GET', `/boards/${encodeURIComponent(slug)}/fixtures`),

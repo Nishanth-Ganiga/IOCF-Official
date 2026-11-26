@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { buildFixtures, dateProblem, perDayChoices, stadiumBoards } from '../../src/data/commandCenter/fixtures.mjs';
-import { squadLimits, squadProblem } from '../../src/data/commandCenter/squads.mjs';
+import { leadersProblem, squadEntries, squadLimits, squadProblem } from '../../src/data/commandCenter/squads.mjs';
 
 const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 export const SERIES_CFG = read('../../src/data/commandCenter/series.json');
@@ -140,8 +140,10 @@ export function validateSeries(input, host, boards, t = Date.now(), keepClubForm
     const keys = Array.isArray(i.squad) ? i.squad.map(String) : [];
     const problem = squadProblem(keys, roster, squadLimits(i.format, clubFormat));
     if (problem) return { error: `Squad announcement: ${problem}` };
+    const lead = leadersProblem(keys, i.captain || null, i.viceCaptain || null);
+    if (lead) return { error: `Squad announcement: ${lead}` };
     const byKey = new Map(roster.map((p) => [p.key, p.name]));
-    squads = { [host]: keys.map((key) => ({ key, name: byKey.get(key) })) };
+    squads = { [host]: squadEntries(keys, byKey, i.captain || null, i.viceCaptain || null) };
   }
   return { value: { name, series_type: type.id, opponents, matches, stadiums: chosen, dates, bet, format: i.format, club_format: clubFormat, ...(perDay === 2 ? { matches_per_day: 2 } : {}), ...(squads ? { squads } : {}) } };
 }
