@@ -315,6 +315,14 @@ function parseChampionsLeague(book) {
       CL.matches.push(M);
     }
   }
+  // the status follows the schedule: Upcoming before the first match day, Ongoing from it, Completed after the last (the dates are "25th Nov", in 2026)
+  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const days = CL.matches.map((m) => /(\d+)\w*\s+([A-Za-z]{3})/.exec(m.date ?? '')).filter(Boolean).map((x) => Date.UTC(2026, MONTHS.indexOf(x[2].toLowerCase()), Number(x[1]))).filter((n) => Number.isFinite(n));
+  if (days.length) {
+    const today = new Date();
+    const t = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    CL.status = t < Math.min(...days) ? 'Upcoming' : t > Math.max(...days) ? 'Completed' : 'Ongoing';
+  }
   return CL;
 }
 
